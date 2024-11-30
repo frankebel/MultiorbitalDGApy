@@ -1,5 +1,6 @@
-import numpy as np
 from abc import ABC, abstractmethod
+
+import numpy as np
 
 
 class LocalNPoint(ABC):
@@ -19,50 +20,47 @@ class LocalNPoint(ABC):
         self.original_shape = self.mat.shape
 
     @property
-    def mat(self):
+    def mat(self) -> np.ndarray:
         return self._mat
 
-    # we do this to automatically add orbital dimensions if not already done
-    # @jit(nopython=True, cache=True)
     @mat.setter
-    def mat(self, value: np.ndarray | list):
-        value = np.array(value, dtype=np.complex64) if isinstance(value, list) else value
-
-        if (
-            self._mat is None and len(value.shape) == self._num_frequency_dimensions
-        ):  # i.e., if the object does not yet have orbital dimensions
-            value = value.reshape((1,) * self._num_orbital_dimensions + value.shape)
-
-        self._mat = value
+    def mat(self, value: np.ndarray) -> None:
+        self._mat = value.astype(np.complex64)
 
     @property
-    def current_shape(self):
+    def current_shape(self) -> tuple:
         return self._mat.shape
 
     @property
-    def original_shape(self):
+    def original_shape(self) -> tuple:
         return self._original_shape
 
     @original_shape.setter
-    def original_shape(self, value):
+    def original_shape(self, value) -> None:
         self._original_shape = value
 
     @property
-    def niv(self):
+    def niv(self) -> int:
         return self.original_shape[-1] // 2 if self.full_niv_range else self.original_shape[-1]
 
     @property
-    def full_niv_range(self):
+    def full_niv_range(self) -> bool:
         return self._full_niv_range
 
     @property
-    def n_bands(self):
+    def n_bands(self) -> int:
         return self.original_shape[0]
 
     @abstractmethod
-    def to_compound_indices(self):
+    def to_compound_indices(self) -> "LocalNPoint":
         pass
 
     @abstractmethod
-    def to_full_indices(self):
+    def to_full_indices(self, shape: tuple = None) -> "LocalNPoint":
         pass
+
+    def __getitem__(self, item):
+        return self.mat[item]
+
+    def __setitem__(self, key, value):
+        self.mat[key] = value
