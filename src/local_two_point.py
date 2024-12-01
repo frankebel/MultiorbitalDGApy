@@ -4,20 +4,16 @@ from local_n_point import LocalNPoint
 
 
 class LocalTwoPoint(LocalNPoint):
-    def __init__(self, mat: np.ndarray, full_niv_range: bool = True):
-        super().__init__(mat, 2, 1, full_niv_range)
-
-    def cut_niv(self, niv_cut: int) -> "LocalTwoPoint":
-        if niv_cut > self.niv:
-            raise ValueError("Cannot cut more fermionic frequencies than the object has.")
-
-        if self.full_niv_range:
-            self.mat = self.mat[..., self.niv - niv_cut : self.niv + niv_cut]
-        else:
-            self.mat = self.mat[..., :niv_cut]
-
-        self.original_shape = self.mat.shape
-        return self
+    def __init__(
+        self,
+        mat: np.ndarray,
+        num_bosonic_frequency_dimensions: int = 0,
+        num_fermionic_frequency_dimensions: int = 1,
+        full_niv_range: bool = True,
+    ):
+        super().__init__(
+            mat, 2, num_bosonic_frequency_dimensions, num_fermionic_frequency_dimensions, True, full_niv_range
+        )
 
     def invert(self) -> "LocalTwoPoint":
         copy = self

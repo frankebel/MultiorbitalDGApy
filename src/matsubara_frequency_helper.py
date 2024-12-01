@@ -1,4 +1,12 @@
 import numpy as np
+from enum import Enum
+
+
+class KnownFrequencyShifts(Enum):
+    MINUS: str = "minus"
+    PLUS: str = "plus"
+    CENTER: str = "center"
+    NONE: str = "none"
 
 
 class MFHelper:
@@ -21,3 +29,18 @@ class MFHelper:
     @staticmethod
     def get_ivn(niv: int, beta: float, shift: int = 0, only_positive: bool = False) -> np.ndarray:
         return 1j * np.pi / beta * (2 * MFHelper.get_vn_int(niv, shift, only_positive) + 1)
+
+    @staticmethod
+    def get_frequency_shift(wn: int, freq_notation: KnownFrequencyShifts) -> (int, int):
+        if freq_notation == KnownFrequencyShifts.PLUS:  # for something like chi_0[w,v] = -beta G(v) * G(v+w)
+            return 0, wn
+        elif freq_notation == KnownFrequencyShifts.MINUS:  # for something like chi_0[w,v] = -beta G(v) * G(v-w)
+            return 0, -wn
+        elif (
+            freq_notation == KnownFrequencyShifts.CENTER
+        ):  # for something like chi_0[w,v] = -beta G(v+w//2) * G(v-w//2-w%2)
+            return wn // 2, -(wn // 2 + wn % 2)
+        else:
+            raise NotImplementedError(
+                f"Frequency notation '{freq_notation}' is not in list {[s for s in KnownFrequencyShifts]}."
+            )

@@ -5,54 +5,40 @@ import numpy as np
 
 import config
 import w2dyn_aux
-from local_four_point import LocalFourPoint
-from local_two_point import LocalTwoPoint
-from local_self_energy import LocalSelfEnergy
+from local_four_point import LocalFourPoint, Channel
 from local_greens_function import LocalGreensFunction
+from local_self_energy import LocalSelfEnergy
 
 
-def load_from_w2dyn_file():
-    dmft_input = {}
-
+def load_from_w2dyn_file_and_edit_config() -> (LocalGreensFunction, LocalSelfEnergy, LocalFourPoint, LocalFourPoint):
     file = w2dyn_aux.W2dynFile(fname=os.path.join(config.input_path, config.dmft_1p_filename))
-
     # TODO: EXTEND TO MULTIORBITAL DATA ONCE I HAVE THE INPUT FILES
 
-    dmft_input["n"] = file.get_totdens()
-    if dmft_input["n"] == 0:
-        dmft_input["n"] = np.sum(np.diag(file.get_occupation()[0, :, 0, :]))  # band spin band spin
-    dmft_input["beta"] = file.get_beta()
-    dmft_input["u"] = file.get_udd()
-    dmft_input["mu"] = file.get_mu()
+    config.n = file.get_totdens()
+    if config.n == 0:
+        config.n = np.sum(np.diag(file.get_occupation()[0, :, 0, :]))  # band spin band spin
+    config.beta = file.get_beta()
+    config.u_dmft = file.get_udd()
+    config.mu = file.get_mu()
 
-    config.beta = dmft_input["beta"]
-    config.n = dmft_input["n"]
-    config.mu = dmft_input["mu"]
-
-    dmft_input["giw"] = LocalGreensFunction.create_from_dmft(np.mean(file.get_giw(), axis=1))  # band spin niv
-    dmft_input["siw"] = LocalSelfEnergy.create_from_dmft(np.mean(file.get_siw(), axis=1))
-
+    giw = LocalGreensFunction.create_from_dmft(np.mean(file.get_giw(), axis=1))  # band spin niv
+    siw = LocalSelfEnergy.create_from_dmft(np.mean(file.get_siw(), axis=1))
     file.close()
 
-    if config.dmft_2p_filename is not None:
-        file = w2dyn_aux.W2dynG4iwFile(fname=os.path.join(config.input_path, config.dmft_2p_filename))
-        dmft_input["g4iw_dens"] = LocalFourPoint(file.read_g2_full(channel="dens"), channel="dens")
-        dmft_input["g4iw_magn"] = LocalFourPoint(file.read_g2_full(channel="magn"), channel="magn")
+    file = w2dyn_aux.W2dynG4iwFile(fname=os.path.join(config.input_path, config.dmft_2p_filename))
+    g2_dens = LocalFourPoint(file.read_g2_full(channel=Channel.DENS), channel=Channel.DENS)
+    g2_magn = LocalFourPoint(file.read_g2_full(channel=Channel.MAGN), channel=Channel.MAGN)
 
-        if len(dmft_input["g4iw_dens"].current_shape) == 3:
-            dmft_input["g4iw_dens"].mat = dmft_input["g4iw_dens"].mat.reshape(
-                (1,) * 4 + dmft_input["g4iw_dens"].mat.shape
-            )
-            dmft_input["g4iw_magn"].mat = dmft_input["g4iw_magn"].mat.reshape(
-                (1,) * 4 + dmft_input["g4iw_magn"].mat.shape
-            )
+    if len(g2_dens.current_shape) == 3:
+        g2_dens.mat = g2_dens.mat.reshape((1,) * 4 + g2_dens.mat.shape)
+    if len(g2_magn.current_shape) == 3:
+        g2_magn.mat = g2_magn.mat.reshape((1,) * 4 + g2_magn.mat.shape)
+    file.close()
 
-        file.close()
-
-    return dmft_input
+    return giw, siw, g2_dens, g2_magn
 
 
-def update_frequency_boxes(niv: int, niw: int):
+def update_frequency_boxes(niv: int, niw: int) -> None:
     logger = logging.getLogger()
     if config.niv == -1:
         config.niv = niv
@@ -71,3 +57,12 @@ def update_frequency_boxes(niv: int, niw: int):
         logger.info(
             "Number of bosonic Matsubara frequencies cannot exceed available frequencies in the DMFT four-point object."
         )
+
+
+def update_g2_from_dmft(g2_dens: LocalFourPoint, g2_magn: LocalFourPoint) -> (LocalFourPoint, LocalFourPoint):
+    g2_dens = g2_dens.cut_niw_and_niv(config.niw, config.niv)
+    g2_magn = g2_magn.cut_niw_and_niv(config.niw, config.niv)
+    if config.do_sym_v_vp:
+        g2_dens = g2_dens.symmetrize_v_vp()
+        g2_magn = g2_magn.symmetrize_v_vp()
+    return g2_dens, g2_magn

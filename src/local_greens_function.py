@@ -1,11 +1,11 @@
 import numpy as np
 import scipy
 
-from matsubara_frequency_helper import MFHelper
-from local_two_point import LocalTwoPoint
-from local_self_energy import LocalSelfEnergy
-
 import config
+from local_four_point import LocalFourPoint
+from local_self_energy import LocalSelfEnergy
+from local_two_point import LocalTwoPoint
+from matsubara_frequency_helper import MFHelper
 
 
 class LocalGreensFunction(LocalTwoPoint):
@@ -16,7 +16,7 @@ class LocalGreensFunction(LocalTwoPoint):
         ek: np.ndarray = None,
         full_niv_range: bool = True,
     ):
-        super().__init__(mat, full_niv_range)
+        super().__init__(mat, full_niv_range=full_niv_range)
         self._sigma = sigma
         self._ek = ek
 
@@ -26,6 +26,10 @@ class LocalGreensFunction(LocalTwoPoint):
     def create_from_dmft(mat: np.ndarray) -> "LocalGreensFunction":
         mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
         return LocalGreensFunction(mat)
+
+    @staticmethod
+    def create_from_sigma_ek(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
+        return LocalGreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
 
     def get_fill(self) -> (float, np.ndarray):
         self.mat = self.get_gloc_mat()
@@ -46,23 +50,34 @@ class LocalGreensFunction(LocalTwoPoint):
         return n_el, filling_k
 
     def get_gloc_mat(self):
-        eye_bands = np.eye(self.n_bands, self.n_bands)
-        v = MFHelper.get_ivn(self.niv, config.beta)
-        iv_bands = (v[None, None, :] * eye_bands[..., None])[None, None, None, ...]
-        mu_bands = (config.mu * eye_bands)[None, None, None, ..., None]
+        iv_bands, mu_bands = self._get_g_params_local()
+        iv_bands = iv_bands[None, None, None, ...]
+        mu_bands = mu_bands[None, None, None, ...]
+
         mat = iv_bands + mu_bands - self._ek[..., None] - self._sigma.mat[None, None, None, :]
         mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
-
         return np.mean(mat, axis=(0, 1, 2))
 
     def get_g_model_mat(self):
+        iv_bands, mu_bands = self._get_g_params_local()
+        hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
+        smom0, _ = self._sigma.smom
+        mat = iv_bands + mu_bands - hloc - smom0
+        return np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
+
+    def _get_g_params_local(self):
         eye_bands = np.eye(self.n_bands, self.n_bands)
         v = MFHelper.get_ivn(self.niv, config.beta)
         iv_bands = v[None, None, :] * eye_bands[..., None]
-        mu_bands = (config.mu * eye_bands)[..., None]
-        hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
+        mu_bands = config.mu * eye_bands[:, :, None]
+        return iv_bands, mu_bands
 
-        smom0, _ = self._sigma.smom
+    def __mul__(self, other: "LocalGreensFunction") -> LocalFourPoint:
+        if not isinstance(other, LocalGreensFunction):
+            raise ValueError("Other needs to be of type LocalTwoPoint.")
 
-        mat = iv_bands + mu_bands - hloc - smom0
-        return np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
+        eye_bands = np.eye(self.n_bands)
+        mat = (self.mat[:, None, None, :, :, None] * eye_bands[None, :, :, None, None, None]) * (
+            np.swapaxes(other.mat, 0, 1)[None, :, :, None, None, :] * eye_bands[None, None, None, :, :, None]
+        )
+        return LocalFourPoint(mat, num_bosonic_frequency_dimensions=0, num_fermionic_frequency_dimensions=1)

@@ -9,10 +9,11 @@ nq: tuple = nk
 niv: int = 60
 niw: int = 60
 
-beta: float
-mu: float
-n: float
+beta: float = 0
+mu: float = 0
+n: float = 0
 n_of_k: np.ndarray
+u_dmft: float = 0
 
 do_sym_v_vp = True
 

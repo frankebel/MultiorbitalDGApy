@@ -6,9 +6,10 @@ import config
 
 
 class LocalSelfEnergy(LocalTwoPoint):
-    def __init__(self, mat: np.ndarray, full_niv_range: bool = True):
-        super().__init__(mat, full_niv_range)
-        self._smom0, self._smom1 = self.fit_smom()
+    def __init__(self, mat: np.ndarray, full_niv_range: bool = True, do_smom_fit: bool = False):
+        super().__init__(mat, full_niv_range=full_niv_range)
+        if do_smom_fit:
+            self._smom0, self._smom1 = self._fit_smom()
 
     @property
     def smom(self) -> (float, float):
@@ -17,9 +18,9 @@ class LocalSelfEnergy(LocalTwoPoint):
     @staticmethod
     def create_from_dmft(mat: np.ndarray) -> "LocalSelfEnergy":
         mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
-        return LocalSelfEnergy(mat)
+        return LocalSelfEnergy(mat, do_smom_fit=True)
 
-    def fit_smom(self):
+    def _fit_smom(self):
         mat_half_v = self.mat[..., self.niv :]
         iv = MFHelper.get_ivn(self.niv, config.beta, only_positive=True)
 

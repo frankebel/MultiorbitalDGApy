@@ -1,12 +1,11 @@
+import itertools as it
 import os
-from typing import Any
 
 import numpy as np
-from numpy import ndarray, dtype
+import pandas as pd
+from numpy import ndarray
 
 import brillouin_zone as bz
-import itertools as it
-import pandas as pd
 
 
 class HoppingElement:

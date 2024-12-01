@@ -2,59 +2,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matsubara_frequency_helper import MFHelper
 
-from local_n_point import LocalNPoint
+from local_n_point import LocalNPoint, Channel
 from local_three_point import LocalThreePoint
 from local_two_point import LocalTwoPoint
 
 
 class LocalFourPoint(LocalNPoint):
-    def __init__(self, mat: np.ndarray, channel: str, full_niw_range: bool = True, full_niv_range: bool = True):
-        super().__init__(mat, 4, 3, full_niv_range)
+    def __init__(
+        self,
+        mat: np.ndarray,
+        channel: Channel = Channel.NONE,
+        num_bosonic_frequency_dimensions: int = 1,
+        num_fermionic_frequency_dimensions: int = 2,
+        full_niw_range: bool = True,
+        full_niv_range: bool = True,
+    ):
+        super().__init__(
+            mat, 4, num_bosonic_frequency_dimensions, num_fermionic_frequency_dimensions, full_niw_range, full_niv_range
+        )
         self._channel = channel
-        self._full_niw_range = full_niw_range
 
     @property
-    def channel(self) -> str:
+    def channel(self) -> Channel:
         return self._channel
-
-    @property
-    def niw(self) -> int:
-        return self.original_shape[-3] // 2 if self.full_niv_range else self.original_shape[-3]
-
-    @property
-    def full_niw_range(self) -> bool:
-        return self._full_niw_range
-
-    def cut_niw(self, niw_cut: int) -> "LocalFourPoint":
-        if niw_cut > self.niw:
-            raise ValueError("Cannot cut more bosonic frequencies than the object has.")
-
-        if self.full_niv_range:
-            self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1, :, :]
-        else:
-            self.mat = self.mat[..., :niw_cut, :, :]
-
-        self.original_shape = self.mat.shape
-        return self
-
-    def cut_niv(self, niv_cut: int) -> "LocalFourPoint":
-        if niv_cut > self.niv:
-            raise ValueError("Cannot cut more fermionic frequencies than the object has.")
-
-        if self.full_niv_range:
-            self.mat = self.mat[..., self.niv - niv_cut : self.niv + niv_cut, self.niv - niv_cut : self.niv + niv_cut]
-        else:
-            self.mat = self.mat[..., :niv_cut, :niv_cut]
-
-        self.original_shape = self.mat.shape
-        return self
-
-    def cut_niw_and_niv(self, niw_cut: int, niv_cut: int) -> "LocalFourPoint":
-        return self.cut_niw(niw_cut).cut_niv(niv_cut)
-
-    def symmetrize_v_vp(self) -> "LocalFourPoint":
-        self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
-        return self
 
     def invert(self) -> "LocalFourPoint":
         copy = self
@@ -67,11 +37,10 @@ class LocalFourPoint(LocalNPoint):
             return self
         elif len(self.current_shape) == 7:  # [o1,o2,o3,o4,w,v,vp]
             self.original_shape = self.mat.shape
-            self.mat = np.ascontiguousarray(
-                self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
-                    2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
-                )
+            self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
+                2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
             )
+
             return self
         else:
             raise ValueError(f"Converting to compound indices with shape {self.current_shape} not supported.")
@@ -81,11 +50,10 @@ class LocalFourPoint(LocalNPoint):
             return self
         elif len(self.current_shape) == 3:  # [w,x1,x2]
             self.original_shape = shape if shape is not None else self.original_shape
-            self.mat = np.ascontiguousarray(
-                self.mat.reshape(
-                    2 * self.niw + 1, self.n_bands, self.n_bands, 2 * self.niv, self.n_bands, self.n_bands, 2 * self.niv
-                ).transpose(1, 2, 4, 5, 0, 3, 6)
-            )
+            self.mat = self.mat.reshape(
+                2 * self.niw + 1, self.n_bands, self.n_bands, 2 * self.niv, self.n_bands, self.n_bands, 2 * self.niv
+            ).transpose(1, 2, 4, 5, 0, 3, 6)
+
             return self
         else:
             raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")
@@ -130,6 +98,10 @@ class LocalFourPoint(LocalNPoint):
 
     def __rmatmul__(self, other: LocalNPoint) -> LocalNPoint:
         return self._matmul_core(other, left_hand_side=False)
+
+    def symmetrize_v_vp(self) -> "LocalFourPoint":
+        self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
+        return self
 
     def plot(
         self,
