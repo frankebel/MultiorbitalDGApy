@@ -23,7 +23,12 @@ class LocalTwoPoint(LocalNPoint):
     def to_compound_indices(self) -> "LocalTwoPoint":
         if len(self.current_shape) == 1:
             return self
-        elif len(self.current_shape) == 3:
+        elif (
+            len(self.current_shape)
+            == self._num_orbital_dimensions
+            + self._num_bosonic_frequency_dimensions
+            + self._num_fermionic_frequency_dimensions
+        ):
             self.mat = self.mat.reshape(np.prod(self.original_shape))
             return self
         else:

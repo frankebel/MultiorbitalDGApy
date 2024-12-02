@@ -1,16 +1,9 @@
-from abc import ABC, abstractmethod
-from enum import Enum
-
 import numpy as np
 
-
-class Channel(Enum):
-    DENS: str = "dens"
-    MAGN: str = "magn"
-    NONE: str = "none"
+from i_have_mat import IHaveMat
 
 
-class LocalNPoint(ABC):
+class LocalNPoint(IHaveMat):
     def __init__(
         self,
         mat: np.ndarray,
@@ -20,26 +13,21 @@ class LocalNPoint(ABC):
         full_niw_range: bool = True,
         full_niv_range: bool = True,
     ):
+        IHaveMat.__init__(self, mat)
+
+        assert num_orbital_dimensions in (2, 4), "2 or 4 orbital dimensions are supported."
         self._num_orbital_dimensions = num_orbital_dimensions
+
+        assert num_fermionic_frequency_dimensions in (0, 1, 2), "0 - 2 fermionic frequency dimensions are supported."
         self._num_fermionic_frequency_dimensions = num_fermionic_frequency_dimensions
+
+        assert num_bosonic_frequency_dimensions in (0, 1), "0 or 1 bosonic frequency dimensions are supported."
         self._num_bosonic_frequency_dimensions = num_bosonic_frequency_dimensions
-        self._num_frequency_dimensions = (
-            self._num_bosonic_frequency_dimensions + self._num_fermionic_frequency_dimensions
-        )
+
         self._full_niv_range = full_niv_range
         self._full_niw_range = full_niw_range
 
-        self._mat = None
-        self.mat: np.ndarray = mat
         self.original_shape = self.mat.shape
-
-    @property
-    def mat(self) -> np.ndarray:
-        return self._mat
-
-    @mat.setter
-    def mat(self, value: np.ndarray) -> None:
-        self._mat = value.astype(np.complex64)
 
     @property
     def current_shape(self) -> tuple:
@@ -59,9 +47,9 @@ class LocalNPoint(ABC):
 
     @property
     def niw(self) -> int:
-        if self._num_fermionic_frequency_dimensions == 0:
+        if self._num_bosonic_frequency_dimensions == 0:
             return 0
-        axis = -self._num_frequency_dimensions
+        axis = -(self._num_bosonic_frequency_dimensions + self._num_fermionic_frequency_dimensions)
         return self.original_shape[axis] // 2 if self.full_niv_range else self.original_shape[axis]
 
     @property
@@ -129,23 +117,49 @@ class LocalNPoint(ABC):
     def cut_niw_and_niv(self, niw_cut: int, niv_cut: int) -> "LocalNPoint":
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
-    @abstractmethod
     def to_compound_indices(self) -> "LocalNPoint":
-        pass
+        if len(self.current_shape) == 3:  # [w,x1,x2]
+            return self
 
-    @abstractmethod
+        self.original_shape = self.mat.shape
+
+        if self._num_bosonic_frequency_dimensions == 1:
+            if self._num_fermionic_frequency_dimensions == 1:  # [o1,o2,o3,o4,w,v]
+                self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(2 * self.niv))
+            self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
+                2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
+            )
+            return self
+
+        raise ValueError(f"Converting to compound indices with shape {self.current_shape} not supported.")
+
     def to_full_indices(self, shape: tuple = None) -> "LocalNPoint":
-        pass
+        if (
+            len(self.current_shape)
+            == self._num_orbital_dimensions
+            + self._num_bosonic_frequency_dimensions
+            + self._num_fermionic_frequency_dimensions
+        ):
+            return self
+        elif len(self.current_shape) == 3:  # [w,x1,x2]
+            self.original_shape = shape if shape is not None else self.original_shape
+            compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
-    @abstractmethod
+            if self._num_bosonic_frequency_dimensions == 1:
+                self.mat = (self.mat.reshape((2 * self.niw + 1,) + compound_index_shape * 2)).transpose(
+                    1, 2, 4, 5, 0, 3, 6
+                )
+                if self._num_fermionic_frequency_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
+                    self.mat.diagonal(axis1=-2, axis2=-1)
+                return self
+        else:
+            raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")
+
     def invert(self) -> "LocalNPoint":
-        pass
+        copy = self
+        copy = copy.to_compound_indices()
+        copy.mat = np.linalg.inv(copy.mat)
+        return copy.to_full_indices()
 
     def __invert__(self) -> "LocalNPoint":
         return self.invert()
-
-    def __getitem__(self, item):
-        return self.mat[item]
-
-    def __setitem__(self, key, value):
-        self.mat[key] = value

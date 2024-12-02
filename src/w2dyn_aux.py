@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 
-from local_n_point import Channel
+from i_have_channel import Channel
 
 
 class W2dynFile:

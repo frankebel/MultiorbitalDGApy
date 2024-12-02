@@ -6,6 +6,7 @@ import pandas as pd
 from numpy import ndarray
 
 import brillouin_zone as bz
+from interaction import InteractionElement
 
 
 class HoppingElement:
@@ -19,25 +20,6 @@ class HoppingElement:
             and all(orb > 0 for orb in orbs)
         ):
             raise ValueError("'orbs' must be a list with exactly 2 integer elements that are greater than 0.")
-        if not isinstance(value, (int, float)):
-            raise ValueError("'value' must be a valid number.")
-
-        self.r_lat = tuple(r_lat)
-        self.orbs = np.array(orbs, dtype=int)
-        self.value = float(value)
-
-
-class InteractionElement:
-    def __init__(self, r_lat: list, orbs: list, value: float = 0.0):
-        if not isinstance(r_lat, list) and len(r_lat) == 3 and all(isinstance(x, int) for x in r_lat):
-            raise ValueError("'r_lat' must be a list with exactly 3 integer elements.")
-        if (
-            not isinstance(orbs, list)
-            and len(orbs) == 4
-            and all(isinstance(x, int) for x in orbs)
-            and all(orb > 0 for orb in orbs)
-        ):
-            raise ValueError("'orbs' must be a list with exactly 4 integer elements that are greater than zero.")
         if not isinstance(value, (int, float)):
             raise ValueError("'value' must be a valid number.")
 
@@ -168,18 +150,18 @@ class HamiltonianBuilder:
             raise ValueError("Local hopping is not allowed!")
 
         unique_lat_r = set([he.r_lat for he in hopping_elements])
-        r2ind = {tup: index for index, tup in enumerate(unique_lat_r)}
+        r_to_index = {tup: index for index, tup in enumerate(unique_lat_r)}
 
-        n_rp = len(r2ind)
+        n_rp = len(r_to_index)
         n_orbs = int(max(np.array([he.orbs for he in hopping_elements]).flatten()))
-        er_r_grid = self.create_er_grid(r2ind, n_orbs)
+        er_r_grid = self.create_er_grid(r_to_index, n_orbs)
 
         er_orbs = self.create_er_orbs(n_rp, n_orbs)
         er_r_weights = np.ones(n_rp)[:, None]
 
         er = np.zeros((n_rp, n_orbs, n_orbs))
         for he in hopping_elements:
-            self.insert_er_element(er, r2ind, he.r_lat, *he.orbs, he.value)
+            self.insert_er_element(er, r_to_index, he.r_lat, *he.orbs, he.value)
 
         self._real_space_hamiltonian.set_kinetic_properties(er, er_r_grid, er_r_weights, er_orbs)
         return self
@@ -189,11 +171,11 @@ class HamiltonianBuilder:
             interaction_elements = self.parse_to_interaction_elements(interaction_elements)
 
         unique_r_lat = set([he.r_lat for he in interaction_elements])
-        r2ind = {tup: index for index, tup in enumerate(unique_r_lat)}
+        r_to_index = {tup: index for index, tup in enumerate(unique_r_lat)}
 
-        n_rp = len(r2ind)
+        n_rp = len(r_to_index)
         n_orbs = int(max(np.array([he.orbs for he in interaction_elements]).flatten()))
-        ur_nonlocal_r_grid = self.create_ur_grid(r2ind, n_orbs)
+        ur_nonlocal_r_grid = self.create_ur_grid(r_to_index, n_orbs)
 
         ur_orbs = self.create_ur_orbs(n_rp, n_orbs)
         ur_nonlocal_r_weights = np.ones(n_rp)[:, None]
@@ -204,7 +186,7 @@ class HamiltonianBuilder:
             if np.allclose(ie.r_lat, [0, 0, 0]):
                 self.insert_ur_element(ur_local, None, None, *ie.orbs, ie.value)
             else:
-                self.insert_ur_element(ur_nonlocal, r2ind, ie.r_lat, *ie.orbs, ie.value)
+                self.insert_ur_element(ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
 
         self._real_space_hamiltonian.set_interaction_properties(
             ur_local, ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights, ur_orbs

@@ -22,7 +22,7 @@ class LocalSelfEnergy(LocalTwoPoint):
 
     def _fit_smom(self):
         mat_half_v = self.mat[..., self.niv :]
-        iv = MFHelper.get_ivn(self.niv, config.beta, only_positive=True)
+        iv = MFHelper.get_ivn(self.niv, config.beta, return_only_positive=True)
 
         n_freq_fit = int(0.2 * self.niv)
         if n_freq_fit < 4:

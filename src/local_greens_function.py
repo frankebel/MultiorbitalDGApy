@@ -2,7 +2,6 @@ import numpy as np
 import scipy
 
 import config
-from local_four_point import LocalFourPoint
 from local_self_energy import LocalSelfEnergy
 from local_two_point import LocalTwoPoint
 from matsubara_frequency_helper import MFHelper
@@ -20,7 +19,8 @@ class LocalGreensFunction(LocalTwoPoint):
         self._sigma = sigma
         self._ek = ek
 
-        config.n, config.n_of_k = (0, 0) if ek is None else self.get_fill()
+        if sigma is not None and ek is not None:
+            config.n, config.n_of_k = self._get_fill()
 
     @staticmethod
     def create_from_dmft(mat: np.ndarray) -> "LocalGreensFunction":
@@ -28,12 +28,12 @@ class LocalGreensFunction(LocalTwoPoint):
         return LocalGreensFunction(mat)
 
     @staticmethod
-    def create_from_sigma_ek(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
+    def create_g_loc(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
         return LocalGreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
 
-    def get_fill(self) -> (float, np.ndarray):
-        self.mat = self.get_gloc_mat()
-        g_model = self.get_g_model_mat()
+    def _get_fill(self) -> (float, np.ndarray):
+        self.mat = self._get_gloc_mat()
+        g_model = self._get_g_model_mat()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
 
@@ -49,7 +49,7 @@ class LocalGreensFunction(LocalTwoPoint):
         n_el = 2.0 * np.trace(filling_k).real
         return n_el, filling_k
 
-    def get_gloc_mat(self):
+    def _get_gloc_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()
         iv_bands = iv_bands[None, None, None, ...]
         mu_bands = mu_bands[None, None, None, ...]
@@ -58,7 +58,7 @@ class LocalGreensFunction(LocalTwoPoint):
         mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
         return np.mean(mat, axis=(0, 1, 2))
 
-    def get_g_model_mat(self):
+    def _get_g_model_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
@@ -71,13 +71,3 @@ class LocalGreensFunction(LocalTwoPoint):
         iv_bands = v[None, None, :] * eye_bands[..., None]
         mu_bands = config.mu * eye_bands[:, :, None]
         return iv_bands, mu_bands
-
-    def __mul__(self, other: "LocalGreensFunction") -> LocalFourPoint:
-        if not isinstance(other, LocalGreensFunction):
-            raise ValueError("Other needs to be of type LocalTwoPoint.")
-
-        eye_bands = np.eye(self.n_bands)
-        mat = (self.mat[:, None, None, :, :, None] * eye_bands[None, :, :, None, None, None]) * (
-            np.swapaxes(other.mat, 0, 1)[None, :, :, None, None, :] * eye_bands[None, None, None, :, :, None]
-        )
-        return LocalFourPoint(mat, num_bosonic_frequency_dimensions=0, num_fermionic_frequency_dimensions=1)
