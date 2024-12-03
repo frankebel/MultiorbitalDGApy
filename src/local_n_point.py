@@ -150,7 +150,7 @@ class LocalNPoint(IHaveMat):
                     1, 2, 4, 5, 0, 3, 6
                 )
                 if self._num_fermionic_frequency_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
-                    self.mat.diagonal(axis1=-2, axis2=-1)
+                    self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
                 return self
         else:
             raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")

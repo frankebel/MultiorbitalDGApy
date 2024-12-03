@@ -44,10 +44,10 @@ class NonLocalInteraction(LocalInteraction):
         self._ur_r_grid = ur_r_grid
         self._ur_r_weights = ur_r_weights
 
-    def get_uk(self, k_grid: bz.KGrid) -> np.ndarray:
-        uk = self._convham_4_orbs(k_grid.kmesh.reshape(3, -1))
+    def get_uq(self, q_grid: bz.KGrid) -> np.ndarray:
+        uk = self._convham_4_orbs(q_grid.kmesh.reshape(3, -1))
         n_bands = uk.shape[-1]
-        return uk.reshape(*k_grid.nk + (n_bands,) * 4)
+        return uk.reshape(*q_grid.nk + (n_bands,) * 4)
 
     def _convham_4_orbs(self, k_mesh: np.ndarray) -> np.ndarray:
         fft_grid = np.exp(1j * np.matmul(self._ur_r_grid, k_mesh)) / self._ur_r_weights[:, None, None, None, None]

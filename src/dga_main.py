@@ -33,10 +33,11 @@ def execute_dga_routine():
         g2_magn.plot(omega=-10, figure_name=f"G2_magn_w{-10}")
         g2_magn.plot(omega=10, figure_name=f"G2_magn_w{10}")
 
-    ek = config.hamiltonian.get_ek(config.k_grid)
+    ek = config.hamiltonian.kinetics.get_ek(config.k_grid)
     g_loc = LocalGreensFunction.create_g_loc(s_loc, ek)
+    u_loc = config.hamiltonian.local_interaction
 
-    sde = local_sde.calculate_local_self_energy(g_loc, g2_dens, g2_magn)
+    sde = local_sde.calculate_local_self_energy(g_loc, g2_dens, g2_magn, u_loc)
 
 
 if __name__ == "__main__":

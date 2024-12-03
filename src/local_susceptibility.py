@@ -19,10 +19,10 @@ class LocalSusceptibility(LocalFourPoint):
             wn = MFHelper.get_wn_int(g2.niw)
             chi_mat[:, :, :, :, wn == 0] = config.beta * (g2.mat[:, :, :, :, wn == 0] - 2.0 * ggv_mat)
 
-        return LocalSusceptibility(chi_mat, g2.channel, 1, 1, g2.full_niw_range, g2.full_niv_range)
+        return LocalSusceptibility(chi_mat, g2.channel, 1, 2, g2.full_niw_range, g2.full_niv_range)
 
     @staticmethod
-    def create_generalized_chi_0(
+    def create_generalized_chi0(
         g_loc: LocalGreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
     ) -> "LocalSusceptibility":
         gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.niw + 1, 2 * config.niv), dtype=np.complex64)
