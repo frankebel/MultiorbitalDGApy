@@ -1,8 +1,8 @@
 import numpy as np
 
-from local_four_point import Channel
-from i_have_mat import IHaveMat
 import brillouin_zone as bz
+from i_have_channel import IHaveChannel, Channel
+from i_have_mat import IHaveMat
 
 
 class InteractionElement:
@@ -24,23 +24,31 @@ class InteractionElement:
         self.value = float(value)
 
 
-class LocalInteraction(IHaveMat):
-    def __init__(self, mat: np.ndarray, ur_orbs: np.ndarray):
-        super().__init__(mat)
+class LocalInteraction(IHaveMat, IHaveChannel):
+    def __init__(self, mat: np.ndarray, ur_orbs: np.ndarray, channel: Channel = Channel.NONE):
+        IHaveMat.__init__(self, mat)
+        IHaveChannel.__init__(self, channel)
         self._ur_orbs = ur_orbs
 
-    def get_for_channel(self, channel: Channel):
-        copy = self
-        if channel == Channel.MAGN:
+    def as_channel(self, channel: Channel = Channel.DENS):
+        copy = LocalInteraction(self.mat, self._ur_orbs, channel)
+        if copy.channel == Channel.MAGN:
             copy.mat *= -1
-        elif channel != Channel.DENS:
+        elif copy.channel != Channel.DENS:
             raise ValueError(f"Invalid channel: {channel}.")
         return copy
 
 
 class NonLocalInteraction(LocalInteraction):
-    def __init__(self, mat: np.ndarray, ur_r_grid: np.ndarray, ur_r_weights: np.ndarray, ur_orbs: np.ndarray):
-        super().__init__(mat, ur_orbs)
+    def __init__(
+        self,
+        mat: np.ndarray,
+        ur_r_grid: np.ndarray,
+        ur_r_weights: np.ndarray,
+        ur_orbs: np.ndarray,
+        channel: Channel = Channel.NONE,
+    ):
+        super().__init__(mat, ur_orbs, channel)
         self._ur_r_grid = ur_r_grid
         self._ur_r_weights = ur_r_weights
 
@@ -52,3 +60,11 @@ class NonLocalInteraction(LocalInteraction):
     def _convham_4_orbs(self, k_mesh: np.ndarray) -> np.ndarray:
         fft_grid = np.exp(1j * np.matmul(self._ur_r_grid, k_mesh)) / self._ur_r_weights[:, None, None, None, None]
         return np.transpose(np.sum(fft_grid * self.mat[..., None], axis=0), axes=(4, 0, 1, 2, 3))
+
+    def __add__(self, other: "NonLocalInteraction"):
+        mat = self.mat + other.mat
+        return NonLocalInteraction(mat, self._ur_r_grid, self._ur_r_weights, self._ur_orbs)
+
+    def __sub__(self, other: "NonLocalInteraction"):
+        mat = self.mat - other.mat
+        return NonLocalInteraction(mat, self._ur_r_grid, self._ur_r_weights, self._ur_orbs)

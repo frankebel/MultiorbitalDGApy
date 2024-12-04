@@ -1,6 +1,7 @@
 import numpy as np
-
+from copy import deepcopy
 from i_have_mat import IHaveMat
+from matsubara_frequency_helper import MFHelper
 
 
 class LocalNPoint(IHaveMat):
@@ -46,15 +47,27 @@ class LocalNPoint(IHaveMat):
         return self.original_shape[0]
 
     @property
+    def num_orbital_dimensions(self) -> int:
+        return self._num_orbital_dimensions
+
+    @property
+    def num_bosonic_frequency_dimensions(self) -> int:
+        return self._num_bosonic_frequency_dimensions
+
+    @property
+    def num_fermionic_frequency_dimensions(self) -> int:
+        return self._num_fermionic_frequency_dimensions
+
+    @property
     def niw(self) -> int:
-        if self._num_bosonic_frequency_dimensions == 0:
+        if self.num_bosonic_frequency_dimensions == 0:
             return 0
-        axis = -(self._num_bosonic_frequency_dimensions + self._num_fermionic_frequency_dimensions)
+        axis = -(self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions)
         return self.original_shape[axis] // 2 if self.full_niv_range else self.original_shape[axis]
 
     @property
     def niv(self) -> int:
-        if self._num_fermionic_frequency_dimensions == 0:
+        if self.num_fermionic_frequency_dimensions == 0:
             return 0
         return self.original_shape[-1] // 2 if self.full_niv_range else self.original_shape[-1]
 
@@ -67,48 +80,48 @@ class LocalNPoint(IHaveMat):
         return self._full_niv_range
 
     def cut_niw(self, niw_cut: int) -> "LocalNPoint":
-        if self._num_bosonic_frequency_dimensions == 0:
+        if self.num_bosonic_frequency_dimensions == 0:
             raise ValueError("Cannot cut bosonic frequencies if there are none.")
 
         if niw_cut > self.niw:
             raise ValueError("Cannot cut more bosonic frequencies than the object has.")
 
         if self.full_niw_range:
-            if self._num_fermionic_frequency_dimensions == 2:
+            if self.num_fermionic_frequency_dimensions == 2:
                 self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1, :, :]
-            elif self._num_fermionic_frequency_dimensions == 1:
+            elif self.num_fermionic_frequency_dimensions == 1:
                 self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1, :]
-            elif self._num_fermionic_frequency_dimensions == 0:
+            elif self.num_fermionic_frequency_dimensions == 0:
                 self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1]
         else:
-            if self._num_fermionic_frequency_dimensions == 2:
+            if self.num_fermionic_frequency_dimensions == 2:
                 self.mat = self.mat[..., :niw_cut, :, :]
-            elif self._num_fermionic_frequency_dimensions == 1:
+            elif self.num_fermionic_frequency_dimensions == 1:
                 self.mat = self.mat[..., :niw_cut, :]
-            elif self._num_fermionic_frequency_dimensions == 0:
+            elif self.num_fermionic_frequency_dimensions == 0:
                 self.mat = self.mat[..., :niw_cut]
 
         self.original_shape = self.mat.shape
         return self
 
     def cut_niv(self, niv_cut: int) -> "LocalNPoint":
-        if self._num_fermionic_frequency_dimensions == 0:
+        if self.num_fermionic_frequency_dimensions == 0:
             raise ValueError("Cannot cut fermionic frequencies if there are none.")
 
         if niv_cut > self.niv:
             raise ValueError("Cannot cut more fermionic frequencies than the object has.")
 
         if self.full_niv_range:
-            if self._num_fermionic_frequency_dimensions == 2:
+            if self.num_fermionic_frequency_dimensions == 2:
                 self.mat = self.mat[
                     ..., self.niv - niv_cut : self.niv + niv_cut, self.niv - niv_cut : self.niv + niv_cut
                 ]
-            elif self._num_fermionic_frequency_dimensions == 1:
+            elif self.num_fermionic_frequency_dimensions == 1:
                 self.mat = self.mat[..., self.niv - niv_cut : self.niv + niv_cut]
         else:
-            if self._num_fermionic_frequency_dimensions == 2:
+            if self.num_fermionic_frequency_dimensions == 2:
                 self.mat = self.mat[..., :niv_cut, :niv_cut]
-            elif self._num_fermionic_frequency_dimensions == 1:
+            elif self.num_fermionic_frequency_dimensions == 1:
                 self.mat = self.mat[..., :niv_cut]
 
         self.original_shape = self.mat.shape
@@ -121,42 +134,44 @@ class LocalNPoint(IHaveMat):
         if len(self.current_shape) == 3:  # [w,x1,x2]
             return self
 
+        if self.num_bosonic_frequency_dimensions != 1:
+            raise ValueError(f"Converting to compound indices with shape {self.current_shape} not supported.")
+
         self.original_shape = self.mat.shape
 
-        if self._num_bosonic_frequency_dimensions == 1:
-            if self._num_fermionic_frequency_dimensions == 1:  # [o1,o2,o3,o4,w,v]
-                self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(2 * self.niv))
-            self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
-                2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
-            )
-            return self
+        if self.num_fermionic_frequency_dimensions == 1:  # [o1,o2,o3,o4,w,v]
+            self.mat = MFHelper.extend_last_frequency_axis_to_diagonal(self.mat)
 
-        raise ValueError(f"Converting to compound indices with shape {self.current_shape} not supported.")
+        self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
+            2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
+        )
+        return self
 
     def to_full_indices(self, shape: tuple = None) -> "LocalNPoint":
         if (
             len(self.current_shape)
-            == self._num_orbital_dimensions
-            + self._num_bosonic_frequency_dimensions
-            + self._num_fermionic_frequency_dimensions
+            == self.num_orbital_dimensions
+            + self.num_bosonic_frequency_dimensions
+            + self.num_fermionic_frequency_dimensions
         ):
             return self
         elif len(self.current_shape) == 3:  # [w,x1,x2]
             self.original_shape = shape if shape is not None else self.original_shape
             compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
-            if self._num_bosonic_frequency_dimensions == 1:
+            if self.num_bosonic_frequency_dimensions == 1:
                 self.mat = (self.mat.reshape((2 * self.niw + 1,) + compound_index_shape * 2)).transpose(
                     1, 2, 4, 5, 0, 3, 6
                 )
-                if self._num_fermionic_frequency_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
+
+                if self.num_fermionic_frequency_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
                     self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
                 return self
         else:
             raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")
 
     def invert(self) -> "LocalNPoint":
-        copy = self
+        copy = deepcopy(self)
         copy = copy.to_compound_indices()
         copy.mat = np.linalg.inv(copy.mat)
         return copy.to_full_indices()

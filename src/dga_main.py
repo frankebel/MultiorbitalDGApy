@@ -28,10 +28,10 @@ def execute_dga_routine():
     g2_dens, g2_magn = dga_io.update_g2_from_dmft(g2_dens, g2_magn)
 
     if config.do_plotting:
-        g2_dens.plot(omega=0, figure_name=f"G2_dens_w{0}")
-        g2_magn.plot(omega=0, figure_name=f"G2_magn_w{0}")
-        g2_magn.plot(omega=-10, figure_name=f"G2_magn_w{-10}")
-        g2_magn.plot(omega=10, figure_name=f"G2_magn_w{10}")
+        g2_dens.plot(omega=0, figure_name=f"G2_dens")
+        g2_magn.plot(omega=0, figure_name=f"G2_magn")
+        g2_magn.plot(omega=-10, figure_name=f"G2_magn")
+        g2_magn.plot(omega=10, figure_name=f"G2_magn")
 
     ek = config.hamiltonian.kinetics.get_ek(config.k_grid)
     g_loc = LocalGreensFunction.create_g_loc(s_loc, ek)

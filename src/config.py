@@ -7,13 +7,13 @@ from hamiltonian import Hamiltonian
 comm: Intracomm
 rank: int = 0
 
-do_plotting: bool = False
+do_plotting: bool = True
 
 nk: tuple = (16, 16, 1)
 nq: tuple = nk
 
-niv: int = 60
-niw: int = 60
+niw: int = -1
+niv: int = 70
 
 beta: float = 0
 mu: float = 0

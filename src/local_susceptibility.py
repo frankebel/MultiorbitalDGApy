@@ -1,25 +1,29 @@
 import numpy as np
 
 import config
+from i_have_channel import Channel
 from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
-from matsubara_frequency_helper import FrequencyShift
-from matsubara_frequency_helper import MFHelper
-from i_have_channel import Channel
+from matsubara_frequency_helper import MFHelper, FrequencyShift
 
 
 class LocalSusceptibility(LocalFourPoint):
     @staticmethod
     def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> "LocalSusceptibility":
         """gchi_r:1/eV^3 = beta:1/eV * (G2_r:1/eV^2 - 2 * GG:1/eV^2 delta_dens delta_w0)"""
-        chi_mat = config.beta * g2.mat
+        chi = config.beta * g2
 
         if g2.channel == Channel.DENS:
             ggv_mat = LocalSusceptibility._get_ggv_mat(g_loc, niv_slice=g2.niv)
             wn = MFHelper.get_wn_int(g2.niw)
-            chi_mat[:, :, :, :, wn == 0] = config.beta * (g2.mat[:, :, :, :, wn == 0] - 2.0 * ggv_mat)
+            chi[:, :, :, :, wn == 0] = config.beta * (g2[:, :, :, :, wn == 0] - 2.0 * ggv_mat)
 
-        return LocalSusceptibility(chi_mat, g2.channel, 1, 2, g2.full_niw_range, g2.full_niv_range)
+        return LocalSusceptibility(
+            chi.mat,
+            chi.channel,
+            full_niw_range=chi.full_niw_range,
+            full_niv_range=chi.full_niv_range,
+        )
 
     @staticmethod
     def create_generalized_chi0(
@@ -45,7 +49,8 @@ class LocalSusceptibility(LocalFourPoint):
 
             gchi0_mat[..., index, :] = -config.beta * g_left_mat * g_right_mat
 
-        return LocalSusceptibility(gchi0_mat, Channel.NONE, 1, 1, full_niw_range=True, full_niv_range=True)
+        gchi0_mat = MFHelper.extend_last_frequency_axis_to_diagonal(gchi0_mat)
+        return LocalSusceptibility(gchi0_mat, Channel.NONE)
 
     @staticmethod
     def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:

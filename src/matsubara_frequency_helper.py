@@ -42,3 +42,7 @@ class MFHelper:
             raise NotImplementedError(
                 f"Frequency notation '{freq_notation}' is not in list {[s for s in FrequencyShift]}."
             )
+
+    @staticmethod
+    def extend_last_frequency_axis_to_diagonal(mat: np.ndarray) -> np.ndarray:
+        return np.einsum("...i,ij->...ij", mat, np.eye(mat.shape[-1]))

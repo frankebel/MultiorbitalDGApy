@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 
 import config
@@ -16,12 +18,25 @@ def calculate_local_self_energy(
     gchi_magn = LocalSusceptibility.create_generalized_chi(g2_magn, g_loc)
 
     if config.do_plotting:
-        gchi_dens.plot(omega=0, figure_name=f"Gchi_dens_w{0}")
-        gchi_magn.plot(omega=0, figure_name=f"Gchi_magn_w{0}")
+        gchi_dens.plot(omega=0, figure_name=f"Gchi_dens")
+        gchi_magn.plot(omega=0, figure_name=f"Gchi_magn")
 
     gchi_0 = LocalSusceptibility.create_generalized_chi0(g_loc)
 
     gamma_dens = LocalIrreducibleVertex.create_irreducible_vertex(gchi_dens, gchi_0, u_loc)
     gamma_magn = LocalIrreducibleVertex.create_irreducible_vertex(gchi_magn, gchi_0, u_loc)
+
+    del gchi_dens, gchi_magn
+    gc.collect()
+
+    if config.do_plotting:
+        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=0, figure_name="Gamma_dens")
+        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=0, figure_name="Gamma_magn")
+
+        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=10, figure_name="Gamma_dens")
+        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=-10, figure_name="Gamma_dens")
+
+        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=10, figure_name="Gamma_magn")
+        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=-10, figure_name="Gamma_magn")
 
     return LocalSelfEnergy(np.array([]), g_loc.full_niv_range)

@@ -16,7 +16,12 @@ class LocalTwoPoint(LocalNPoint):
         )
 
     def invert(self) -> "LocalTwoPoint":
-        copy = self
+        copy = LocalTwoPoint(
+            self.mat,
+            self._num_bosonic_frequency_dimensions,
+            self._num_fermionic_frequency_dimensions,
+            self._full_niv_range,
+        )
         copy.mat = np.linalg.inv(copy.mat.transpose(2, 0, 1)).transpose(1, 2, 0)
         return copy
 

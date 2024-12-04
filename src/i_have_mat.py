@@ -1,5 +1,7 @@
-import numpy as np
 from abc import ABC
+from copy import deepcopy
+
+import numpy as np
 
 
 class IHaveMat(ABC):
@@ -14,16 +16,22 @@ class IHaveMat(ABC):
     def mat(self, value: np.ndarray) -> None:
         self._mat = value.astype(np.complex64)
 
-    def __mul__(self, other: int | float | complex) -> "IHaveMat":
+    def __mul__(self, other) -> "IHaveMat":
         if not isinstance(other, int | float | complex):
-            raise ValueError("Other needs to be a number.")
+            raise ValueError("Multiplication only supported with numbers.")
 
-        copy = self
+        copy = deepcopy(self)
         copy.mat *= other
         return copy
 
-    def __rmul__(self, other: int | float | complex) -> "IHaveMat":
+    def __rmul__(self, other) -> "IHaveMat":
         return self.__mul__(other)
+
+    def __neg__(self):
+        return self.__mul__(-1.0)
+
+    def __truediv__(self, other) -> "IHaveMat":
+        return self.__mul__(1.0 / other)
 
     def __getitem__(self, item):
         return self.mat[item]
