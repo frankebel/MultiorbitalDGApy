@@ -5,7 +5,8 @@ import numpy as np
 
 import config
 import w2dyn_aux
-from local_four_point import LocalFourPoint, Channel
+from i_have_channel import Channel
+from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
 from local_self_energy import LocalSelfEnergy
 

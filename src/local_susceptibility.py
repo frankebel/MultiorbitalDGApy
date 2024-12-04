@@ -2,11 +2,11 @@ import numpy as np
 
 import config
 from i_have_channel import Channel
+from interaction import LocalInteraction
 from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
+from local_three_point import LocalThreePoint
 from matsubara_frequency_helper import MFHelper, FrequencyShift
-from interaction import LocalInteraction
-from local_irreducible_vertex import LocalIrreducibleVertex
 
 
 class LocalSusceptibility(LocalFourPoint):
@@ -76,13 +76,30 @@ class LocalSusceptibility(LocalFourPoint):
 
     @staticmethod
     def create_auxiliary_chi(
-        gamma_r: LocalIrreducibleVertex, gchi_0: "LocalSusceptibility", u_loc: LocalInteraction
+        gamma_r: "LocalIrreducibleVertex", gchi_0: "LocalSusceptibility", u_loc: LocalInteraction
     ) -> "LocalSusceptibility":
-        chi_aux_mat = ~(~gchi_0 + gamma_r - u_loc.as_channel(gamma_r.channel) / (config.beta * config.beta)).mat
+        chi_aux_mat = (~(~gchi_0 + gamma_r - u_loc.as_channel(gamma_r.channel) / (config.beta * config.beta))).mat
+
         return LocalSusceptibility(
             chi_aux_mat, gamma_r.channel, full_niw_range=gamma_r.full_niw_range, full_niv_range=gamma_r.full_niv_range
         )
 
     @staticmethod
-    def create_physical_chi(chi_aux_contracted, g1chi0_sum, u_loc) -> "LocalSusceptibility":
-        pass
+    def create_physical_chi(
+        chi_aux_contracted: "LocalSusceptibility", gchi0_sum: "LocalSusceptibility", u_loc: LocalInteraction
+    ) -> "LocalSusceptibility":
+        chi_phys_mat = (~(~(chi_aux_contracted + gchi0_sum) + u_loc.as_channel(chi_aux_contracted.channel))).mat
+        return LocalSusceptibility(
+            chi_phys_mat,
+            chi_aux_contracted.channel,
+            1,
+            0,
+            chi_aux_contracted.full_niw_range,
+            chi_aux_contracted.full_niv_range,
+        )
+
+    @staticmethod
+    def create_vrg(gchi_aux: "LocalSusceptibility", gchi0: "LocalSusceptibility") -> LocalThreePoint:
+        gchi_aux_sum = gchi_aux.sum(axis=(-1,))
+        vrg_mat = MFHelper.compress_last_two_frequency_dimensions_to_single_dimension(((~gchi0) @ gchi_aux_sum).mat)
+        return LocalThreePoint(vrg_mat, gchi_aux.channel, 1, 1, gchi_aux.full_niw_range, gchi_aux.full_niv_range)

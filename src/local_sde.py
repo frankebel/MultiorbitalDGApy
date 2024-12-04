@@ -21,10 +21,10 @@ def calculate_local_self_energy(
         gchi_dens.plot(omega=0, figure_name=f"Gchi_dens")
         gchi_magn.plot(omega=0, figure_name=f"Gchi_magn")
 
-    gchi_0 = LocalSusceptibility.create_generalized_chi0(g_loc)
+    gchi0 = LocalSusceptibility.create_generalized_chi0(g_loc)
 
-    gamma_dens = LocalIrreducibleVertex.create_irreducible_vertex(gchi_dens, gchi_0, u_loc)
-    gamma_magn = LocalIrreducibleVertex.create_irreducible_vertex(gchi_magn, gchi_0, u_loc)
+    gamma_dens = LocalIrreducibleVertex.create_irreducible_vertex(gchi_dens, gchi0, u_loc)
+    gamma_magn = LocalIrreducibleVertex.create_irreducible_vertex(gchi_magn, gchi0, u_loc)
 
     del gchi_dens, gchi_magn
     gc.collect()
@@ -43,10 +43,17 @@ def calculate_local_self_energy(
         gamma_magn.plot(omega=-10, figure_name="Gamma_magn")
 
     gchi0_sum = LocalSusceptibility.create_chi0_sum(g_loc)
-    gchi_aux_dens_contracted = LocalSusceptibility.create_auxiliary_chi(gamma_dens, gchi_0, u_loc).contract_legs()
-    gchi_aux_magn_contracted = LocalSusceptibility.create_auxiliary_chi(gamma_magn, gchi_0, u_loc).contract_legs()
+
+    gchi_aux_dens = LocalSusceptibility.create_auxiliary_chi(gamma_dens, gchi0, u_loc)
+    gchi_aux_dens_contracted = gchi_aux_dens.contract_legs()
+
+    gchi_aux_magn = LocalSusceptibility.create_auxiliary_chi(gamma_magn, gchi0, u_loc)
+    gchi_aux_magn_contracted = gchi_aux_magn.contract_legs()
 
     chi_phys_dens = LocalSusceptibility.create_physical_chi(gchi_aux_dens_contracted, gchi0_sum, u_loc)
     chi_phys_magn = LocalSusceptibility.create_physical_chi(gchi_aux_magn_contracted, gchi0_sum, u_loc)
+
+    vrg_dens = LocalSusceptibility.create_vrg(gchi_aux_dens, gchi0)
+    vrg_magn = LocalSusceptibility.create_vrg(gchi_aux_magn, gchi0)
 
     return LocalSelfEnergy(np.array([]), g_loc.full_niv_range)

@@ -53,8 +53,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
         if isinstance(other, (LocalThreePoint, LocalFourPoint)):
-            if self.channel != other.channel:
-                raise ValueError(f"Channels {self.channel} and {other.channel} don't match.")
             if self.niw != other.niw:
                 raise ValueError(
                     f"Shapes {self.current_shape} and {other.current_shape} do not match for multiplication!"
@@ -71,17 +69,22 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         other = other.to_full_indices()
 
         if isinstance(other, LocalTwoPoint):
+            # TODO: or np.mean?
             new_mat = np.sum(new_mat, -2)
-            return LocalTwoPoint(new_mat, full_niv_range=self.full_niv_range).to_full_indices(other.current_shape)
+            return LocalTwoPoint(new_mat, full_niv_range=self.full_niv_range).to_full_indices(
+                self.original_shape if self.num_fermionic_frequency_dimensions == 0 else other.original_shape
+            )
 
         if isinstance(other, LocalThreePoint):
             return LocalThreePoint(
-                new_mat, self.channel, full_niw_range=self.full_niw_range, full_niv_range=self.full_niw_range
-            ).to_full_indices(other.current_shape)
+                new_mat, self.channel, 1, 1, full_niw_range=self.full_niw_range, full_niv_range=self.full_niw_range
+            ).to_full_indices(
+                self.original_shape if self.num_fermionic_frequency_dimensions == 1 else other.original_shape
+            )
 
         return LocalFourPoint(
-            new_mat, self.channel, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
-        ).to_full_indices(other.current_shape)
+            new_mat, self.channel, 1, 2, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
+        ).to_full_indices(self.original_shape if self.num_fermionic_frequency_dimensions == 2 else other.original_shape)
 
     def _execute_add_sub(self, other, is_addition: bool = True) -> "LocalFourPoint":
         if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint)):
@@ -90,8 +93,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self_mat, other_mat = self.mat, other.mat
 
         if isinstance(other, (LocalFourPoint, LocalThreePoint)):
-            if self.channel != other.channel:
-                raise ValueError(f"Channels {self.channel} and {other.channel} don't match.")
             if self.niw != other.niw or self.niv != other.niv or self.n_bands != other.n_bands:
                 raise ValueError(f"Shapes {self.current_shape} and {other.current_shape} do not match!")
             if self.num_bosonic_frequency_dimensions != other.num_bosonic_frequency_dimensions:
@@ -101,23 +102,32 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             other_mat = MFHelper.extend_last_frequency_axis_to_diagonal(other_mat)
 
         if isinstance(other, LocalInteraction):
-            if self.num_bosonic_frequency_dimensions == 1:
+            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:
+                result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
+                return LocalFourPoint(result_mat, self.channel, 1, 0, self.full_niw_range, self.full_niv_range)
+            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 2:
                 other_mat = other_mat * np.eye(2 * self.niv)[None, None, None, None, None, :, :]
 
-        return LocalFourPoint(
-            self_mat + other_mat if is_addition else self_mat - other_mat,
-            self.channel,
-            self.full_niw_range,
-            self.full_niv_range,
-        )
+        result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
+        if self.num_fermionic_frequency_dimensions == 0 and other.num_fermionic_frequency_dimensions == 0:
+            return LocalFourPoint(result_mat, self.channel, 1, 0, self.full_niw_range, self.full_niv_range)
+        return LocalFourPoint(result_mat, self.channel, 1, 2, self.full_niw_range, self.full_niv_range)
 
     def symmetrize_v_vp(self) -> "LocalFourPoint":
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
         return self
 
+    def sum(self, axis: tuple = (-1,)) -> "LocalFourPoint":
+        if len(axis) > self.num_fermionic_frequency_dimensions:
+            raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
+        remaining_fermionic_dimensions = self.num_fermionic_frequency_dimensions - len(axis)
+        copy_mat = np.sum(self.mat, axis=axis)
+        return LocalFourPoint(
+            copy_mat, self.channel, 1, remaining_fermionic_dimensions, self.full_niw_range, self.full_niv_range
+        )
+
     def contract_legs(self) -> "LocalFourPoint":
-        copy_mat = np.sum(self.mat, axis=(-1, -2))
-        return LocalFourPoint(copy_mat, self.channel, 1, 0, self.full_niw_range, self.full_niv_range)
+        return self.sum(axis=(-1, -2))
 
     def plot(
         self,

@@ -1,17 +1,20 @@
 import logging
 
+import numpy as np
 from mpi4py import MPI
 
 import config
 import dga_io
+import local_sde
+from dga_decorators import timeit
 from hamiltonian import HamiltonianBuilder
 from local_greens_function import LocalGreensFunction
-import local_sde
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
+@timeit
 def execute_dga_routine():
     config.comm = MPI.COMM_WORLD
     config.rank = config.comm.rank
@@ -41,4 +44,6 @@ def execute_dga_routine():
 
 
 if __name__ == "__main__":
+    test = np.random.rand
+
     execute_dga_routine()

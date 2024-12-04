@@ -139,6 +139,10 @@ class LocalNPoint(IHaveMat):
 
         self.original_shape = self.mat.shape
 
+        if self.num_fermionic_frequency_dimensions == 0:  # [o1,o2,o3,o4,w]
+            self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(2 * self.niw + 1, self.n_bands**2, self.n_bands**2)
+            return self
+
         if self.num_fermionic_frequency_dimensions == 1:  # [o1,o2,o3,o4,w,v]
             self.mat = MFHelper.extend_last_frequency_axis_to_diagonal(self.mat)
 
@@ -157,9 +161,15 @@ class LocalNPoint(IHaveMat):
             return self
         elif len(self.current_shape) == 3:  # [w,x1,x2]
             self.original_shape = shape if shape is not None else self.original_shape
-            compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
-
             if self.num_bosonic_frequency_dimensions == 1:
+                if self.num_fermionic_frequency_dimensions == 0:  # original was [o1,o2,o3,o4,w]
+                    self.mat = self.mat.reshape(
+                        (2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions
+                    ).transpose(1, 2, 3, 4, 0)
+                    return self
+
+                compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
+
                 self.mat = (self.mat.reshape((2 * self.niw + 1,) + compound_index_shape * 2)).transpose(
                     1, 2, 4, 5, 0, 3, 6
                 )

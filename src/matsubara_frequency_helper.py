@@ -46,3 +46,7 @@ class MFHelper:
     @staticmethod
     def extend_last_frequency_axis_to_diagonal(mat: np.ndarray) -> np.ndarray:
         return np.einsum("...i,ij->...ij", mat, np.eye(mat.shape[-1]))
+
+    @staticmethod
+    def compress_last_two_frequency_dimensions_to_single_dimension(mat: np.ndarray) -> np.ndarray:
+        return mat.diagonal(axis1=-2, axis2=-1)
