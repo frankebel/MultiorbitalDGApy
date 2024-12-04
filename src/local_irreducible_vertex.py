@@ -18,7 +18,6 @@ class LocalIrreducibleVertex(LocalFourPoint):
         )
 
         gammar_mat = ((~gchi_r) - chi_tilde + u_loc.as_channel(gchi_r.channel) / (config.beta * config.beta)).mat
-
         return LocalIrreducibleVertex(
             gammar_mat,
             gchi_r.channel,

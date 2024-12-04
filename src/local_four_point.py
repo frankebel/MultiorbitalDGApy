@@ -14,10 +14,20 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self,
         mat: np.ndarray,
         channel: Channel = Channel.NONE,
+        num_bosonic_frequency_dimensions: int = 1,
+        num_fermionic_frequency_dimensions: int = 2,
         full_niw_range: bool = True,
         full_niv_range: bool = True,
     ):
-        LocalNPoint.__init__(self, mat, 4, 1, 2, full_niw_range, full_niv_range)
+        LocalNPoint.__init__(
+            self,
+            mat,
+            4,
+            num_bosonic_frequency_dimensions,
+            num_fermionic_frequency_dimensions,
+            full_niw_range,
+            full_niv_range,
+        )
         IHaveChannel.__init__(self, channel)
 
     def __matmul__(self, other) -> LocalNPoint:
@@ -62,16 +72,16 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         if isinstance(other, LocalTwoPoint):
             new_mat = np.sum(new_mat, -2)
-            return LocalTwoPoint(new_mat, self.full_niv_range).to_full_indices(other.current_shape)
+            return LocalTwoPoint(new_mat, full_niv_range=self.full_niv_range).to_full_indices(other.current_shape)
 
         if isinstance(other, LocalThreePoint):
-            return LocalThreePoint(new_mat, self.channel, self.full_niw_range, self.full_niw_range).to_full_indices(
-                other.current_shape
-            )
+            return LocalThreePoint(
+                new_mat, self.channel, full_niw_range=self.full_niw_range, full_niv_range=self.full_niw_range
+            ).to_full_indices(other.current_shape)
 
-        return LocalFourPoint(new_mat, self.channel, self.full_niw_range, self.full_niv_range).to_full_indices(
-            other.current_shape
-        )
+        return LocalFourPoint(
+            new_mat, self.channel, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
+        ).to_full_indices(other.current_shape)
 
     def _execute_add_sub(self, other, is_addition: bool = True) -> "LocalFourPoint":
         if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint)):
@@ -104,6 +114,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def symmetrize_v_vp(self) -> "LocalFourPoint":
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
         return self
+
+    def contract_legs(self) -> "LocalFourPoint":
+        copy_mat = np.sum(self.mat, axis=(-1, -2))
+        return LocalFourPoint(copy_mat, self.channel, 1, 0, self.full_niw_range, self.full_niv_range)
 
     def plot(
         self,

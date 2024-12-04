@@ -7,8 +7,8 @@ from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
 from local_self_energy import LocalSelfEnergy
 from local_susceptibility import LocalSusceptibility
-from src.interaction import LocalInteraction
-from src.local_irreducible_vertex import LocalIrreducibleVertex
+from interaction import LocalInteraction
+from local_irreducible_vertex import LocalIrreducibleVertex
 
 
 def calculate_local_self_energy(
@@ -30,13 +30,23 @@ def calculate_local_self_energy(
     gc.collect()
 
     if config.do_plotting:
-        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=0, figure_name="Gamma_dens")
-        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=0, figure_name="Gamma_magn")
+        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta)))
+        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta)))
 
-        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=10, figure_name="Gamma_dens")
-        gamma_dens.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=-10, figure_name="Gamma_dens")
+        gamma_dens.plot(omega=0, figure_name="Gamma_dens")
+        gamma_magn.plot(omega=0, figure_name="Gamma_magn")
 
-        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=10, figure_name="Gamma_magn")
-        gamma_magn.cut_niv(min(config.niv, 2 * int(config.beta))).plot(omega=-10, figure_name="Gamma_magn")
+        gamma_dens.plot(omega=10, figure_name="Gamma_dens")
+        gamma_dens.plot(omega=-10, figure_name="Gamma_dens")
+
+        gamma_magn.plot(omega=10, figure_name="Gamma_magn")
+        gamma_magn.plot(omega=-10, figure_name="Gamma_magn")
+
+    gchi0_sum = LocalSusceptibility.create_chi0_sum(g_loc)
+    gchi_aux_dens_contracted = LocalSusceptibility.create_auxiliary_chi(gamma_dens, gchi_0, u_loc).contract_legs()
+    gchi_aux_magn_contracted = LocalSusceptibility.create_auxiliary_chi(gamma_magn, gchi_0, u_loc).contract_legs()
+
+    chi_phys_dens = LocalSusceptibility.create_physical_chi(gchi_aux_dens_contracted, gchi0_sum, u_loc)
+    chi_phys_magn = LocalSusceptibility.create_physical_chi(gchi_aux_magn_contracted, gchi0_sum, u_loc)
 
     return LocalSelfEnergy(np.array([]), g_loc.full_niv_range)

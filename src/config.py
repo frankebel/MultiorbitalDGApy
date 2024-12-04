@@ -7,7 +7,7 @@ from hamiltonian import Hamiltonian
 comm: Intracomm
 rank: int = 0
 
-do_plotting: bool = True
+do_plotting: bool = False
 
 nk: tuple = (16, 16, 1)
 nq: tuple = nk

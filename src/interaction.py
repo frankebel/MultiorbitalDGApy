@@ -38,6 +38,20 @@ class LocalInteraction(IHaveMat, IHaveChannel):
             raise ValueError(f"Invalid channel: {channel}.")
         return copy
 
+    def __add__(self, other):
+        if not isinstance(other, LocalInteraction):
+            raise ValueError(f"Addition {type(self)} + {type(other)} not supported.")
+        if self.channel != other.channel:
+            raise ValueError(f"Channels {self.channel} and {other.channel} don't match.")
+        return LocalInteraction(self.mat + other.mat, self._ur_orbs, self.channel)
+
+    def __sub__(self, other):
+        if not isinstance(other, LocalInteraction):
+            raise ValueError(f"Subtraction {type(self)} - {type(other)} not supported.")
+        if self.channel != other.channel:
+            raise ValueError(f"Channels {self.channel} and {other.channel} don't match.")
+        return LocalInteraction(self.mat - other.mat, self._ur_orbs, self.channel)
+
 
 class NonLocalInteraction(LocalInteraction):
     def __init__(
@@ -62,9 +76,19 @@ class NonLocalInteraction(LocalInteraction):
         return np.transpose(np.sum(fft_grid * self.mat[..., None], axis=0), axes=(4, 0, 1, 2, 3))
 
     def __add__(self, other: "NonLocalInteraction"):
-        mat = self.mat + other.mat
-        return NonLocalInteraction(mat, self._ur_r_grid, self._ur_r_weights, self._ur_orbs)
+        if not isinstance(other, NonLocalInteraction):
+            raise ValueError(f"Addition {type(self)} + {type(other)} not supported.")
+        if self.channel != other.channel:
+            raise ValueError(f"Channels {self.channel} and {other.channel} don't match.")
+        return NonLocalInteraction(
+            self.mat + other.mat, self._ur_r_grid, self._ur_r_weights, self._ur_orbs, self.channel
+        )
 
     def __sub__(self, other: "NonLocalInteraction"):
-        mat = self.mat - other.mat
-        return NonLocalInteraction(mat, self._ur_r_grid, self._ur_r_weights, self._ur_orbs)
+        if not isinstance(other, NonLocalInteraction):
+            raise ValueError(f"Subtraction {type(self)} - {type(other)} not supported.")
+        if self.channel != other.channel:
+            raise ValueError(f"Channels {self.channel} and {other.channel} don't match.")
+        return NonLocalInteraction(
+            self.mat - other.mat, self._ur_r_grid, self._ur_r_weights, self._ur_orbs, self.channel
+        )

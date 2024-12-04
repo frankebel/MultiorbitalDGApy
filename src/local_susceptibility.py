@@ -5,6 +5,8 @@ from i_have_channel import Channel
 from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
 from matsubara_frequency_helper import MFHelper, FrequencyShift
+from interaction import LocalInteraction
+from local_irreducible_vertex import LocalIrreducibleVertex
 
 
 class LocalSusceptibility(LocalFourPoint):
@@ -53,6 +55,14 @@ class LocalSusceptibility(LocalFourPoint):
         return LocalSusceptibility(gchi0_mat, Channel.NONE)
 
     @staticmethod
+    def create_chi0_sum(
+        g_loc: LocalGreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
+    ) -> "LocalSusceptibility":
+        gchi0 = LocalSusceptibility.create_generalized_chi0(g_loc, frequency_shift)
+        # gchi0 has a factor beta in front, that's why we divide by beta squared here
+        return (1.0 / (config.beta * config.beta) * gchi0).contract_legs()
+
+    @staticmethod
     def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
         if niv_slice == -1:
             niv_slice = g_loc.niv
@@ -63,3 +73,16 @@ class LocalSusceptibility(LocalFourPoint):
             np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :] * eye_bands[None, None, None, :, :, None]
         )
         return g_left_mat * g_right_mat
+
+    @staticmethod
+    def create_auxiliary_chi(
+        gamma_r: LocalIrreducibleVertex, gchi_0: "LocalSusceptibility", u_loc: LocalInteraction
+    ) -> "LocalSusceptibility":
+        chi_aux_mat = ~(~gchi_0 + gamma_r - u_loc.as_channel(gamma_r.channel) / (config.beta * config.beta)).mat
+        return LocalSusceptibility(
+            chi_aux_mat, gamma_r.channel, full_niw_range=gamma_r.full_niw_range, full_niv_range=gamma_r.full_niv_range
+        )
+
+    @staticmethod
+    def create_physical_chi(chi_aux_contracted, g1chi0_sum, u_loc) -> "LocalSusceptibility":
+        pass
