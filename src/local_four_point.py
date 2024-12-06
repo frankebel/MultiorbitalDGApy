@@ -10,6 +10,11 @@ from matsubara_frequency_helper import MFHelper
 
 
 class LocalFourPoint(LocalNPoint, IHaveChannel):
+    """
+    This class is used to represent a local four-point object in a given channel with a given number of bosonic and
+    fermionic frequency dimensions that have to be added to keep track of (re-)shaping.
+    """
+
     def __init__(
         self,
         mat: np.ndarray,
@@ -49,6 +54,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         return self.__sub__(other)
 
     def _execute_matmul(self, other, left_hand_side: bool = True) -> LocalNPoint:
+        """
+        Helper method that allows for matrix multiplication for LocalFourPoint objects. Depending on the
+        number of frequency dimensions, the objects have to be multiplied differently.
+        """
         if not isinstance(other, (LocalTwoPoint, LocalThreePoint, LocalFourPoint)):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
@@ -87,6 +96,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         ).to_full_indices(self.original_shape if self.num_fermionic_frequency_dimensions == 2 else other.original_shape)
 
     def _execute_add_sub(self, other, is_addition: bool = True) -> "LocalFourPoint":
+        """
+        Helper method that allows for in-place addition and subtraction for LocalFourPoint objects. Depending on the
+        number of frequency dimensions, the objects have to be added differently.
+        """
         if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint)):
             raise ValueError(f"Operation for {type(self)} and {type(other)} not supported.")
 
@@ -117,7 +130,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
         return self
 
-    def sum(self, axis: tuple = (-1,)) -> "LocalFourPoint":
+    def sum_over_fermionic_dimensions(self, axis: tuple = (-1,)) -> "LocalFourPoint":
+        """
+        This method is used to sum over specific fermionic frequency dimensions and returns the new objects with
+        the new shape.
+        """
         if len(axis) > self.num_fermionic_frequency_dimensions:
             raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
         remaining_fermionic_dimensions = self.num_fermionic_frequency_dimensions - len(axis)
@@ -127,7 +144,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
 
     def contract_legs(self) -> "LocalFourPoint":
-        return self.sum(axis=(-1, -2))
+        """
+        Sums over all fermionic frequency dimensions.
+        """
+        return self.sum_over_fermionic_dimensions(axis=(-1, -2))
 
     def plot(
         self,
@@ -139,6 +159,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         colormap: str = "RdBu",
         show: bool = False,
     ) -> None:
+        """
+        Plots the four-point object for a given set of orbitals and a given bosonic frequency.
+        """
         if np.abs(omega) > self.niw:
             raise ValueError(f"Omega {omega} out of range.")
         if len(orbs) != 4:

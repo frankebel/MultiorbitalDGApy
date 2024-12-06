@@ -5,6 +5,11 @@ from matsubara_frequency_helper import MFHelper
 
 
 class LocalNPoint(IHaveMat):
+    """
+    Base class for all LocalNPoint objects, such as the (Full/Irreducible) Vertex functions, Susceptibilities,
+    Fermi-Bose Vertices, Green's Function, Self-Energy and the like.
+    """
+
     def __init__(
         self,
         mat: np.ndarray,
@@ -60,6 +65,9 @@ class LocalNPoint(IHaveMat):
 
     @property
     def niw(self) -> int:
+        """
+        Returns the number of bosonic frequencies in the object.
+        """
         if self.num_bosonic_frequency_dimensions == 0:
             return 0
         axis = -(self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions)
@@ -67,19 +75,34 @@ class LocalNPoint(IHaveMat):
 
     @property
     def niv(self) -> int:
+        """
+        Returns the number of fermionic frequencies in the object.
+        """
         if self.num_fermionic_frequency_dimensions == 0:
             return 0
         return self.original_shape[-1] // 2 if self.full_niv_range else self.original_shape[-1]
 
     @property
     def full_niw_range(self) -> bool:
+        """
+        Specifies whether the object is stored in the full bosonic frequency range or
+        only a subset of it (e.g. only w >= 0).
+        """
         return self._full_niw_range
 
     @property
     def full_niv_range(self) -> bool:
+        """
+        Specifies whether the object is stored in the full fermionic frequency range or
+        only a subset of it (e.g. only w >= 0).
+        """
         return self._full_niv_range
 
     def cut_niw(self, niw_cut: int) -> "LocalNPoint":
+        """
+        Allows to place a cutoff on the number of bosonic frequencies in the object.
+        Cuts all bosonic frequency dimensions, modifies and returns the original object without creating a copy.
+        """
         if self.num_bosonic_frequency_dimensions == 0:
             raise ValueError("Cannot cut bosonic frequencies if there are none.")
 
@@ -105,6 +128,10 @@ class LocalNPoint(IHaveMat):
         return self
 
     def cut_niv(self, niv_cut: int) -> "LocalNPoint":
+        """
+        Allows to place a cutoff on the number of fermionic frequencies in the object.
+        Cuts all fermionic frequency dimensions, modifies and returns the original object without creating a copy.
+        """
         if self.num_fermionic_frequency_dimensions == 0:
             raise ValueError("Cannot cut fermionic frequencies if there are none.")
 
@@ -128,9 +155,19 @@ class LocalNPoint(IHaveMat):
         return self
 
     def cut_niw_and_niv(self, niw_cut: int, niv_cut: int) -> "LocalNPoint":
+        """
+        Allows to place a cutoff on the number of bosonic and fermionic frequencies in the object.
+        Cuts all fermionic and bosonic frequency dimensions, modifies
+        and returns the original object without creating a copy.
+        """
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
     def to_compound_indices(self) -> "LocalNPoint":
+        """
+        Converts a fermionic frequency axis and two orbital axis into a single compound index. This is useful for
+        multiplications between and inversions of LocalNPoint objects. Depending on the number of fermionic frequency
+        dimensions, other strategies are used to form the compound indices.
+        """
         if len(self.current_shape) == 3:  # [w,x1,x2]
             return self
 
@@ -152,6 +189,10 @@ class LocalNPoint(IHaveMat):
         return self
 
     def to_full_indices(self, shape: tuple = None) -> "LocalNPoint":
+        """
+        Converts an object stored with compound indices to an object that has unraveled orbital and frequency axis.
+        This needs to be done to have the object in the original shape present before the transformation to compound indices.
+        """
         if (
             len(self.current_shape)
             == self.num_orbital_dimensions
@@ -181,6 +222,9 @@ class LocalNPoint(IHaveMat):
             raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")
 
     def invert(self) -> "LocalNPoint":
+        """
+        Inverts the LocalNPoint object by transforming it to compound indices.
+        """
         copy = deepcopy(self)
         copy = copy.to_compound_indices()
         copy.mat = np.linalg.inv(copy.mat)

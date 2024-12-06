@@ -1,104 +1,64 @@
 import itertools as it
 import os
 
-import numpy as np
 import pandas as pd
 
-from interaction import LocalInteraction, NonLocalInteraction, InteractionElement
-from kinetics import Kinetics, HoppingElement
+from interaction import *
+
+
+class HoppingElement:
+    def __init__(self, r_lat: list, orbs: list, value: float = 0.0):
+        if not (isinstance(r_lat, list) and len(r_lat) == 3 and all(isinstance(x, int) for x in r_lat)):
+            raise ValueError("'r_lat' must be a list with exactly 3 integer elements.")
+        if not (
+            isinstance(orbs, list)
+            and len(orbs) == 2
+            and all(isinstance(x, int) for x in orbs)
+            and all(orb > 0 for orb in orbs)
+        ):
+            raise ValueError("'orbs' must be a list with exactly 2 integer elements that are greater than 0.")
+        if not isinstance(value, (int, float)):
+            raise ValueError("'value' must be a valid number.")
+
+        self.r_lat = tuple(r_lat)
+        self.orbs = np.array(orbs, dtype=int)
+        self.value = float(value)
+
+
+class InteractionElement:
+    def __init__(self, r_lat: list[int], orbs: list[int], value: float):
+        if not isinstance(r_lat, list) and len(r_lat) == 3 and all(isinstance(x, int) for x in r_lat):
+            raise ValueError("'r_lat' must be a list with exactly 3 integer elements.")
+        if (
+            not isinstance(orbs, list)
+            and len(orbs) == 4
+            and all(isinstance(x, int) for x in orbs)
+            and all(orb > 0 for orb in orbs)
+        ):
+            raise ValueError("'orbs' must be a list with exactly 4 integer elements that are greater than zero.")
+        if not isinstance(value, (int, float)):
+            raise ValueError("'value' must be a real number.")
+
+        self.r_lat = tuple(r_lat)
+        self.orbs = np.array(orbs, dtype=int)
+        self.value = float(value)
 
 
 class Hamiltonian:
     def __init__(self):
-        self._kinetics = None
+        self._er = None
+        self._er_r_grid = None
+        self._er_orbs = None
+        self._er_r_weights = None
 
         self._local_interaction = None
         self._nonlocal_interaction = None
 
-    @property
-    def kinetics(self) -> Kinetics:
-        return self._kinetics
-
-    @property
-    def local_interaction(self) -> LocalInteraction:
-        return self._local_interaction
-
-    @property
-    def nonlocal_interaction(self) -> NonLocalInteraction:
-        return self._nonlocal_interaction
-
-    def set_kinetics(
-        self, er: np.ndarray, er_r_grid: np.ndarray, er_r_weights: np.ndarray, er_orbs: np.ndarray
-    ) -> None:
-        self._kinetics = Kinetics(er, er_r_grid, er_r_weights, er_orbs)
-
-    def set_interaction(
-        self,
-        local_ur: np.ndarray,
-        nonlocal_ur: np.ndarray,
-        ur_r_grid: np.ndarray,
-        ur_r_weights: np.ndarray,
-        ur_orbs: np.ndarray,
-    ) -> None:
-        self._local_interaction = LocalInteraction(local_ur, ur_orbs)
-        self._nonlocal_interaction = NonLocalInteraction(nonlocal_ur, ur_r_grid, ur_r_weights, ur_orbs)
-
-
-class HamiltonianBuilder:
-    def __init__(self):
-        self._real_space_hamiltonian = Hamiltonian()
-
-    def build(self) -> Hamiltonian:
-        return self._real_space_hamiltonian
-
-    def add(self, hopping_elements: list, interaction_elements: list) -> "HamiltonianBuilder":
-        return self.add_kinetic(hopping_elements).add_interaction(interaction_elements)
-
-    def add_kinetic(self, hopping_elements: list) -> "HamiltonianBuilder":
-        hopping_elements = self._parse_elements(hopping_elements, HoppingElement)
-
-        if any(np.allclose(el.r_lat, [0, 0, 0]) for el in hopping_elements):
-            raise ValueError("Local hopping is not allowed!")
-
-        r_to_index, n_rp, n_orbs = self._prepare_indices_and_dimensions(hopping_elements)
-
-        er_r_grid = self._create_er_grid(r_to_index, n_orbs)
-        er_orbs = self._create_er_orbs(n_rp, n_orbs)
-        er_r_weights = np.ones(n_rp)[:, None]
-
-        er = np.zeros((n_rp, n_orbs, n_orbs))
-        for he in hopping_elements:
-            self._insert_er_element(er, r_to_index, he.r_lat, *he.orbs, he.value)
-
-        self._real_space_hamiltonian.set_kinetics(er, er_r_grid, er_r_weights, er_orbs)
-        return self
-
-    def add_interaction(self, interaction_elements: list) -> "HamiltonianBuilder":
-        interaction_elements = self._parse_elements(interaction_elements, InteractionElement)
-        r_to_index, n_rp, n_orbs = self._prepare_indices_and_dimensions(interaction_elements)
-
-        ur_nonlocal_r_grid = self._create_ur_grid(r_to_index, n_orbs)
-        ur_orbs = self._create_ur_orbs(n_rp, n_orbs)
-        ur_nonlocal_r_weights = np.ones(n_rp)[:, None]
-
-        ur_local = np.zeros((n_orbs, n_orbs, n_orbs, n_orbs))
-        ur_nonlocal = np.zeros((n_rp, n_orbs, n_orbs, n_orbs, n_orbs))
-        for ie in interaction_elements:
-            if np.allclose(ie.r_lat, [0, 0, 0]):
-                self._insert_ur_element(ur_local, None, None, *ie.orbs, ie.value)
-            else:
-                self._insert_ur_element(ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
-
-        self._real_space_hamiltonian.set_interaction(
-            ur_local, ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights, ur_orbs
-        )
-        return self
-
-    def add_single_band_interaction(self, u: float) -> "HamiltonianBuilder":
+    def single_band_interaction(self, u: float) -> "Hamiltonian":
         interaction_elements = [InteractionElement([0, 0, 0], [1, 1, 1, 1], u)]
-        return self.add_interaction(interaction_elements)
+        return self._add_interaction_term(interaction_elements)
 
-    def add_kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "HamiltonianBuilder":
+    def kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "Hamiltonian":
         orbs = [1, 1]
         hopping_elements = [
             HoppingElement(r_lat=[1, 0, 0], orbs=orbs, value=-t),
@@ -115,9 +75,9 @@ class HamiltonianBuilder:
             HoppingElement(r_lat=[0, -2, 0], orbs=orbs, value=-tpp),
         ]
 
-        return self.add_kinetic(hopping_elements)
+        return self._add_kinetic_term(hopping_elements)
 
-    def add_kinetic_from_file(self, filepath: str = "./", filename: str = "wannier90.dat") -> "HamiltonianBuilder":
+    def read_er_w2k(self, filepath: str = "./", filename: str = "wannier90.dat") -> "Hamiltonian":
         hr_file = pd.read_csv(
             os.path.join(filepath, filename), skiprows=1, names=np.arange(15), sep=r"\s+", dtype=float, engine="python"
         )
@@ -127,17 +87,63 @@ class HamiltonianBuilder:
         tmp = np.reshape(hr_file.values, (np.size(hr_file.values), 1))
         tmp = tmp[~np.isnan(tmp)]
 
-        er_r_weights = tmp[2 : 2 + nr].astype(int)
-        er_r_weights = np.reshape(er_r_weights, (np.size(er_r_weights), 1))
+        self._er_r_weights = tmp[2 : 2 + nr].astype(int)
+        self._er_r_weights = np.reshape(self._er_r_weights, (np.size(self._er_r_weights), 1))
         ns = 7
         n_tmp = np.size(tmp[2 + nr :]) // ns
         tmp = np.reshape(tmp[2 + nr :], (n_tmp, ns))
 
-        er_r_grid = np.reshape(tmp[:, 0:3], (nr, n_bands, n_bands, 3))
-        er_orbs = np.reshape(tmp[:, 3:5], (nr, n_bands, n_bands, 2))
-        er = np.reshape(tmp[:, 5] + 1j * tmp[:, 6], (nr, n_bands, n_bands))
+        self._er_r_grid = np.reshape(tmp[:, 0:3], (nr, n_bands, n_bands, 3))
+        self._er_orbs = np.reshape(tmp[:, 3:5], (nr, n_bands, n_bands, 2))
+        self._er = np.reshape(tmp[:, 5] + 1j * tmp[:, 6], (nr, n_bands, n_bands))
+        return self
 
-        self._real_space_hamiltonian.set_kinetics(er, er_r_grid, er_r_weights, er_orbs)
+    def get_ek(self, k_grid: bz.KGrid) -> np.ndarray:
+        ek = self._convham_2_orbs(k_grid.kmesh.reshape(3, -1))
+        n_orbs = ek.shape[-1]
+        return ek.reshape(*k_grid.nk, n_orbs, n_orbs)
+
+    def get_local_uq(self) -> LocalInteraction:
+        return self._local_interaction
+
+    def get_nonlocal_uq(self, q_grid: bz.KGrid) -> NonLocalInteraction:
+        return self._nonlocal_interaction.get_uq(q_grid)
+
+    def _add_kinetic_term(self, hopping_elements: list) -> "Hamiltonian":
+        hopping_elements = self._parse_elements(hopping_elements, HoppingElement)
+
+        if any(np.allclose(el.r_lat, [0, 0, 0]) for el in hopping_elements):
+            raise ValueError("Local hopping is not allowed!")
+
+        r_to_index, n_rp, n_orbs = self._prepare_indices_and_dimensions(hopping_elements)
+
+        self._er_r_grid = self._create_er_grid(r_to_index, n_orbs)
+        self._er_orbs = self._create_er_orbs(n_rp, n_orbs)
+        self._er_r_weights = np.ones(n_rp)[:, None]
+
+        self._er = np.zeros((n_rp, n_orbs, n_orbs))
+        for he in hopping_elements:
+            self._insert_er_element(self._er, r_to_index, he.r_lat, *he.orbs, he.value)
+        return self
+
+    def _add_interaction_term(self, interaction_elements: list) -> "Hamiltonian":
+        interaction_elements = self._parse_elements(interaction_elements, InteractionElement)
+        r_to_index, n_rp, n_orbs = self._prepare_indices_and_dimensions(interaction_elements)
+
+        ur_nonlocal_r_grid = self._create_ur_grid(r_to_index, n_orbs)
+        ur_orbs = self._create_ur_orbs(n_rp, n_orbs)
+        ur_nonlocal_r_weights = np.ones(n_rp)[:, None]
+
+        ur_local = np.zeros((n_orbs, n_orbs, n_orbs, n_orbs))
+        ur_nonlocal = np.zeros((n_rp, n_orbs, n_orbs, n_orbs, n_orbs))
+        for ie in interaction_elements:
+            if np.allclose(ie.r_lat, [0, 0, 0]):
+                self._insert_ur_element(ur_local, None, None, *ie.orbs, ie.value)
+            else:
+                self._insert_ur_element(ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
+
+        self._local_interaction = LocalInteraction(ur_local)
+        self._nonlocal_interaction = NonLocalInteraction(ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights)
         return self
 
     def _create_er_grid(self, r2ind: dict[list, int], n_orbs: int) -> np.ndarray:
@@ -190,6 +196,10 @@ class HamiltonianBuilder:
             return
         index = r_to_index[r_vec]
         ur_mat[index, orb1 - 1, orb2 - 1, orb3 - 1, orb4 - 1] = value
+
+    def _convham_2_orbs(self, k_mesh: np.ndarray = None) -> np.ndarray:
+        fft_grid = np.exp(1j * np.matmul(self._er_r_grid, k_mesh)) / self._er_r_weights[:, None, None]
+        return np.transpose(np.sum(fft_grid * self._er[..., None], axis=0), axes=(2, 0, 1))
 
     def _parse_elements(self, elements: list, element_type: type) -> list:
         if not all(isinstance(item, element_type) for item in elements):
