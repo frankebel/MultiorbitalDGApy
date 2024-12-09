@@ -181,7 +181,7 @@ class LocalNPoint(IHaveMat):
             return self
 
         if self.num_fermionic_frequency_dimensions == 1:  # [o1,o2,o3,o4,w,v]
-            self.mat = MFHelper.extend_last_frequency_axis_to_diagonal(self.mat)
+            self.extend_last_frequency_axis_to_diagonal()
 
         self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
             2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
@@ -232,3 +232,19 @@ class LocalNPoint(IHaveMat):
 
     def __invert__(self) -> "LocalNPoint":
         return self.invert()
+
+    def extend_last_frequency_axis_to_diagonal(self) -> "LocalNPoint":
+        if self.num_fermionic_frequency_dimensions == 2:
+            raise ValueError("Extending to three or more fermionic frequency dimensions is not supported.")
+        self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]))
+        self._num_fermionic_frequency_dimensions += 1
+        self.original_shape = self.current_shape
+        return self
+
+    def compress_last_two_frequency_dimensions_to_single_dimension(self) -> "LocalNPoint":
+        if self.num_fermionic_frequency_dimensions < 2:
+            raise ValueError("Cannot compress two fermionic frequency dimensions to one if there are less than two.")
+        self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
+        self._num_fermionic_frequency_dimensions -= 1
+        self.original_shape = self.current_shape
+        return self

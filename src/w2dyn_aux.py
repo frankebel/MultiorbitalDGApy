@@ -43,7 +43,7 @@ class W2dynFile:
     def get_giw(self, dmft_iter="dmft-last", atom=1):
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/giw/value"][()]
 
-    def get_occupation(self, dmft_iter="dmft-last", atom=1):
+    def get_occ(self, dmft_iter="dmft-last", atom=1):
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/occ/value"][()]
 
 

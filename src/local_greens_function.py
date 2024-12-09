@@ -23,13 +23,19 @@ class LocalGreensFunction(LocalTwoPoint):
             config.n, config.n_of_k = self._get_fill()
 
     @staticmethod
-    def create_from_dmft(mat: np.ndarray) -> "LocalGreensFunction":
+    def from_dmft(mat: np.ndarray) -> "LocalGreensFunction":
         mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
         return LocalGreensFunction(mat)
 
     @staticmethod
     def create_g_loc(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
         return LocalGreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
+
+    @property
+    def e_kin(self):  # be careful about the on-site energy
+        ekin = 1 / config.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
+        assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
+        return ekin.real
 
     def _get_fill(self) -> (float, np.ndarray):
         self.mat = self._get_gloc_mat()

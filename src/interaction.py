@@ -10,6 +10,10 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         IHaveMat.__init__(self, mat)
         IHaveChannel.__init__(self, channel)
 
+    @property
+    def n_bands(self) -> int:
+        return self.mat.shape[0]
+
     def as_channel(self, channel: Channel = Channel.DENS) -> "LocalInteraction":
         copy = LocalInteraction(self.mat, channel)
         if copy.channel == Channel.MAGN:

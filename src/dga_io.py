@@ -11,19 +11,19 @@ from local_greens_function import LocalGreensFunction
 from local_self_energy import LocalSelfEnergy
 
 
-def load_from_w2dyn_file_and_edit_config() -> (LocalGreensFunction, LocalSelfEnergy, LocalFourPoint, LocalFourPoint):
+def load_from_w2dyn_file_and_update_config() -> (LocalGreensFunction, LocalSelfEnergy, LocalFourPoint, LocalFourPoint):
     file = w2dyn_aux.W2dynFile(fname=os.path.join(config.input_path, config.dmft_1p_filename))
     # TODO: EXTEND TO MULTIORBITAL DATA ONCE I HAVE THE INPUT FILES
 
-    config.n = file.get_totdens()
-    if config.n == 0:
-        config.n = np.sum(np.diag(file.get_occupation()[0, :, 0, :]))  # band spin band spin
+    config.n_dmft = file.get_totdens()
+    if config.n_dmft == 0:
+        config.n_dmft = np.sum(np.diag(file.get_occ()[0, :, 0, :]))  # band spin band spin
     config.beta = file.get_beta()
     config.u_dmft = file.get_udd()
     config.mu = file.get_mu()
 
-    giw = LocalGreensFunction.create_from_dmft(np.mean(file.get_giw(), axis=1))  # band spin niv
-    siw = LocalSelfEnergy.create_from_dmft(np.mean(file.get_siw(), axis=1))
+    giw = LocalGreensFunction.from_dmft(np.mean(file.get_giw(), axis=1))
+    siw = LocalSelfEnergy.from_dmft(np.mean(file.get_siw(), axis=1))
     file.close()
 
     file = w2dyn_aux.W2dynG4iwFile(fname=os.path.join(config.input_path, config.dmft_2p_filename))
