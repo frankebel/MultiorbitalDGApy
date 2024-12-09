@@ -73,7 +73,7 @@ class Hamiltonian:
 
     def single_band_interaction(self, u: float) -> "Hamiltonian":
         """
-        Sets the local interaction term for a single band model by the input of a floating point number .
+        Sets the local interaction term for a single band model from the input of a floating point number.
         """
         interaction_elements = [InteractionElement([0, 0, 0], [1, 1, 1, 1], u)]
         return self._add_interaction_term(interaction_elements)

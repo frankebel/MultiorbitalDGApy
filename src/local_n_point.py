@@ -1,7 +1,9 @@
-import numpy as np
+import os
 from copy import deepcopy
+
+import numpy as np
+
 from i_have_mat import IHaveMat
-from matsubara_frequency_helper import MFHelper
 
 
 class LocalNPoint(IHaveMat):
@@ -234,6 +236,9 @@ class LocalNPoint(IHaveMat):
         return self.invert()
 
     def extend_last_frequency_axis_to_diagonal(self) -> "LocalNPoint":
+        """
+        Extends an object [...,w,v] to [...,w,v,v] by making a diagonal from the last dimension.
+        """
         if self.num_fermionic_frequency_dimensions == 2:
             raise ValueError("Extending to three or more fermionic frequency dimensions is not supported.")
         self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]))
@@ -242,9 +247,18 @@ class LocalNPoint(IHaveMat):
         return self
 
     def compress_last_two_frequency_dimensions_to_single_dimension(self) -> "LocalNPoint":
+        """
+        Compresses an object [...w,v,v] to [...,w,v] by taking the diagonal of the last two dimensions.
+        """
         if self.num_fermionic_frequency_dimensions < 2:
             raise ValueError("Cannot compress two fermionic frequency dimensions to one if there are less than two.")
         self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         self._num_fermionic_frequency_dimensions -= 1
         self.original_shape = self.current_shape
         return self
+
+    def save(self, output_dir: str = "./", name: str = "please_give_me_a_name"):
+        """
+        Saves the content of the matrix to a file.
+        """
+        np.save(os.path.join(output_dir, f"{name}.npy"), self.mat, allow_pickle=True)
