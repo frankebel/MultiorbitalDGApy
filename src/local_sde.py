@@ -135,12 +135,12 @@ def get_self_energy(
 
     inner_sum_left = np.einsum("abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, chi_phys_dens.mat)
     inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, chi_phys_dens.mat)
-    inner = deltas - vrg_dens.mat + inner_sum_left - inner_sum_right
+    inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum_left - inner_sum_right
 
     self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
 
     hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs)
-    self_energy_mat += hartree
+    self_energy_mat += hartree[..., np.newaxis]
 
     return LocalSelfEnergy(self_energy_mat)
 

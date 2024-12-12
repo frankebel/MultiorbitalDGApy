@@ -108,13 +108,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self_mat, other_mat = self.mat, other.mat
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
-        if isinstance(other, LocalInteraction):
-            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:
-                result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
-                return LocalFourPoint(result_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
-            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 2:
-                other_mat = other_mat * np.eye(2 * self.niv)[None, None, None, None, None, :, :]
-
         if isinstance(other, (LocalFourPoint, LocalThreePoint)):
             if self.niw != other.niw or self.niv != other.niv or self.n_bands != other.n_bands:
                 raise ValueError(f"Shapes {self.current_shape} and {other.current_shape} do not match!")
@@ -123,6 +116,18 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         if isinstance(other, LocalThreePoint):
             other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]))
+
+        if len(self_mat.shape) != len(other_mat.shape):
+            diff = abs(len(self_mat.shape) - len(other_mat.shape))
+            if len(self_mat.shape) > len(other_mat.shape):
+                other_mat = np.reshape(other_mat, other_mat.shape + (1,) * diff)
+            else:
+                self_mat = np.reshape(self_mat, self_mat.shape + (1,) * diff)
+
+        if isinstance(other, LocalInteraction):
+            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:
+                result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
+                return LocalFourPoint(result_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
 
         result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
         if self.num_fermionic_frequency_dimensions == 0 and other.num_fermionic_frequency_dimensions == 0:
