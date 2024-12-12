@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 
 import config
 
-from matsubara_frequency_helper import MFHelper
+from matsubara_frequencies import MFHelper
 from local_greens_function import LocalGreensFunction
 
 
@@ -26,25 +26,25 @@ def sigma_loc_checks(
     axes = axes.flatten()
 
     for i, siw in enumerate(siw_arr):
-        vn = MFHelper.get_vn_int(np.size(siw) // 2)
+        vn = MFHelper.vn(np.size(siw) // 2)
         axes[0].plot(vn, siw.real, label=labels[i])
     axes[0].set_ylabel(r"$\Re \Sigma(i\nu_n)$")
     axes[0].set_xlabel(r"$\nu_n$")
 
     for i, siw in enumerate(siw_arr):
-        vn = MFHelper.get_vn_int(np.size(siw) // 2)
+        vn = MFHelper.vn(np.size(siw) // 2)
         axes[1].plot(vn, siw.imag, label=labels[i])
     axes[1].set_ylabel(r"$\Im \Sigma(i\nu_n)$")
     axes[1].set_xlabel(r"$\nu_n$")
 
     for i, siw in enumerate(siw_arr):
-        vn = MFHelper.get_vn_int(np.size(siw) // 2)
+        vn = MFHelper.vn(np.size(siw) // 2)
         axes[2].loglog(vn, siw.real, label=labels[i])
     axes[2].set_ylabel(r"$\Re \Sigma(i\nu_n)$")
     axes[2].set_xlabel(r"$\nu_n$")
 
     for i, siw in enumerate(siw_arr):
-        vn = MFHelper.get_vn_int(np.size(siw) // 2)
+        vn = MFHelper.vn(np.size(siw) // 2)
         axes[3].loglog(vn, np.abs(siw.imag), label=labels[i])
     axes[3].set_ylabel(r"$|\Im \Sigma(i\nu_n)|$")
     axes[3].set_xlabel(r"$\nu_n$")
@@ -83,20 +83,20 @@ def chi_checks(
     niw_chi_input = np.size(chi_dens[0][*orbs, :])
 
     for i, cd in enumerate(chi_dens):
-        axes[0].plot(MFHelper.get_wn_int(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i])
+        axes[0].plot(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i])
     axes[0].set_ylabel(r"$\Re \chi(i\omega_n)_{dens}$")
     axes[0].legend()
 
     for i, cd in enumerate(chi_magn):
-        axes[1].plot(MFHelper.get_wn_int(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i])
+        axes[1].plot(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i])
     axes[1].set_ylabel(r"$\Re \chi(i\omega_n)_{magn}$")
     axes[1].legend()
 
     for i, cd in enumerate(chi_dens):
-        axes[2].loglog(MFHelper.get_wn_int(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
+        axes[2].loglog(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
     axes[2].loglog(
-        MFHelper.get_wn_int(niw_chi_input),
-        np.real(1 / (MFHelper.get_iwn(niw_chi_input, config.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
+        MFHelper.wn(niw_chi_input),
+        np.real(1 / (1j * MFHelper.wn(niw_chi_input, config.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
         ls="--",
         label="Asympt",
         ms=0,
@@ -105,10 +105,10 @@ def chi_checks(
     axes[2].legend()
 
     for i, cd in enumerate(chi_magn):
-        axes[3].loglog(MFHelper.get_wn_int(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
+        axes[3].loglog(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
     axes[3].loglog(
-        MFHelper.get_wn_int(niw_chi_input),
-        np.real(1 / (MFHelper.get_iwn(niw_chi_input, config.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
+        MFHelper.wn(niw_chi_input),
+        np.real(1 / (1j * MFHelper.wn(niw_chi_input, config.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
         "--",
         label="Asympt",
         ms=0,

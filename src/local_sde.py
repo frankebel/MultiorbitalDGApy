@@ -9,16 +9,15 @@ from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
 from local_self_energy import LocalSelfEnergy
 from local_three_point import LocalThreePoint
-from matsubara_frequency_helper import MFHelper, FrequencyShift
+from matsubara_frequencies import MFHelper, FrequencyShift
 from memory_helper import MemoryHelper
 
 
-def create_irreducible_vertex(gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
+def create_irreducible_vertex(gchi_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
     """
-    Returns the irreducible vertex gamma_r = (gchi_r)^(-1) - chi_tilde + u_loc / beta^2
+    Returns the irreducible vertex gamma_r = (gchi_r)^(-1) - (gchi0)^(-1)
     """
-    chi_tilde = (~gchi0) + u_loc.as_channel(gchi_r.channel) / (config.beta * config.beta)
-    return (~gchi_r) - chi_tilde + u_loc.as_channel(gchi_r.channel) / (config.beta * config.beta)
+    return ~gchi_r - ~gchi0
 
 
 def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> LocalFourPoint:
@@ -29,7 +28,7 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
 
     if g2.channel == Channel.DENS:
         ggv_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
-        wn = MFHelper.get_wn_int(g2.niw)
+        wn = MFHelper.wn(g2.niw)
         chi[:, :, :, :, wn == 0] = config.beta * (g2[:, :, :, :, wn == 0] - 2.0 * ggv_mat)
 
     return LocalFourPoint(
@@ -64,7 +63,7 @@ def create_generalized_chi0(
     gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.niw + 1, 2 * config.niv), dtype=np.complex64)
     eye_bands = np.eye(g_loc.n_bands)
 
-    wn = MFHelper.get_wn_int(config.niw)
+    wn = MFHelper.wn(config.niw)
     for index, current_wn in enumerate(wn):
         iws, iws2 = MFHelper.get_frequency_shift(current_wn, frequency_shift)
 
@@ -98,18 +97,18 @@ def create_chi0_sum(
 
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
     """
-    Returns the auxiliary susceptibility gchi_aux = (gamma_r + (gchi_0)^(-1) - u_loc / beta^2)^(-1)
+    Returns the auxiliary susceptibility gchi_aux = ((gchi_0)^(-1) + gamma_r-(u_abcd - u_adcb)/beta^2)^(-1)
     """
-    return ~(gamma_r + ~gchi_0 - u_loc.as_channel(gamma_r.channel) / (config.beta * config.beta))
+    u = u_loc.as_channel(gamma_r.channel)
+    return ~(~gchi_0 + gamma_r - (u - u.permute_orbitals("abcd->adcb")) / config.beta**2)
 
 
-def create_physical_chi(
-    chi_aux_contracted: LocalFourPoint, gchi0_sum: LocalFourPoint, u_loc: LocalInteraction
-) -> LocalFourPoint:
+# TODO: CHECK IF CORRECT, I AM UNSURE
+def create_physical_chi(chi_aux_contracted: LocalFourPoint) -> LocalFourPoint:
     """
     Returns the physical susceptibility chi_phys = (([sum_v gchi_aux] - [sum_v gchi0])^(-1) + u_loc)^(-1). sum_v is performed over the fermionic frequency dimensions and includes a factor 1/beta^(n_dim).
     """
-    return ~(~(chi_aux_contracted - gchi0_sum) + u_loc.as_channel(chi_aux_contracted.channel))
+    return chi_aux_contracted
 
 
 def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalThreePoint:
@@ -130,7 +129,6 @@ def get_self_energy(
     """
     Performs the local self-energy calculation using the Schwinger-Dyson equation, see Paul Worm's thesis, P. 49, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
-
     n_bands = vrg_dens.n_bands
     g_1 = MFHelper.wn_slices_gen(g_loc.mat, vrg_dens.niv, vrg_dens.niw)
     deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands))
@@ -171,8 +169,8 @@ def perform_schwinger_dyson(
 
     gchi0 = create_generalized_chi0(g_loc)
 
-    gamma_dens = create_irreducible_vertex(gchi_dens, gchi0, u_loc)
-    gamma_magn = create_irreducible_vertex(gchi_magn, gchi0, u_loc)
+    gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
+    gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
 
     MemoryHelper.delete(gchi_dens, gchi_magn)
 
@@ -202,8 +200,8 @@ def perform_schwinger_dyson(
     gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
     gchi_aux_magn_contracted = gchi_aux_magn.contract_legs(config.beta)
 
-    chi_dens = create_physical_chi(gchi_aux_dens_contracted, gchi0_sum, u_loc)
-    chi_magn = create_physical_chi(gchi_aux_magn_contracted, gchi0_sum, u_loc)
+    chi_dens = create_physical_chi(gchi_aux_dens_contracted)
+    chi_magn = create_physical_chi(gchi_aux_magn_contracted)
 
     MemoryHelper.delete(gchi0_sum, gchi_aux_magn_contracted)
 

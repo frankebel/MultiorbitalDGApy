@@ -7,6 +7,7 @@ import numpy as np
 class IHaveMat(ABC):
     def __init__(self, mat: np.ndarray):
         self._mat = mat.astype(np.complex64)
+        self._original_shape = self.mat.shape
 
     @property
     def mat(self) -> np.ndarray:
@@ -15,6 +16,18 @@ class IHaveMat(ABC):
     @mat.setter
     def mat(self, value: np.ndarray) -> None:
         self._mat = value
+
+    @property
+    def current_shape(self) -> tuple:
+        return self._mat.shape
+
+    @property
+    def original_shape(self) -> tuple:
+        return self._original_shape
+
+    @original_shape.setter
+    def original_shape(self, value) -> None:
+        self._original_shape = value
 
     def __mul__(self, other) -> "IHaveMat":
         if not isinstance(other, int | float | complex):

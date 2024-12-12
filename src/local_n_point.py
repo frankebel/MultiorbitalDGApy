@@ -35,20 +35,6 @@ class LocalNPoint(IHaveMat):
         self._full_niv_range = full_niv_range
         self._full_niw_range = full_niw_range
 
-        self.original_shape = self.mat.shape
-
-    @property
-    def current_shape(self) -> tuple:
-        return self._mat.shape
-
-    @property
-    def original_shape(self) -> tuple:
-        return self._original_shape
-
-    @original_shape.setter
-    def original_shape(self, value) -> None:
-        self._original_shape = value
-
     @property
     def n_bands(self) -> int:
         return self.original_shape[0]
@@ -257,7 +243,35 @@ class LocalNPoint(IHaveMat):
         self.original_shape = self.current_shape
         return self
 
-    def save(self, output_dir: str = "./", name: str = "please_give_me_a_name"):
+    def padding_along_fermionic(self, other: "LocalNPoint") -> "LocalNPoint":
+        """
+        Symmetrically pads the larger of two LocalNPoint objects to the smaller one along the fermionic frequency dimensions.
+        Example: Object 1 is 'oooo', object 2 is 'nn'. The resulting object will be 'onno'.
+        """
+        if self.num_fermionic_frequency_dimensions != other.num_fermionic_frequency_dimensions:
+            raise ValueError("Number of fermionic frequency dimensions do not match.")
+        if self.num_fermionic_frequency_dimensions == 0 or other.num_fermionic_frequency_dimensions == 0:
+            raise ValueError("Cannot concatenate objects with zero fermionic frequency dimensions.")
+        if self.niv == other.niv:
+            raise ValueError("Cannot concatenate objects with the same number of fermionic frequencies.")
+
+        axis = -1
+        if self.num_fermionic_frequency_dimensions == 2:
+            axis = (-1, -2)
+
+        copy = deepcopy(self)
+
+        if other.niv > self.niv:
+            niv = other.niv - self.niv
+            copy.mat = np.concatenate((other.mat[..., :niv], copy.mat, other.mat[..., 2 * copy.niv + niv :]), axis=axis)
+        else:
+            niv = self.niv - other.niv
+            copy.mat = np.concatenate((copy.mat[..., :niv], other.mat, copy.mat[..., 2 * other.niv + niv :]), axis=axis)
+
+        copy.original_shape = copy.current_shape
+        return copy
+
+    def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """
         Saves the content of the matrix to a file.
         """

@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 from mpi4py import MPI
 
 import config
@@ -23,6 +24,8 @@ def execute_dga_routine():
     config.hamiltonian = (
         Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
     )
+
+    np.save("./sigma_dmft.npy", sigma_dmft.mat, allow_pickle=True)
 
     dga_io.update_frequency_boxes(g2_dens.niv, g2_dens.niw)
     g2_dens, g2_magn = dga_io.update_g2_from_dmft(g2_dens, g2_magn)
@@ -69,6 +72,20 @@ def execute_dga_routine():
         )
 
     print("Success!")
+
+    """
+    # just a test to see if the SDE can be performed selfconsistently
+    logger = logging.getLogger()
+    for it in range(0, 25):
+        logger.info(f"current_iter: {it}")
+        g_loc = LocalGreensFunction.create_g_loc(sigma, ek).padding_along_fermionic(g_dmft)
+        gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma = local_sde.perform_schwinger_dyson(
+            g_loc, g2_dens, g2_magn, u_loc
+        )
+        config.n_dmft = config.n
+
+    sigma.save(name="siw_sde_full_sc")
+    """
 
 
 if __name__ == "__main__":

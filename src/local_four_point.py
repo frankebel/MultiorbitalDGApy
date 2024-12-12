@@ -6,7 +6,7 @@ from interaction import LocalInteraction
 from local_n_point import LocalNPoint
 from local_three_point import LocalThreePoint
 from local_two_point import LocalTwoPoint
-from matsubara_frequency_helper import MFHelper
+from matsubara_frequencies import MFHelper
 
 
 class LocalFourPoint(LocalNPoint, IHaveChannel):
@@ -84,15 +84,17 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 self.original_shape if self.num_fermionic_frequency_dimensions == 0 else other.original_shape
             )
 
+        channel = self.channel if self.channel != Channel.NONE else other.channel
+
         if isinstance(other, LocalThreePoint):
             return LocalThreePoint(
-                new_mat, self.channel, 1, 1, full_niw_range=self.full_niw_range, full_niv_range=self.full_niw_range
+                new_mat, channel, 1, 1, full_niw_range=self.full_niw_range, full_niv_range=self.full_niw_range
             ).to_full_indices(
                 self.original_shape if self.num_fermionic_frequency_dimensions == 1 else other.original_shape
             )
 
         return LocalFourPoint(
-            new_mat, self.channel, 1, 2, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
+            new_mat, channel, 1, 2, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
         ).to_full_indices(self.original_shape if self.num_fermionic_frequency_dimensions == 2 else other.original_shape)
 
     def _execute_add_sub(self, other, is_addition: bool = True) -> "LocalFourPoint":
@@ -174,10 +176,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         fig, axes = plt.subplots(ncols=2, figsize=(7, 3), dpi=251)
         axes = axes.flatten()
-        wn_list = MFHelper.get_wn_int(self.niw)
+        wn_list = MFHelper.wn(self.niw)
         wn_index = np.argmax(wn_list == omega)
         mat = self.mat[orbs[0], orbs[1], orbs[2], orbs[3], wn_index, ...]
-        vn = MFHelper.get_vn_int(self.niv)  # pylint: disable=unexpected-keyword-arg
+        vn = MFHelper.vn(self.niv)  # pylint: disable=unexpected-keyword-arg
         im1 = axes[0].pcolormesh(vn, vn, mat.real, cmap=colormap)
         im2 = axes[1].pcolormesh(vn, vn, mat.imag, cmap=colormap)
         axes[0].set_title(r"$\Re$")

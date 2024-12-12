@@ -1,12 +1,12 @@
 import numpy as np
 from local_two_point import LocalTwoPoint
-from matsubara_frequency_helper import MFHelper
+from matsubara_frequencies import MFHelper
 
 import config
 
 
 class LocalSelfEnergy(LocalTwoPoint):
-    def __init__(self, mat: np.ndarray, full_niv_range: bool = True, do_smom_fit: bool = False):
+    def __init__(self, mat: np.ndarray, full_niv_range: bool = True, do_smom_fit: bool = True):
         super().__init__(mat, full_niv_range=full_niv_range)
         if do_smom_fit:
             self._smom0, self._smom1 = self._fit_smom()
@@ -22,7 +22,7 @@ class LocalSelfEnergy(LocalTwoPoint):
 
     def _fit_smom(self):
         mat_half_v = self.mat[..., self.niv :]
-        iv = MFHelper.get_ivn(self.niv, config.beta, return_only_positive=True)
+        iv = 1j * MFHelper.vn(self.niv, config.beta, return_only_positive=True)
 
         n_freq_fit = int(0.2 * self.niv)
         if n_freq_fit < 4:

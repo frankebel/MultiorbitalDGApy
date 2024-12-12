@@ -7,14 +7,14 @@ from hamiltonian import Hamiltonian
 comm: Intracomm
 rank: int = 0
 
-do_plotting: bool = False
-save_quantities: bool = False
+do_plotting: bool = True
+save_quantities: bool = True
 
-nk: tuple = (16, 16, 1)
+nk: tuple = (26, 26, 1)
 nq: tuple = nk
 
 niw: int = -1
-niv: int = 70
+niv: int = -1
 
 beta: float = 0
 mu: float = 0
@@ -27,7 +27,7 @@ do_sym_v_vp: bool = True
 
 lattice_symmetry_set: str = "two_dimensional_square"
 lattice_er_type: str = "t_tp_tpp"
-lattice_er_input: list = [1, -0.2, 0.1]
+lattice_er_input: list = [1, -0.25, 0.12]
 
 input_path: str = "/home/julpe/Documents/DATA"
 dmft_1p_filename: str = "1p-data.hdf5"

@@ -4,7 +4,7 @@ import scipy
 import config
 from local_self_energy import LocalSelfEnergy
 from local_two_point import LocalTwoPoint
-from matsubara_frequency_helper import MFHelper
+from matsubara_frequencies import MFHelper
 
 
 class LocalGreensFunction(LocalTwoPoint):
@@ -73,7 +73,7 @@ class LocalGreensFunction(LocalTwoPoint):
 
     def _get_g_params_local(self):
         eye_bands = np.eye(self.n_bands, self.n_bands)
-        v = MFHelper.get_ivn(self.niv, config.beta)
-        iv_bands = v[None, None, :] * eye_bands[..., None]
+        iv = 1j * MFHelper.vn(self.niv, config.beta)
+        iv_bands = iv[None, None, :] * eye_bands[..., None]
         mu_bands = config.mu * eye_bands[:, :, None]
         return iv_bands, mu_bands
