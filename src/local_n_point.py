@@ -215,6 +215,13 @@ class LocalNPoint(IHaveMat):
         """
         copy = deepcopy(self)
         copy = copy.to_compound_indices()
+
+        if np.any(np.linalg.cond(copy.mat) > 1 / np.finfo(copy.mat.dtype).eps):
+            raise np.linalg.LinAlgError(
+                f"Matrix is (close to or) singular / ill-conditioned for the data type {copy.mat.dtype}. "
+                f"You will have a bad time inverting this."
+            )
+
         copy.mat = np.linalg.inv(copy.mat)
         return copy.to_full_indices()
 

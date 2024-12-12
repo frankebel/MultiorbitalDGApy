@@ -1,18 +1,39 @@
 import logging
 
-import numpy as np
 from mpi4py import MPI
 
+import numpy as np
 import config
 import dga_io
 import local_sde
+import plotting
 from dga_decorators import timeit
 from hamiltonian import Hamiltonian
 from local_greens_function import LocalGreensFunction
-import plotting
+from local_n_point import LocalNPoint
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
+
+def extend_to_multiorbital_data(obj: LocalNPoint, new_n_bands: int = 3) -> LocalNPoint:
+    """
+    Extend the object to multiorbital data.
+    """
+    new_mat = np.zeros(
+        (new_n_bands,) * obj.num_orbital_dimensions
+        + (2 * obj.niw + 1,) * obj.num_bosonic_frequency_dimensions
+        + (2 * obj.niv,) * obj.num_fermionic_frequency_dimensions,
+        dtype=np.complex64,
+    )
+    if obj.num_orbital_dimensions == 2:
+        new_mat[0, 0, ...] = obj.mat
+    if obj.num_orbital_dimensions == 4:
+        new_mat[0, 0, 0, 0, ...] = obj.mat
+
+    obj.mat = new_mat
+    obj.original_shape = obj.current_shape
+    return obj
 
 
 @timeit
@@ -21,11 +42,22 @@ def execute_dga_routine():
     config.rank = config.comm.rank
 
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
+
+    g_dmft = extend_to_multiorbital_data(g_dmft)
+    sigma_dmft = extend_to_multiorbital_data(sigma_dmft)
+    g2_dens = extend_to_multiorbital_data(g2_dens)
+    g2_magn = extend_to_multiorbital_data(g2_magn)
+
     config.hamiltonian = (
         Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
     )
+    config.hamiltonian = (
+        Hamiltonian()
+        .read_er_w2k(filename="wannier_hr_test.dat")
+        .single_band_interaction_as_multiband(config.u_dmft, num_bands=3)
+    )
 
-    np.save("./sigma_dmft.npy", sigma_dmft.mat, allow_pickle=True)
+    sigma_dmft.save(name="sigma_dmft")
 
     dga_io.update_frequency_boxes(g2_dens.niv, g2_dens.niw)
     g2_dens, g2_magn = dga_io.update_g2_from_dmft(g2_dens, g2_magn)
@@ -53,39 +85,12 @@ def execute_dga_routine():
         chi_magn.save(name="chi_magn")
 
     if config.do_plotting:
-        plotting.chi_checks(
-            [
-                chi_dens.mat,
-            ],
-            [
-                chi_magn.mat,
-            ],
-            [
-                "Loc-tilde",
-            ],
-            g_loc,
-            name="loc",
-        )
-
+        plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
         plotting.sigma_loc_checks(
             [sigma[0, 0], sigma_dmft[0, 0]], ["SDE", "Input"], config.beta, show=False, save=True, xmax=config.niv
         )
 
-    print("Success!")
-
-    """
-    # just a test to see if the SDE can be performed selfconsistently
-    logger = logging.getLogger()
-    for it in range(0, 25):
-        logger.info(f"current_iter: {it}")
-        g_loc = LocalGreensFunction.create_g_loc(sigma, ek).padding_along_fermionic(g_dmft)
-        gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma = local_sde.perform_schwinger_dyson(
-            g_loc, g2_dens, g2_magn, u_loc
-        )
-        config.n_dmft = config.n
-
-    sigma.save(name="siw_sde_full_sc")
-    """
+    print("Done!")
 
 
 if __name__ == "__main__":

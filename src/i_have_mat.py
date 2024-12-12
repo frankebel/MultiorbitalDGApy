@@ -5,6 +5,10 @@ import numpy as np
 
 
 class IHaveMat(ABC):
+    """
+    Interface for classes that have a mat attribute. Adds a couple of convenience methods for matrix operations.
+    """
+
     def __init__(self, mat: np.ndarray):
         self._mat = mat.astype(np.complex64)
         self._original_shape = self.mat.shape
@@ -31,7 +35,7 @@ class IHaveMat(ABC):
 
     def __mul__(self, other) -> "IHaveMat":
         if not isinstance(other, int | float | complex):
-            raise ValueError("Multiplication only supported with numbers.")
+            raise ValueError("Multiplication/divison only supported with numbers.")
 
         copy = deepcopy(self)
         copy.mat *= other

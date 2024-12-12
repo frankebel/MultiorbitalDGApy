@@ -75,7 +75,16 @@ class Hamiltonian:
         """
         Sets the local interaction term for a single band model from the input of a floating point number.
         """
-        interaction_elements = [InteractionElement([0, 0, 0], [1, 1, 1, 1], u)]
+        return self.single_band_interaction_as_multiband(u, 1)
+
+    def single_band_interaction_as_multiband(self, u: float, num_bands: int = 1) -> "Hamiltonian":
+        interaction_elements = []
+        for i, j, k, l in it.product(range(num_bands), repeat=4):
+            if i == j == k == l == 1:
+                interaction_elements.append(InteractionElement([0, 0, 0], [i + 1, j + 1, k + 1, l + 1], u))
+            else:
+                interaction_elements.append(InteractionElement([0, 0, 0], [i + 1, j + 1, k + 1, l + 1], 0))
+
         return self._add_interaction_term(interaction_elements)
 
     def kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "Hamiltonian":

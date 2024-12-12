@@ -8,6 +8,10 @@ from matsubara_frequencies import MFHelper
 
 
 class LocalGreensFunction(LocalTwoPoint):
+    """
+    Represents a momentum-independent Green's function.
+    """
+
     def __init__(
         self,
         mat: np.ndarray,
@@ -20,40 +24,55 @@ class LocalGreensFunction(LocalTwoPoint):
         self._ek = ek
 
         if sigma is not None and ek is not None:
-            config.n, config.n_of_k = self._get_fill()
+            config.n, config.rho_orbs = self._get_fill()
 
     @staticmethod
     def from_dmft(mat: np.ndarray) -> "LocalGreensFunction":
+        """
+        Creates a LocalGreensFunction object from a given DMFT file input matrix.
+
+        """
         mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
         return LocalGreensFunction(mat)
 
     @staticmethod
     def create_g_loc(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
+        """
+        Returns a local Green's function object from a given self-energy and band dispersion.
+        """
         return LocalGreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
 
     @property
     def e_kin(self):  # be careful about the on-site energy
+        """
+        Returns the kinetic energy of the system.
+        """
         ekin = 1 / config.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
         assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
         return ekin.real
 
     def _get_fill(self) -> (float, np.ndarray):
+        """
+        Returns the total filling and the filling of each band.
+        """
         self.mat = self._get_gloc_mat()
         g_model = self._get_g_model_mat()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
-
         mu_bands: np.ndarray = config.mu * np.eye(self.n_bands)
-        if (config.beta * np.linalg.eigvals(hloc.real + smom0 - mu_bands) < 20).any():
-            rho_loc = np.linalg.inv(
-                np.eye(self.n_bands) + scipy.linalg.expm(config.beta * (hloc.real + smom0 - mu_bands))
-            )
-        else:
-            rho_loc = scipy.linalg.expm(-config.beta * (smom0 + hloc.real - mu_bands))
 
-        filling_k = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.beta
-        n_el = 2.0 * np.trace(filling_k).real
-        return n_el, filling_k
+        eigenvals, eigenvecs = np.linalg.eig(config.beta * (hloc.real + smom0 - mu_bands))
+        rho_loc_diag = np.zeros(self.n_bands, dtype=np.complex64)
+        for i in range(self.n_bands):
+            if eigenvals[i] > 0:
+                rho_loc_diag[i] = np.exp(-eigenvals[i]) / (1 + np.exp(-eigenvals[i]))
+            else:
+                rho_loc_diag[i] = 1 / (1 + np.exp(eigenvals[i]))
+
+        rho_loc = eigenvecs @ np.diag(rho_loc_diag) @ np.linalg.inv(eigenvecs)
+        rho_new = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.beta
+        n_el = 2.0 * np.trace(rho_new).real
+        return n_el, rho_new
 
     def _get_gloc_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()
@@ -68,7 +87,7 @@ class LocalGreensFunction(LocalTwoPoint):
         iv_bands, mu_bands = self._get_g_params_local()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
-        mat = iv_bands + mu_bands - hloc - smom0
+        mat = iv_bands + mu_bands - hloc[..., None] - smom0
         return np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
 
     def _get_g_params_local(self):

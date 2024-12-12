@@ -29,7 +29,9 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
     if g2.channel == Channel.DENS:
         ggv_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
         wn = MFHelper.wn(g2.niw)
-        chi[:, :, :, :, wn == 0] = config.beta * (g2[:, :, :, :, wn == 0] - 2.0 * ggv_mat)
+        chi[:, :, :, :, wn == 0, ...] = config.beta * (
+            g2[:, :, :, :, wn == 0, ...] - 2.0 * ggv_mat[:, :, :, :, None, ...]
+        )
 
     return LocalFourPoint(
         chi.mat,
@@ -47,11 +49,9 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
         niv_slice = g_loc.niv
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
     eye_bands = np.eye(g_loc.n_bands)
-    g_left_mat = g_loc_slice_mat[:, None, None, :, :, None] * eye_bands[None, :, :, None, None, None]
-    g_right_mat = (
-        np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :] * eye_bands[None, None, None, :, :, None]
-    )
-    return g_left_mat * g_right_mat
+    g_left_mat = g_loc_slice_mat[:, None, None, :, :] * eye_bands[None, :, :, None, None]
+    g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, :] * eye_bands[:, None, None, :, None]
+    return np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]))
 
 
 def create_generalized_chi0(
@@ -138,19 +138,11 @@ def get_self_energy(
     inner = deltas - vrg_dens.mat + inner_sum_left - inner_sum_right
 
     self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
-    self_energy_mat += get_hartree_fock(u_loc, config.n_dmft)
+
+    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs)
+    self_energy_mat += hartree
+
     return LocalSelfEnergy(self_energy_mat)
-
-
-def get_hartree_fock(u_loc: LocalInteraction, n: float) -> np.ndarray:
-    """
-    Computes the local Hartree-Fock contribution with the n obtained from DMFT.
-    """
-    u = u_loc.as_channel(Channel.DENS).mat
-    n = n * np.eye(u_loc.n_bands)
-    hartree = 0.5 * np.einsum("abcd,dc->ab", u, n)
-    fock = np.zeros_like(hartree)
-    return hartree + fock
 
 
 def perform_schwinger_dyson(

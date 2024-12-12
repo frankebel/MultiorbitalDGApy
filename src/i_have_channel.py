@@ -9,6 +9,10 @@ class Channel(Enum):
 
 
 class IHaveChannel(ABC):
+    """
+    Interface for classes that have a channel attribute.
+    """
+
     def __init__(self, channel: Channel = Channel.NONE):
         self._channel = channel
 

@@ -13,15 +13,15 @@ save_quantities: bool = True
 nk: tuple = (26, 26, 1)
 nq: tuple = nk
 
-niw: int = -1
-niv: int = -1
+niw: int = 50
+niv: int = 50
 
-beta: float = 0
-mu: float = 0
-n: float = 0
-n_dmft: float = 0
-n_of_k: np.ndarray
-u_dmft: float = 0
+beta: float = 0.0
+mu: float = 0.0
+n: float = 0.0
+rho_orbs: np.ndarray
+n_dmft: float = 0.0
+u_dmft: float = 0.0
 
 do_sym_v_vp: bool = True
 
