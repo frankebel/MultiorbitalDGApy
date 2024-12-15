@@ -2,7 +2,6 @@ import logging
 
 from mpi4py import MPI
 
-import numpy as np
 import config
 import dga_io
 import local_sde
@@ -16,26 +15,6 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
-def extend_to_multiorbital_data(obj: LocalNPoint, new_n_bands: int = 3) -> LocalNPoint:
-    """
-    Extend the object to multiorbital data.
-    """
-    new_mat = np.zeros(
-        (new_n_bands,) * obj.num_orbital_dimensions
-        + (2 * obj.niw + 1,) * obj.num_bosonic_frequency_dimensions
-        + (2 * obj.niv,) * obj.num_fermionic_frequency_dimensions,
-        dtype=np.complex64,
-    )
-    if obj.num_orbital_dimensions == 2:
-        new_mat[0, 0, ...] = obj.mat
-    if obj.num_orbital_dimensions == 4:
-        new_mat[0, 0, 0, 0, ...] = obj.mat
-
-    obj.mat = new_mat
-    obj.original_shape = obj.current_shape
-    return obj
-
-
 @timeit
 def execute_dga_routine():
     config.comm = MPI.COMM_WORLD
@@ -43,10 +22,7 @@ def execute_dga_routine():
 
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
-    g_dmft = extend_to_multiorbital_data(g_dmft)
-    sigma_dmft = extend_to_multiorbital_data(sigma_dmft)
-    g2_dens = extend_to_multiorbital_data(g2_dens)
-    g2_magn = extend_to_multiorbital_data(g2_magn)
+    sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 3)
 
     config.hamiltonian = (
         Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
@@ -87,7 +63,12 @@ def execute_dga_routine():
     if config.do_plotting:
         plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
         plotting.sigma_loc_checks(
-            [sigma[0, 0], sigma_dmft[0, 0]], ["SDE", "Input"], config.beta, show=False, save=True, xmax=config.niv
+            [sigma[0, 0], sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],
+            ["SDE00", "SDE10", "SDE01", "SDE11", "Input"],
+            config.beta,
+            show=False,
+            save=True,
+            xmax=config.niv,
         )
 
     print("Done!")

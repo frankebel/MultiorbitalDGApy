@@ -211,32 +211,12 @@ class LocalNPoint(IHaveMat):
             raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")
 
     def invert(self) -> "LocalNPoint":
-        logger = logging.getLogger()
         """
         Inverts the LocalNPoint object by transforming it to compound indices.
         """
         copy = deepcopy(self)
         copy = copy.to_compound_indices()
-
-        condition_numbers = np.array([np.linalg.cond(copy.mat[i]) for i in range(copy.mat.shape[0])])
-
-        if np.any(condition_numbers > 1 / np.finfo(copy.mat.dtype).eps):
-            logger.warning(f"Matrix is (close to or) singular / ill-conditioned for the data type {copy.mat.dtype}.")
-            eps = np.finfo(copy.mat.dtype).eps
-            for i in range(2 * copy.niw + 1):
-                u, s, v_t = np.linalg.svd(copy.mat[i, ...], full_matrices=True)
-                s_inv = np.zeros_like(copy.mat[i, ...])
-                for j in range(len(s)):
-                    if s[j] > eps:  # Avoid division by "zero" for very small singular values
-                        s_inv[j, j] = 1.0 / s[j]
-                copy.mat[i, ...] = v_t.T @ s_inv @ u.T
-
-            # raise np.linalg.LinAlgError(
-            # f"Matrix is (close to or) singular / ill-conditioned for the data type {copy.mat.dtype}. "
-            # f"You will have a bad time inverting this."
-        # )
-        else:
-            copy.mat = np.linalg.inv(copy.mat)
+        copy.mat = np.linalg.inv(copy.mat)
         return copy.to_full_indices()
 
     def __invert__(self) -> "LocalNPoint":
@@ -297,3 +277,28 @@ class LocalNPoint(IHaveMat):
         Saves the content of the matrix to a file.
         """
         np.save(os.path.join(output_dir, f"{name}.npy"), self.mat, allow_pickle=True)
+
+    @staticmethod
+    def from_constant(
+        n_bands: int,
+        niw: int,
+        niv: int,
+        num_orbital_dimensions: int = 4,
+        num_bosonic_frequency_dimensions: int = 1,
+        num_fermionic_frequency_dimensions: int = 2,
+        value: float = 0.0,
+    ) -> "LocalNPoint":
+        """
+        Initializes the object with a constant value.
+        """
+        shape = (
+            (n_bands,) * num_orbital_dimensions
+            + (2 * niw + 1,) * num_bosonic_frequency_dimensions
+            + (2 * niv,) * num_fermionic_frequency_dimensions
+        )
+        return LocalNPoint(
+            np.full(shape, value, dtype=np.complex64),
+            num_orbital_dimensions,
+            num_bosonic_frequency_dimensions,
+            num_fermionic_frequency_dimensions,
+        )

@@ -62,14 +62,14 @@ class LocalGreensFunction(LocalTwoPoint):
         mu_bands: np.ndarray = config.mu * np.eye(self.n_bands)
 
         eigenvals, eigenvecs = np.linalg.eig(config.beta * (hloc.real + smom0 - mu_bands))
-        rho_loc_diag = np.zeros(self.n_bands, dtype=np.complex64)
+        rho_loc_diag = np.zeros((self.n_bands, self.n_bands), dtype=np.complex64)
         for i in range(self.n_bands):
             if eigenvals[i] > 0:
-                rho_loc_diag[i] = np.exp(-eigenvals[i]) / (1 + np.exp(-eigenvals[i]))
+                rho_loc_diag[i, i] = np.exp(-eigenvals[i]) / (1 + np.exp(-eigenvals[i]))
             else:
-                rho_loc_diag[i] = 1 / (1 + np.exp(eigenvals[i]))
+                rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
 
-        rho_loc = eigenvecs @ np.diag(rho_loc_diag) @ np.linalg.inv(eigenvecs)
+        rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
         rho_new = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.beta
         n_el = 2.0 * np.trace(rho_new).real
         return n_el, rho_new
@@ -87,7 +87,7 @@ class LocalGreensFunction(LocalTwoPoint):
         iv_bands, mu_bands = self._get_g_params_local()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
-        mat = iv_bands + mu_bands - hloc[..., None] - smom0
+        mat = iv_bands + mu_bands - hloc[..., None] - smom0[..., np.newaxis]
         return np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
 
     def _get_g_params_local(self):

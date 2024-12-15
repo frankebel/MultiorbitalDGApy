@@ -70,7 +70,7 @@ def chi_checks(
     labels: list[str],
     g_loc: LocalGreensFunction,
     output_dir: str = "./",
-    orbs=[0, 0, 0, 0],
+    orbs=[0, 0],
     show: bool = False,
     save: bool = True,
     name: str = "",

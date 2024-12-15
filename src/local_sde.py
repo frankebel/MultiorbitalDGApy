@@ -25,12 +25,21 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
     Returns the generalized susceptibility gchi_{r;lmm'l'}^{wvv'}:1/eV^3 = beta:1/eV * (G2_{r;lmm'l'}^{wvv'}:1/eV^2 - 2 * G_{ll'}^{v} G_{m'm}^{v}:1/eV^2 delta_dens delta_w0)
     """
     chi = config.beta * g2
+    chi0_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
 
+    """ PUT BACK IN WHEN TESTING DONE
     if g2.channel == Channel.DENS:
-        ggv_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
         wn = MFHelper.wn(g2.niw)
         chi[:, :, :, :, wn == 0, ...] = config.beta * (
-            g2[:, :, :, :, wn == 0, ...] - 2.0 * ggv_mat[:, :, :, :, None, ...]
+            g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[:, :, :, :, wn == 0, ...]
+        )
+    """
+
+    # just for testing!
+    if g2.channel == Channel.DENS:
+        wn = MFHelper.wn(g2.niw)
+        chi[:, :, :, :, wn == 0, ...] = config.beta * (
+            g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[0, 0, 0, 0, wn == 0, ...]
         )
 
     return LocalFourPoint(
@@ -51,7 +60,9 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
     eye_bands = np.eye(g_loc.n_bands)
     g_left_mat = g_loc_slice_mat[:, None, None, :, :] * eye_bands[None, :, :, None, None]
     g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, :] * eye_bands[:, None, None, :, None]
-    return np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]))
+    ggv_mat = np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]))
+    ggv_mat = ggv_mat[:, :, :, :, np.newaxis, ...]
+    return np.tile(ggv_mat, (1, 1, 1, 1, 2 * config.niw + 1, 1, 1))
 
 
 def create_generalized_chi0(
@@ -97,23 +108,23 @@ def create_chi0_sum(
 
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
     """
-    Returns the auxiliary susceptibility gchi_aux = ((gchi_0)^(-1) + gamma_r-(u_abcd - u_adcb)/beta^2)^(-1)
+    Returns the auxiliary susceptibility gchi_aux_{r;lmm'l'} = ((gchi_{0;lmm'l'})^(-1) + gamma_{r;lmm'l'}-(u_{lmm'l'} - u_{ll'm'm})/beta^2)^(-1). See Eq. (3.68) in Paul Worm's thesis.
     """
     u = u_loc.as_channel(gamma_r.channel)
     return ~(~gchi_0 + gamma_r - (u - u.permute_orbitals("abcd->adcb")) / config.beta**2)
 
 
-# TODO: CHECK IF CORRECT, I AM UNSURE
-def create_physical_chi(chi_aux_contracted: LocalFourPoint) -> LocalFourPoint:
+def create_physical_chi(gchi_r: LocalFourPoint) -> LocalFourPoint:
     """
-    Returns the physical susceptibility chi_phys = (([sum_v gchi_aux] - [sum_v gchi0])^(-1) + u_loc)^(-1). sum_v is performed over the fermionic frequency dimensions and includes a factor 1/beta^(n_dim).
+    Returns the physical susceptibility chi_phys_{r;ll'}^{w} = 1/beta^2 [sum_v sum_{mm'} gchi_{r;lmm'l'}]. See Eq. (3.51) in Paul Worm's thesis.
     """
-    return chi_aux_contracted
+    return gchi_r.contract_legs(config.beta).sum_over_orbitals("abcd->ad")
 
 
 def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalThreePoint:
     """
-    Returns the three-leg vertex vrg = beta * (gchi0)^(-1) * (sum_v gchi_aux). sum_v is performed over the fermionic frequency dimensions and includes a factor 1/beta^2.
+    Returns the three-leg vertex vrg = beta * (gchi0)^(-1) * (sum_v gchi_aux). sum_v is performed over the fermionic
+    frequency dimensions and includes a factor 1/beta^2. See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_sum = gchi_aux.sum_over_fermionic_dimensions(config.beta, axis=(-1,))
     vrg_mat = config.beta * ((~gchi0) @ gchi_aux_sum).compress_last_two_frequency_dimensions_to_single_dimension().mat
@@ -122,19 +133,26 @@ def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalThreePoi
 
 def get_self_energy(
     vrg_dens: LocalThreePoint,
-    chi_phys_dens: LocalFourPoint,
+    gchi_dens: LocalFourPoint,
     g_loc: LocalGreensFunction,
     u_loc: LocalInteraction,
 ) -> LocalSelfEnergy:
     """
-    Performs the local self-energy calculation using the Schwinger-Dyson equation, see Paul Worm's thesis, P. 49, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
+    Performs the local self-energy calculation using the Schwinger-Dyson equation, see Paul Worm's thesis, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
     n_bands = vrg_dens.n_bands
+
+    # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
+
     g_1 = MFHelper.wn_slices_gen(g_loc.mat, vrg_dens.niv, vrg_dens.niw)
     deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands))
 
-    inner_sum_left = np.einsum("abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, chi_phys_dens.mat)
-    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, chi_phys_dens.mat)
+    gchi_dens = gchi_dens.contract_legs(config.beta)
+
+    inner_sum_left = np.einsum(
+        "abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat, casting="no", optimize=True
+    )
+    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat)
     inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum_left - inner_sum_right
 
     self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
@@ -161,10 +179,37 @@ def perform_schwinger_dyson(
 
     gchi0 = create_generalized_chi0(g_loc)
 
+    # testing block
+    gchi_dens_copy = deepcopy(gchi0.mat)
+    gchi_dens_copy[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
+    gchi_dens.mat = gchi_dens_copy
+    gchi_dens.original_shape = gchi_dens.current_shape
+
+    gchi_magn_copy = deepcopy(gchi0.mat)
+    gchi_magn_copy[0, 0, 0, 0, ...] = gchi_magn.mat[0, 0, 0, 0, ...]
+    gchi_magn.mat = gchi_magn_copy
+    gchi_magn.original_shape = gchi_magn.current_shape
+
+    assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Yessir"
+    assert np.allclose(gchi_magn[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Yessir"
+    assert np.allclose(gchi_dens[1, 1, 1, 1], gchi0[1, 1, 1, 1]), "Yessir"
+    # endtesting block
+
     gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
     gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
 
-    MemoryHelper.delete(gchi_dens, gchi_magn)
+    # testing block
+    test = gamma_dens[0, 0, 0, 0, ...]
+    test1 = gamma_dens[1, 1, 1, 1, ...]
+    test1_zero = np.zeros_like(test1)
+    res = np.allclose(test1, test1_zero)
+    assert res is True, "Yessir"
+    # endtesting block
+
+    chi_dens_physical = create_physical_chi(gchi_dens)
+    chi_magn_physical = create_physical_chi(gchi_magn)
+
+    # MemoryHelper.delete(gchi_dens, gchi_magn)
 
     if config.do_plotting:
         gamma_dens_copy = deepcopy(gamma_dens)
@@ -184,24 +229,14 @@ def perform_schwinger_dyson(
 
         MemoryHelper.delete(gamma_dens_copy, gamma_magn_copy)
 
-    gchi0_sum = create_chi0_sum(g_loc)
-
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
-    gchi_aux_dens_contracted = gchi_aux_dens.contract_legs(config.beta)
-
     gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
-    gchi_aux_magn_contracted = gchi_aux_magn.contract_legs(config.beta)
-
-    chi_dens = create_physical_chi(gchi_aux_dens_contracted)
-    chi_magn = create_physical_chi(gchi_aux_magn_contracted)
-
-    MemoryHelper.delete(gchi0_sum, gchi_aux_magn_contracted)
 
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
     vrg_magn = create_vrg(gchi_aux_magn, gchi0)
 
     MemoryHelper.delete(gchi0, gchi_aux_dens, gchi_aux_magn)
 
-    sigma = get_self_energy(vrg_dens, gchi_aux_dens_contracted, g_loc, u_loc)
+    sigma = get_self_energy(vrg_dens, gchi_dens, g_loc, u_loc)
 
-    return gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma
+    return gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma

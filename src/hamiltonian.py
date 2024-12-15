@@ -80,7 +80,7 @@ class Hamiltonian:
     def single_band_interaction_as_multiband(self, u: float, num_bands: int = 1) -> "Hamiltonian":
         interaction_elements = []
         for i, j, k, l in it.product(range(num_bands), repeat=4):
-            if i == j == k == l == 1:
+            if i == j == k == l == 0:
                 interaction_elements.append(InteractionElement([0, 0, 0], [i + 1, j + 1, k + 1, l + 1], u))
             else:
                 interaction_elements.append(InteractionElement([0, 0, 0], [i + 1, j + 1, k + 1, l + 1], 0))

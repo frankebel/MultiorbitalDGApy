@@ -141,6 +141,20 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
         return self
 
+    def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad") -> "LocalFourPoint":
+        """
+        Sums over the given orbitals.
+        """
+        split = orbital_contraction.split("->")
+        if len(split[0]) != 4 or len(split[1]) > len(split[0]):
+            raise ValueError("Invalid orbital contraction.")
+
+        self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat)
+        diff = len(split[0]) - len(split[1])
+        self.original_shape = self.current_shape
+        self._num_orbital_dimensions = self.num_orbital_dimensions - diff
+        return self
+
     def sum_over_fermionic_dimensions(self, beta: float, axis: tuple = (-1,)) -> "LocalFourPoint":
         """
         This method is used to sum over specific fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
@@ -160,6 +174,25 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if self.num_fermionic_frequency_dimensions != 2:
             raise ValueError("This method is only implemented for 2 fermionic frequency dimensions.")
         return self.sum_over_fermionic_dimensions(beta, axis=(-1, -2))
+
+    def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalFourPoint":
+        """
+        Permutes the orbitals of the four-point object.
+        """
+        split = permutation.split("->")
+        if len(split) != 2 or len(split[0]) != 4 or len(split[1]) != 4:
+            raise ValueError("Invalid permutation.")
+
+        permutation = f"{split[0]}...->{split[1]}..."
+
+        return LocalFourPoint(
+            np.einsum(permutation, self.mat),
+            self.channel,
+            self.num_bosonic_frequency_dimensions,
+            self.num_fermionic_frequency_dimensions,
+            self.full_niw_range,
+            self.full_niv_range,
+        )
 
     def plot(
         self,
