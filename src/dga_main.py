@@ -22,15 +22,15 @@ def execute_dga_routine():
 
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
-    sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 3)
+    sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
 
-    config.hamiltonian = (
-        Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
-    )
+    # config.hamiltonian = (
+    #    Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
+    # )
     config.hamiltonian = (
         Hamiltonian()
         .read_er_w2k(filename="wannier_hr_test.dat")
-        .single_band_interaction_as_multiband(config.u_dmft, num_bands=3)
+        .single_band_interaction_as_multiband(config.u_dmft, num_bands=2)
     )
 
     sigma_dmft.save(name="sigma_dmft")

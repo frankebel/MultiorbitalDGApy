@@ -228,7 +228,7 @@ class LocalNPoint(IHaveMat):
         """
         if self.num_fermionic_frequency_dimensions == 2:
             raise ValueError("Extending to three or more fermionic frequency dimensions is not supported.")
-        self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]))
+        self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]), optimize=True)
         self._num_fermionic_frequency_dimensions += 1
         self.original_shape = self.current_shape
         return self

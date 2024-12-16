@@ -16,7 +16,7 @@ class LocalSelfEnergy(LocalTwoPoint):
 
     @staticmethod
     def from_dmft(mat: np.ndarray) -> "LocalSelfEnergy":
-        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
+        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]), optimize=True)
         return LocalSelfEnergy(mat)
 
     def _fit_smom(self):

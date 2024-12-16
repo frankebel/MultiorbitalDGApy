@@ -60,7 +60,7 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
     eye_bands = np.eye(g_loc.n_bands)
     g_left_mat = g_loc_slice_mat[:, None, None, :, :] * eye_bands[None, :, :, None, None]
     g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, :] * eye_bands[:, None, None, :, None]
-    ggv_mat = np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]))
+    ggv_mat = np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]), optimize=True)
     ggv_mat = ggv_mat[:, :, :, :, np.newaxis, ...]
     return np.tile(ggv_mat, (1, 1, 1, 1, 2 * config.niw + 1, 1, 1))
 
@@ -145,20 +145,19 @@ def get_self_energy(
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
 
     g_1 = MFHelper.wn_slices_gen(g_loc.mat, vrg_dens.niv, vrg_dens.niw)
-    deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands))
+    deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands), optimize=True)
 
     gchi_dens = gchi_dens.contract_legs(config.beta)
 
-    inner_sum_left = np.einsum(
-        "abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat, casting="no", optimize=True
-    )
-    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat)
+    inner_sum_left = np.einsum("abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat, optimize=True)
+    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat, optimize=True)
     inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum_left - inner_sum_right
 
-    self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
+    self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1, optimize=True)
 
-    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs)
+    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs, optimize=True)
     self_energy_mat += hartree[..., np.newaxis]
+    self_energy_mat += 0  # 1
 
     return LocalSelfEnergy(self_energy_mat)
 
@@ -184,32 +183,36 @@ def perform_schwinger_dyson(
     gchi_dens_copy[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
     gchi_dens.mat = gchi_dens_copy
     gchi_dens.original_shape = gchi_dens.current_shape
+    MemoryHelper.delete(gchi_dens_copy)
 
     gchi_magn_copy = deepcopy(gchi0.mat)
     gchi_magn_copy[0, 0, 0, 0, ...] = gchi_magn.mat[0, 0, 0, 0, ...]
     gchi_magn.mat = gchi_magn_copy
     gchi_magn.original_shape = gchi_magn.current_shape
+    MemoryHelper.delete(gchi_magn_copy)
 
-    assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Yessir"
-    assert np.allclose(gchi_magn[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Yessir"
-    assert np.allclose(gchi_dens[1, 1, 1, 1], gchi0[1, 1, 1, 1]), "Yessir"
+    assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Shit"
+    assert np.allclose(gchi_magn[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Shit"
+    assert np.allclose(gchi_dens[1, 1, 1, 1], gchi0[1, 1, 1, 1]), "Shit"
     # endtesting block
 
     gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
     gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
 
+    chi_dens_physical = create_physical_chi(gchi_dens)
+    chi_magn_physical = create_physical_chi(gchi_magn)
+
+    MemoryHelper.delete(gchi_magn)
+
     # testing block
     test = gamma_dens[0, 0, 0, 0, ...]
     test1 = gamma_dens[1, 1, 1, 1, ...]
     test1_zero = np.zeros_like(test1)
+    res = np.allclose(test, test1_zero)
+    assert res is False, "Shit"
     res = np.allclose(test1, test1_zero)
-    assert res is True, "Yessir"
+    assert res is True, "Shit"
     # endtesting block
-
-    chi_dens_physical = create_physical_chi(gchi_dens)
-    chi_magn_physical = create_physical_chi(gchi_magn)
-
-    # MemoryHelper.delete(gchi_dens, gchi_magn)
 
     if config.do_plotting:
         gamma_dens_copy = deepcopy(gamma_dens)
@@ -230,12 +233,12 @@ def perform_schwinger_dyson(
         MemoryHelper.delete(gamma_dens_copy, gamma_magn_copy)
 
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
-    gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
-
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
-    vrg_magn = create_vrg(gchi_aux_magn, gchi0)
+    MemoryHelper.delete(gchi_aux_dens)
 
-    MemoryHelper.delete(gchi0, gchi_aux_dens, gchi_aux_magn)
+    gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
+    vrg_magn = create_vrg(gchi_aux_magn, gchi0)
+    MemoryHelper.delete(gchi0, gchi_aux_magn)
 
     sigma = get_self_energy(vrg_dens, gchi_dens, g_loc, u_loc)
 

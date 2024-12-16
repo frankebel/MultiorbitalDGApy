@@ -32,7 +32,7 @@ class LocalGreensFunction(LocalTwoPoint):
         Creates a LocalGreensFunction object from a given DMFT file input matrix.
 
         """
-        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
+        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]), optimize=True)
         return LocalGreensFunction(mat)
 
     @staticmethod
@@ -60,6 +60,8 @@ class LocalGreensFunction(LocalTwoPoint):
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
         mu_bands: np.ndarray = config.mu * np.eye(self.n_bands)
+
+        test = config.beta * (hloc.real + smom0 - mu_bands)
 
         eigenvals, eigenvecs = np.linalg.eig(config.beta * (hloc.real + smom0 - mu_bands))
         rho_loc_diag = np.zeros((self.n_bands, self.n_bands), dtype=np.complex64)

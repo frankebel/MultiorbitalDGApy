@@ -23,7 +23,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         return copy
 
     def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalInteraction":
-        return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
+        return LocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
 
     def __add__(self, other: "LocalInteraction") -> "LocalInteraction":
         if not isinstance(other, LocalInteraction):
@@ -59,7 +59,12 @@ class NonLocalInteraction(LocalInteraction):
             raise ValueError("Invalid permutation.")
 
         permutation = f"...{split[0]}->...{split[1]}"
-        return NonLocalInteraction(np.einsum(permutation, self.mat), self._ur_r_grid, self._ur_r_weights, self.channel)
+        return NonLocalInteraction(
+            np.einsum(permutation, self.mat, optimize=True),
+            self._ur_r_grid,
+            self._ur_r_weights,
+            self.channel,
+        )
 
     def _convham_4_orbs(self, k_mesh: np.ndarray) -> np.ndarray:
         fft_grid = np.exp(1j * np.matmul(self._ur_r_grid, k_mesh)) / self._ur_r_weights[:, None, None, None, None]

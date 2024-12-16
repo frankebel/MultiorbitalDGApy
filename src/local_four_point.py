@@ -105,7 +105,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
 
-        self_mat, other_mat = self.mat, other.mat
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
         if isinstance(other, (LocalFourPoint, LocalThreePoint)):
@@ -114,25 +113,30 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             if self.num_bosonic_frequency_dimensions != other.num_bosonic_frequency_dimensions:
                 raise ValueError("Number of bosonic frequency dimensions do not match.")
 
+        self_mat, other_mat = self.mat, other.mat
+
         if isinstance(other, LocalThreePoint):
-            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]))
+            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]), optimize=True)
 
         if len(self_mat.shape) != len(other_mat.shape):
-            diff = abs(len(self_mat.shape) - len(other_mat.shape))
-            if len(self_mat.shape) > len(other_mat.shape):
+            diff = len(self_mat.shape) - len(other_mat.shape)
+            if diff > 0:
                 other_mat = np.reshape(other_mat, other_mat.shape + (1,) * diff)
             else:
-                self_mat = np.reshape(self_mat, self_mat.shape + (1,) * diff)
+                self_mat = np.reshape(self_mat, self_mat.shape + (1,) * -diff)
 
-        if isinstance(other, LocalInteraction):
-            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:
-                result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
-                return LocalFourPoint(result_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
+        if (
+            isinstance(other, LocalInteraction)
+            and self.num_bosonic_frequency_dimensions == 1
+            and self.num_fermionic_frequency_dimensions == 0
+        ):
+            np.add(self_mat, other_mat, out=self_mat) if is_addition else np.subtract(self_mat, other_mat, out=self_mat)
+            return LocalFourPoint(self_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
 
-        result_mat = self_mat + other_mat if is_addition else self_mat - other_mat
+        np.add(self_mat, other_mat, out=self_mat) if is_addition else np.subtract(self_mat, other_mat, out=self_mat)
         if self.num_fermionic_frequency_dimensions == 0 and other.num_fermionic_frequency_dimensions == 0:
-            return LocalFourPoint(result_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
-        return LocalFourPoint(result_mat, channel, 1, 2, self.full_niw_range, self.full_niv_range)
+            return LocalFourPoint(self_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
+        return LocalFourPoint(self_mat, channel, 1, 2, self.full_niw_range, self.full_niv_range)
 
     def symmetrize_v_vp(self) -> "LocalFourPoint":
         """
@@ -149,7 +153,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if len(split[0]) != 4 or len(split[1]) > len(split[0]):
             raise ValueError("Invalid orbital contraction.")
 
-        self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat)
+        self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat, optimize=True)
         diff = len(split[0]) - len(split[1])
         self.original_shape = self.current_shape
         self._num_orbital_dimensions = self.num_orbital_dimensions - diff
@@ -186,7 +190,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         permutation = f"{split[0]}...->{split[1]}..."
 
         return LocalFourPoint(
-            np.einsum(permutation, self.mat),
+            np.einsum(permutation, self.mat, optimize=True),
             self.channel,
             self.num_bosonic_frequency_dimensions,
             self.num_fermionic_frequency_dimensions,
