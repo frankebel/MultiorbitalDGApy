@@ -10,7 +10,7 @@ nk: tuple = (26, 26, 1)
 nq: tuple = nk
 
 niw: int = -1
-niv: int = 70
+niv: int = 80
 
 beta: float = 0.0
 mu: float = 0.0

@@ -35,7 +35,7 @@ class IHaveMat(ABC):
 
     def __mul__(self, other) -> "IHaveMat":
         if not isinstance(other, int | float | complex):
-            raise ValueError("Multiplication/divison only supported with numbers.")
+            raise ValueError("Multiplication/division only supported with numbers.")
 
         copy = deepcopy(self)
         copy.mat *= other

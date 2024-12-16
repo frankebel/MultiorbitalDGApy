@@ -61,8 +61,6 @@ class LocalGreensFunction(LocalTwoPoint):
         smom0, _ = self._sigma.smom
         mu_bands: np.ndarray = config.mu * np.eye(self.n_bands)
 
-        test = config.beta * (hloc.real + smom0 - mu_bands)
-
         eigenvals, eigenvecs = np.linalg.eig(config.beta * (hloc.real + smom0 - mu_bands))
         rho_loc_diag = np.zeros((self.n_bands, self.n_bands), dtype=np.complex64)
         for i in range(self.n_bands):
