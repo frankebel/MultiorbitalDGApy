@@ -27,13 +27,11 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
     chi = config.beta * g2
     chi0_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
 
-    """ PUT BACK IN WHEN TESTING DONE
-    if g2.channel == Channel.DENS:
-        wn = MFHelper.wn(g2.niw)
-        chi[:, :, :, :, wn == 0, ...] = config.beta * (
-            g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[:, :, :, :, wn == 0, ...]
-        )
-    """
+    # if g2.channel == Channel.DENS:
+    #    wn = MFHelper.wn(g2.niw)
+    #    chi[:, :, :, :, wn == 0, ...] = config.beta * (
+    #        g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[:, :, :, :, wn == 0, ...]
+    #    )
 
     # just for testing!
     if g2.channel == Channel.DENS:
@@ -60,7 +58,7 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
     eye_bands = np.eye(g_loc.n_bands)
     g_left_mat = g_loc_slice_mat[:, None, None, :, :] * eye_bands[None, :, :, None, None]
     g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, :] * eye_bands[:, None, None, :, None]
-    ggv_mat = np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]), optimize=True)
+    ggv_mat = np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]))
     ggv_mat = ggv_mat[:, :, :, :, np.newaxis, ...]
     return np.tile(ggv_mat, (1, 1, 1, 1, 2 * config.niw + 1, 1, 1))
 
@@ -93,17 +91,6 @@ def create_generalized_chi0(
         gchi0_mat[..., index, :] = -config.beta * g_left_mat * g_right_mat
 
     return LocalFourPoint(gchi0_mat, Channel.NONE, 1, 1).extend_last_frequency_axis_to_diagonal()
-
-
-def create_chi0_sum(
-    g_loc: LocalGreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
-) -> LocalFourPoint:
-    """
-    Returns the sum over the generalized bare susceptibility gchi0_{lmm'l'}^{w}:eV = -1/beta:eV * (1/beta^2:eV^2 sum_v G_{ll'}^{v}:1/eV * G_{m'm}^{v-w}:1/eV)
-    """
-    gchi0 = create_generalized_chi0(g_loc, frequency_shift)
-    # gchi0 has a factor beta in front, that's why we divide by beta squared here
-    return (1.0 / (config.beta * config.beta) * gchi0).contract_legs(config.beta)
 
 
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
@@ -145,19 +132,18 @@ def get_self_energy(
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
 
     g_1 = MFHelper.wn_slices_gen(g_loc.mat, vrg_dens.niv, vrg_dens.niw)
-    deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands), optimize=True)
+    deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands))
 
     gchi_dens = gchi_dens.contract_legs(config.beta)
 
-    inner_sum_left = np.einsum("abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat, optimize=True)
-    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat, optimize=True)
+    inner_sum_left = np.einsum("abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat)
+    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat)
     inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum_left - inner_sum_right
 
-    self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1, optimize=True)
+    self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
 
-    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs, optimize=True)
+    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs)
     self_energy_mat += hartree[..., np.newaxis]
-    self_energy_mat += 0  # 1
 
     return LocalSelfEnergy(self_energy_mat)
 
@@ -203,16 +189,6 @@ def perform_schwinger_dyson(
     chi_magn_physical = create_physical_chi(gchi_magn)
 
     MemoryHelper.delete(gchi_magn)
-
-    # testing block
-    test = gamma_dens[0, 0, 0, 0, ...]
-    test1 = gamma_dens[1, 1, 1, 1, ...]
-    test1_zero = np.zeros_like(test1)
-    res = np.allclose(test, test1_zero)
-    assert res is False, "Shit"
-    res = np.allclose(test1, test1_zero)
-    assert res is True, "Shit"
-    # endtesting block
 
     if config.do_plotting:
         gamma_dens_copy = deepcopy(gamma_dens)

@@ -9,6 +9,11 @@ __pycache__/
 *.npy
 *.dat
 
+# other
+*.html
+*.json
+*.sh
+
 # C extensions
 *.so
 

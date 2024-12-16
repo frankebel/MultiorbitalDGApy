@@ -116,7 +116,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self_mat, other_mat = self.mat, other.mat
 
         if isinstance(other, LocalThreePoint):
-            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]), optimize=True)
+            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]))
 
         if len(self_mat.shape) != len(other_mat.shape):
             diff = len(self_mat.shape) - len(other_mat.shape)
@@ -153,7 +153,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if len(split[0]) != 4 or len(split[1]) > len(split[0]):
             raise ValueError("Invalid orbital contraction.")
 
-        self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat, optimize=True)
+        self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat)
         diff = len(split[0]) - len(split[1])
         self.original_shape = self.current_shape
         self._num_orbital_dimensions = self.num_orbital_dimensions - diff
@@ -190,7 +190,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         permutation = f"{split[0]}...->{split[1]}..."
 
         return LocalFourPoint(
-            np.einsum(permutation, self.mat, optimize=True),
+            np.einsum(permutation, self.mat),
             self.channel,
             self.num_bosonic_frequency_dimensions,
             self.num_fermionic_frequency_dimensions,

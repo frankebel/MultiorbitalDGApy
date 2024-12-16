@@ -1,7 +1,5 @@
 import logging
 
-from mpi4py import MPI
-
 import config
 import dga_io
 import local_sde
@@ -17,16 +15,13 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 @timeit
 def execute_dga_routine():
-    config.comm = MPI.COMM_WORLD
-    config.rank = config.comm.rank
-
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
     sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
 
-    # config.hamiltonian = (
-    #    Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
-    # )
+    config.hamiltonian = (
+        Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
+    )
     config.hamiltonian = (
         Hamiltonian()
         .read_er_w2k(filename="wannier_hr_test.dat")
@@ -63,8 +58,8 @@ def execute_dga_routine():
     if config.do_plotting:
         plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
         plotting.sigma_loc_checks(
-            [sigma[0, 0], sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],
-            ["SDE00", "SDE10", "SDE01", "SDE11", "Input"],
+            [sigma[0, 0], sigma_dmft[0, 0]],  # , sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],
+            ["SDE00", "Input"],  # , "SDE10", "SDE01", "SDE11", "Input"],
             config.beta,
             show=False,
             save=True,

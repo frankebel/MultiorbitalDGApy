@@ -32,7 +32,7 @@ class LocalGreensFunction(LocalTwoPoint):
         Creates a LocalGreensFunction object from a given DMFT file input matrix.
 
         """
-        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]), optimize=True)
+        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
         return LocalGreensFunction(mat)
 
     @staticmethod

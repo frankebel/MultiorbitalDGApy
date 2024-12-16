@@ -1,11 +1,7 @@
 import numpy as np
-from mpi4py.MPI import Intracomm
 
 import brillouin_zone as bz
 from hamiltonian import Hamiltonian
-
-comm: Intracomm
-rank: int = 0
 
 do_plotting: bool = True
 save_quantities: bool = True
@@ -14,7 +10,7 @@ nk: tuple = (26, 26, 1)
 nq: tuple = nk
 
 niw: int = -1
-niv: int = 80
+niv: int = 70
 
 beta: float = 0.0
 mu: float = 0.0
@@ -30,6 +26,7 @@ lattice_er_type: str = "t_tp_tpp"
 lattice_er_input: list = [1, -0.25, 0.12]
 
 input_path: str = "/home/julpe/Documents/DATA"
+output_path: str = "/home/julpe/Documents/repos/MultiorbitalDGApy"
 dmft_1p_filename: str = "1p-data.hdf5"
 dmft_2p_filename: str = "g4iw_sym.hdf5"
 

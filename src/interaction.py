@@ -23,7 +23,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         return copy
 
     def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalInteraction":
-        return LocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
+        return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
     def __add__(self, other: "LocalInteraction") -> "LocalInteraction":
         if not isinstance(other, LocalInteraction):
@@ -60,7 +60,7 @@ class NonLocalInteraction(LocalInteraction):
 
         permutation = f"...{split[0]}->...{split[1]}"
         return NonLocalInteraction(
-            np.einsum(permutation, self.mat, optimize=True),
+            np.einsum(permutation, self.mat),
             self._ur_r_grid,
             self._ur_r_weights,
             self.channel,
