@@ -27,11 +27,13 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
     chi = config.beta * g2
     chi0_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
 
-    # if g2.channel == Channel.DENS:
-    #    wn = MFHelper.wn(g2.niw)
-    #    chi[:, :, :, :, wn == 0, ...] = config.beta * (
-    #        g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[:, :, :, :, wn == 0, ...]
-    #    )
+    """
+    if g2.channel == Channel.DENS:
+        wn = MFHelper.wn(g2.niw)
+        chi[:, :, :, :, wn == 0, ...] = config.beta * (
+            g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[:, :, :, :, wn == 0, ...]
+        )
+    """
 
     # just for testing!
     if g2.channel == Channel.DENS:
@@ -55,10 +57,9 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
     if niv_slice == -1:
         niv_slice = g_loc.niv
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
-    eye_bands = np.eye(g_loc.n_bands)
-    g_left_mat = g_loc_slice_mat[:, None, None, :, :] * eye_bands[None, :, :, None, None]
-    g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, :] * eye_bands[:, None, None, :, None]
-    ggv_mat = np.einsum("...i,ij->...ij", g_left_mat * g_right_mat, np.eye(g_left_mat.shape[-1]))
+    g_left_mat = g_loc_slice_mat[:, None, None, :, :, None]
+    g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :]
+    ggv_mat = g_left_mat * g_right_mat
     ggv_mat = ggv_mat[:, :, :, :, np.newaxis, ...]
     return np.tile(ggv_mat, (1, 1, 1, 1, 2 * config.niw + 1, 1, 1))
 
@@ -70,23 +71,16 @@ def create_generalized_chi0(
     Returns the generalized bare susceptibility gchi0_{lmm'l'}^{wvv}:1/eV^3 = -beta:1/eV * G_{ll'}^{v}:1/eV * G_{m'm}^{v-w}:1/eV
     """
     gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.niw + 1, 2 * config.niv), dtype=np.complex64)
-    eye_bands = np.eye(g_loc.n_bands)
 
     wn = MFHelper.wn(config.niw)
     for index, current_wn in enumerate(wn):
         iws, iws2 = MFHelper.get_frequency_shift(current_wn, frequency_shift)
 
         # this is basically the same as _get_ggv_mat, but I don't know how to avoid the code duplication in a smart way
-        g_left_mat = (
-            g_loc.mat[..., g_loc.niv - config.niv + iws : g_loc.niv + config.niv + iws][:, None, None, :, :]
-            * eye_bands[None, :, :, None, None]
-        )
-        g_right_mat = (
-            np.swapaxes(g_loc.mat, 0, 1)[..., g_loc.niv - config.niv + iws2 : g_loc.niv + config.niv + iws2][
-                None, :, :, None, :
-            ]
-            * eye_bands[:, None, None, :, None]
-        )
+        g_left_mat = g_loc.mat[..., g_loc.niv - config.niv + iws : g_loc.niv + config.niv + iws][:, None, None, :, :]
+        g_right_mat = np.swapaxes(g_loc.mat, 0, 1)[..., g_loc.niv - config.niv + iws2 : g_loc.niv + config.niv + iws2][
+            None, :, :, None, :
+        ]
 
         gchi0_mat[..., index, :] = -config.beta * g_left_mat * g_right_mat
 
@@ -184,16 +178,6 @@ def perform_schwinger_dyson(
 
     gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
     gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
-
-    # testing block
-    test = gamma_dens[0, 0, 0, 0, ...]
-    test1 = gamma_dens[1, 1, 1, 1, ...]
-    test1_zero = np.zeros_like(test1)
-    res = np.allclose(test, test1_zero)
-    assert res is False, "Nooo"
-    res = np.allclose(test1, test1_zero)
-    assert res is True, "Nooo"
-    # endtesting block
 
     chi_dens_physical = create_physical_chi(gchi_dens)
     chi_magn_physical = create_physical_chi(gchi_magn)

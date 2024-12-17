@@ -54,16 +54,28 @@ def execute_dga_routine():
         sigma.save(name="siw_sde_full")
         chi_dens.save(name="chi_dens")
         chi_magn.save(name="chi_magn")
+        vrg_dens.save(name="vrg_dens")
+        vrg_magn.save(name="vrg_magn")
 
     if config.do_plotting:
         plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
         plotting.sigma_loc_checks(
-            [sigma[0, 0], sigma_dmft[0, 0]],  # , sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],
-            ["SDE00", "Input"],  # , "SDE10", "SDE01", "SDE11", "Input"],
+            [sigma[0, 0], sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],
+            ["SDE00", "SDE10", "SDE01", "SDE11", "Input"],
             config.beta,
             show=False,
             save=True,
             xmax=config.niv,
+            name="1",
+        )
+        plotting.sigma_loc_checks(
+            [sigma[0, 0], sigma_dmft[0, 0]],
+            ["SDE00", "Input"],
+            config.beta,
+            show=False,
+            save=True,
+            xmax=config.niv,
+            name="2",
         )
 
     print("Done!")

@@ -9,8 +9,8 @@ save_quantities: bool = True
 nk: tuple = (26, 26, 1)
 nq: tuple = nk
 
-niw: int = 30
-niv: int = 30
+niw: int = -1
+niv: int = -1
 
 beta: float = 0.0
 mu: float = 0.0
