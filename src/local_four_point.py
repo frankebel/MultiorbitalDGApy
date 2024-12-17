@@ -115,23 +115,20 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         self_mat, other_mat = self.mat, other.mat
 
-        if isinstance(other, LocalThreePoint):
-            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]))
+        if isinstance(other, LocalInteraction):
+            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:
+                other_mat = other_mat.reshape(other_mat.shape + (1,))
+            elif self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 2:
+                other_mat = (
+                    other_mat.reshape(other_mat.shape + (1,) * 3)
+                    * np.eye(2 * self.niv)[None, None, None, None, None, :, :]
+                )
 
-        if len(self_mat.shape) != len(other_mat.shape):
-            diff = len(self_mat.shape) - len(other_mat.shape)
-            if diff > 0:
-                other_mat = np.reshape(other_mat, other_mat.shape + (1,) * diff)
-            else:
-                self_mat = np.reshape(self_mat, self_mat.shape + (1,) * -diff)
-
-        if (
-            isinstance(other, LocalInteraction)
-            and self.num_bosonic_frequency_dimensions == 1
-            and self.num_fermionic_frequency_dimensions == 0
-        ):
             np.add(self_mat, other_mat, out=self_mat) if is_addition else np.subtract(self_mat, other_mat, out=self_mat)
-            return LocalFourPoint(self_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
+            return LocalFourPoint(self_mat, channel, 1, 2, self.full_niw_range, self.full_niv_range)
+
+        if other.num_fermionic_frequency_dimensions == 1:
+            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]))
 
         np.add(self_mat, other_mat, out=self_mat) if is_addition else np.subtract(self_mat, other_mat, out=self_mat)
         if self.num_fermionic_frequency_dimensions == 0 and other.num_fermionic_frequency_dimensions == 0:

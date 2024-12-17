@@ -177,13 +177,23 @@ def perform_schwinger_dyson(
     gchi_magn.original_shape = gchi_magn.current_shape
     MemoryHelper.delete(gchi_magn_copy)
 
-    assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Shit"
-    assert np.allclose(gchi_magn[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Shit"
-    assert np.allclose(gchi_dens[1, 1, 1, 1], gchi0[1, 1, 1, 1]), "Shit"
+    assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Nooo"
+    assert np.allclose(gchi_magn[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Nooo"
+    assert np.allclose(gchi_dens[1, 1, 1, 1], gchi0[1, 1, 1, 1]), "Nooo"
     # endtesting block
 
     gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
     gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
+
+    # testing block
+    test = gamma_dens[0, 0, 0, 0, ...]
+    test1 = gamma_dens[1, 1, 1, 1, ...]
+    test1_zero = np.zeros_like(test1)
+    res = np.allclose(test, test1_zero)
+    assert res is False, "Nooo"
+    res = np.allclose(test1, test1_zero)
+    assert res is True, "Nooo"
+    # endtesting block
 
     chi_dens_physical = create_physical_chi(gchi_dens)
     chi_magn_physical = create_physical_chi(gchi_magn)
