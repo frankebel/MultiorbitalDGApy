@@ -25,7 +25,7 @@ nk: tuple = (64, 64, 1)
 nq: tuple = nk
 
 niw: int = -1
-niv: int = -1
+niv: int = 110
 
 beta: float = 0.0
 mu: float = 0.0
@@ -40,7 +40,8 @@ lattice_symmetry_set: str = "two_dimensional_square"
 lattice_er_type: str = "t_tp_tpp"
 lattice_er_input: list = [1, -0.25, 0.12]
 
-input_path: str = "/home/julpe/Documents/DATA/Singleorb-DATA/N490_B10_Nv40_U10"
+# input_path: str = "/home/julpe/Documents/DATA/Singleorb-DATA/N490_B10_Nv40_U10"
+input_path: str = "/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12.5_Nv140_U8"
 output_path: str = "/home/julpe/Documents/repos/MultiorbitalDGApy"
 dmft_1p_filename: str = "1p-data.hdf5"
 dmft_2p_filename: str = "g4iw_sym.hdf5"

@@ -19,9 +19,7 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 def execute_dga_routine():
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
-    sigma_dmft = sigma_dmft.extend_to_multi_orbital(
-        LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), config.n_bands
-    )
+    sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
 
     # config.hamiltonian = (
     #    Hamiltonian()
@@ -30,13 +28,13 @@ def execute_dga_routine():
     # )
     config.hamiltonian = (
         Hamiltonian()
-        .read_er_w2k(filepath="/home/julpe/Documents/DATA/Singleorb-DATA/N490_B10_Nv40_U10/", filename="wannier_hr.dat")
-        .single_band_interaction_as_multiband(config.interaction.udd, num_bands=config.n_bands)
+        .read_er_w2k(filepath="/home/julpe/Documents/repos/MultiorbitalDGApy/", filename="wannier_hr.dat")
+        .single_band_interaction_as_multiband(config.interaction.udd, 2)
     )
 
     # config.hamiltonian = (
     #    Hamiltonian()
-    #    .read_er_w2k(filename="wannier_hr_test.dat")
+    #    .read_er_w2k(filename="wannier_hr.dat")
     #    .kanamori_interaction(config.n_bands, config.interaction.udd, config.interaction.jdd, config.interaction.vdd)
     # )
 

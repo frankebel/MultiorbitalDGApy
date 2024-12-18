@@ -170,13 +170,13 @@ def perform_schwinger_dyson(
     # testing block
     gchi_dens_copy = deepcopy(gchi0)
     gchi_dens_copy.mat[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
-    gchi_dens = gchi_dens_copy
+    gchi_dens = deepcopy(gchi_dens_copy)
     gchi_dens._channel = Channel.DENS
     MemoryHelper.delete(gchi_dens_copy)
 
     gchi_magn_copy = deepcopy(gchi0)
     gchi_magn_copy.mat[0, 0, 0, 0, ...] = gchi_magn.mat[0, 0, 0, 0, ...]
-    gchi_magn = gchi_magn_copy
+    gchi_magn = deepcopy(gchi_magn_copy)
     gchi_magn._channel = Channel.MAGN
     MemoryHelper.delete(gchi_magn_copy)
 

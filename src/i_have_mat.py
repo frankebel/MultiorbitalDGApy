@@ -21,6 +21,10 @@ class IHaveMat(ABC):
     def mat(self, value: np.ndarray) -> None:
         self._mat = value
 
+    @mat.deleter
+    def mat(self) -> None:
+        del self._mat
+
     @property
     def current_shape(self) -> tuple:
         return self._mat.shape
