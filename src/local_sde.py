@@ -57,8 +57,11 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
     if niv_slice == -1:
         niv_slice = g_loc.niv
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
-    g_left_mat = g_loc_slice_mat[:, None, None, :, :, None]
-    g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :]
+    g_left_mat = g_loc_slice_mat[:, None, None, :, :, None] * np.eye(g_loc.n_bands)[None, :, :, None, None, None]
+    g_right_mat = (
+        np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :]
+        * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
+    )
     ggv_mat = g_left_mat * g_right_mat
     ggv_mat = ggv_mat[:, :, :, :, np.newaxis, ...]
     return np.tile(ggv_mat, (1, 1, 1, 1, 2 * config.niw + 1, 1, 1))
@@ -77,10 +80,16 @@ def create_generalized_chi0(
         iws, iws2 = MFHelper.get_frequency_shift(current_wn, frequency_shift)
 
         # this is basically the same as _get_ggv_mat, but I don't know how to avoid the code duplication in a smart way
-        g_left_mat = g_loc.mat[..., g_loc.niv - config.niv + iws : g_loc.niv + config.niv + iws][:, None, None, :, :]
-        g_right_mat = np.swapaxes(g_loc.mat, 0, 1)[..., g_loc.niv - config.niv + iws2 : g_loc.niv + config.niv + iws2][
-            None, :, :, None, :
-        ]
+        g_left_mat = (
+            g_loc.mat[..., g_loc.niv - config.niv + iws : g_loc.niv + config.niv + iws][:, None, None, :, :]
+            * np.eye(g_loc.n_bands)[None, :, :, None, None]
+        )
+        g_right_mat = (
+            np.swapaxes(g_loc.mat, 0, 1)[..., g_loc.niv - config.niv + iws2 : g_loc.niv + config.niv + iws2][
+                None, :, :, None, :
+            ]
+            * np.eye(g_loc.n_bands)[:, None, None, :, None]
+        )
 
         gchi0_mat[..., index, :] = -config.beta * g_left_mat * g_right_mat
 
@@ -159,16 +168,16 @@ def perform_schwinger_dyson(
     gchi0 = create_generalized_chi0(g_loc)
 
     # testing block
-    gchi_dens_copy = deepcopy(gchi0.mat)
-    gchi_dens_copy[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
-    gchi_dens.mat = gchi_dens_copy
-    gchi_dens.original_shape = gchi_dens.current_shape
+    gchi_dens_copy = deepcopy(gchi0)
+    gchi_dens_copy.mat[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
+    gchi_dens = gchi_dens_copy
+    gchi_dens._channel = Channel.DENS
     MemoryHelper.delete(gchi_dens_copy)
 
-    gchi_magn_copy = deepcopy(gchi0.mat)
-    gchi_magn_copy[0, 0, 0, 0, ...] = gchi_magn.mat[0, 0, 0, 0, ...]
-    gchi_magn.mat = gchi_magn_copy
-    gchi_magn.original_shape = gchi_magn.current_shape
+    gchi_magn_copy = deepcopy(gchi0)
+    gchi_magn_copy.mat[0, 0, 0, 0, ...] = gchi_magn.mat[0, 0, 0, 0, ...]
+    gchi_magn = gchi_magn_copy
+    gchi_magn._channel = Channel.MAGN
     MemoryHelper.delete(gchi_magn_copy)
 
     assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Nooo"
@@ -179,28 +188,20 @@ def perform_schwinger_dyson(
     gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
     gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
 
+    # testing block
+    test = gamma_dens[0, 0, 0, 0, ...]
+    test1 = gamma_dens[1, 1, 1, 1, ...]
+    test1_zero = np.zeros_like(test1)
+    res = np.allclose(test, test1_zero)
+    assert res is False, "Shit"
+    res = np.allclose(test1, test1_zero)
+    assert res is True, "Shit"
+    # endtesting block
+
     chi_dens_physical = create_physical_chi(gchi_dens)
     chi_magn_physical = create_physical_chi(gchi_magn)
 
     MemoryHelper.delete(gchi_magn)
-
-    if config.do_plotting:
-        gamma_dens_copy = deepcopy(gamma_dens)
-        gamma_magn_copy = deepcopy(gamma_magn)
-
-        gamma_dens_copy = gamma_dens_copy.cut_niv(min(config.niv, 2 * int(config.beta)))
-        gamma_magn_copy = gamma_magn_copy.cut_niv(min(config.niv, 2 * int(config.beta)))
-
-        gamma_dens_copy.plot(omega=0, name="Gamma_dens")
-        gamma_magn_copy.plot(omega=0, name="Gamma_magn")
-
-        gamma_dens_copy.plot(omega=10, name="Gamma_dens")
-        gamma_dens_copy.plot(omega=-10, name="Gamma_dens")
-
-        gamma_magn_copy.plot(omega=10, name="Gamma_magn")
-        gamma_magn_copy.plot(omega=-10, name="Gamma_magn")
-
-        MemoryHelper.delete(gamma_dens_copy, gamma_magn_copy)
 
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)

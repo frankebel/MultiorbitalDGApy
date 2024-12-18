@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 
 import config
 import dga_io
@@ -8,6 +9,7 @@ from dga_decorators import timeit
 from hamiltonian import Hamiltonian
 from local_greens_function import LocalGreensFunction
 from local_n_point import LocalNPoint
+from memory_helper import MemoryHelper
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -17,16 +19,26 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 def execute_dga_routine():
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
-    sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
-
-    config.hamiltonian = (
-        Hamiltonian().kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input).single_band_interaction(config.u_dmft)
+    sigma_dmft = sigma_dmft.extend_to_multi_orbital(
+        LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), config.n_bands
     )
+
+    # config.hamiltonian = (
+    #    Hamiltonian()
+    #    .kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input)
+    #    .single_band_interaction(config.interaction.udd)
+    # )
     config.hamiltonian = (
         Hamiltonian()
-        .read_er_w2k(filename="wannier_hr_test.dat")
-        .single_band_interaction_as_multiband(config.u_dmft, num_bands=2)
+        .read_er_w2k(filepath="/home/julpe/Documents/DATA/Singleorb-DATA/N490_B10_Nv40_U10/", filename="wannier_hr.dat")
+        .single_band_interaction_as_multiband(config.interaction.udd, num_bands=config.n_bands)
     )
+
+    # config.hamiltonian = (
+    #    Hamiltonian()
+    #    .read_er_w2k(filename="wannier_hr_test.dat")
+    #    .kanamori_interaction(config.n_bands, config.interaction.udd, config.interaction.jdd, config.interaction.vdd)
+    # )
 
     sigma_dmft.save(name="sigma_dmft")
 
@@ -58,6 +70,20 @@ def execute_dga_routine():
         vrg_magn.save(name="vrg_magn")
 
     if config.do_plotting:
+        gamma_dens_copy = deepcopy(gamma_dens)
+        gamma_dens_copy = gamma_dens_copy.cut_niv(min(config.niv, 2 * int(config.beta)))
+        gamma_dens_copy.plot(omega=0, name="Gamma_dens")
+        gamma_dens_copy.plot(omega=10, name="Gamma_dens")
+        gamma_dens_copy.plot(omega=-10, name="Gamma_dens")
+        MemoryHelper.delete(gamma_dens_copy)
+
+        gamma_magn_copy = deepcopy(gamma_magn)
+        gamma_magn_copy = gamma_magn_copy.cut_niv(min(config.niv, 2 * int(config.beta)))
+        gamma_magn_copy.plot(omega=0, name="Gamma_magn")
+        gamma_magn_copy.plot(omega=10, name="Gamma_magn")
+        gamma_magn_copy.plot(omega=-10, name="Gamma_magn")
+        MemoryHelper.delete(gamma_magn_copy)
+
         plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
         plotting.sigma_loc_checks(
             [sigma[0, 0], sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],

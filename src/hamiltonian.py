@@ -87,6 +87,23 @@ class Hamiltonian:
 
         return self._add_interaction_term(interaction_elements)
 
+    def kanamori_interaction(self, n_bands: int, udd: float, jdd: float, vdd: float) -> "Hamiltonian":
+        r_loc = [0, 0, 0]
+
+        interaction_elements = []
+        for i in range(1, n_bands + 1):
+            interaction_elements.append(InteractionElement(r_loc, [i, i, i, i], udd))
+        for i in range(1, n_bands):
+            interaction_elements.append(InteractionElement(r_loc, [i, i, i + 1, i + 1], jdd))
+            interaction_elements.append(InteractionElement(r_loc, [i + 1, i + 1, i, i], jdd))
+            interaction_elements.append(InteractionElement(r_loc, [i, i + 1, i + 1, i], jdd))
+            interaction_elements.append(InteractionElement(r_loc, [i + 1, i, i, i + 1], jdd))
+
+            interaction_elements.append(InteractionElement(r_loc, [i, i + 1, i, i + 1], vdd))
+            interaction_elements.append(InteractionElement(r_loc, [i + 1, i, i + 1, i], vdd))
+
+        return self._add_interaction_term(interaction_elements)
+
     def kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "Hamiltonian":
         """
         Adds the kinetic terms for a one band model in 2D with nearest, next-nearest and next-next-nearest neighbor hopping.
@@ -113,13 +130,13 @@ class Hamiltonian:
         """
         Reads the 'wannier90.dat' file from the Wannier90 package and sets the Hamiltonian parameters accordingly.
         """
-        hr_file = pd.read_csv(
+        er_file = pd.read_csv(
             os.path.join(filepath, filename), skiprows=1, names=np.arange(15), sep=r"\s+", dtype=float, engine="python"
         )
-        n_bands = hr_file.values[0][0].astype(int)
-        nr = hr_file.values[1][0].astype(int)
+        n_bands = er_file.values[0][0].astype(int)
+        nr = er_file.values[1][0].astype(int)
 
-        tmp = np.reshape(hr_file.values, (np.size(hr_file.values), 1))
+        tmp = np.reshape(er_file.values, (np.size(er_file.values), 1))
         tmp = tmp[~np.isnan(tmp)]
 
         self._er_r_weights = tmp[2 : 2 + nr].astype(int)
@@ -218,6 +235,8 @@ class Hamiltonian:
             else:
                 self._insert_ur_element(ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
 
+        ur_local = self._perform_swapping_symmetry(ur_local)
+
         self._local_interaction = LocalInteraction(ur_local)
         self._nonlocal_interaction = NonLocalInteraction(ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights)
         return self
@@ -315,3 +334,11 @@ class Hamiltonian:
         n_rp = len(r_to_index)
         n_orbs = int(max(np.array([el.orbs for el in elements]).flatten()))
         return r_to_index, n_rp, n_orbs
+
+    def _perform_swapping_symmetry(self, ur_local: np.ndarray) -> np.ndarray:
+        n_bands = ur_local.shape[0]
+        for l, mp, m, lp in np.ndindex((n_bands, n_bands, n_bands, n_bands)):
+            if ur_local[l, mp, m, lp] != 0:
+                ur_local[mp, l, lp, m] = ur_local[l, mp, m, lp]
+
+        return ur_local

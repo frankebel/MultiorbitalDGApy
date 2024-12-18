@@ -23,7 +23,10 @@ class W2dynFile:
         return dmft_iter + f"/ineq-{atom:03}"
 
     def get_nd(self, atom=1):
-        return self._file[".config"].attrs[f"atoms.{atom:1}.nd"]
+        return self._from_atom_config("nd", atom=atom)
+
+    def get_np(self, atom=1):
+        return self._from_atom_config("np", atom=atom)
 
     def get_beta(self):
         return self._file[".config"].attrs["general.beta"]
@@ -34,8 +37,37 @@ class W2dynFile:
     def get_totdens(self):
         return self._file[".config"].attrs["general.totdens"]
 
+    def get_jdd(self, atom=1):
+        return self._from_atom_config("jdd", atom=atom)
+
+    def get_jdp(self, atom=1):
+        return self._from_atom_config("jdp", atom=atom)
+
+    def get_jpp(self, atom=1):
+        return self._from_atom_config("jpp", atom=atom)
+
+    def get_jppod(self, atom=1):
+        """Offdiagonal terms for jpp"""
+        return self._from_atom_config("jppod", atom=atom)
+
     def get_udd(self, atom=1):
-        return self._file[".config"].attrs[f"atoms.{atom:1}.udd"]
+        return self._from_atom_config("udd", atom=atom)
+
+    def get_udp(self, atom=1):
+        return self._from_atom_config("udp", atom=atom)
+
+    def get_upp(self, atom=1):
+        return self._from_atom_config("upp", atom=atom)
+
+    def get_uppod(self, atom=1):
+        """Offdiagonal terms for upp"""
+        return self._from_atom_config("uppod", atom=atom)
+
+    def get_vdd(self, atom=1):
+        return self._from_atom_config("vdd", atom=atom)
+
+    def get_vpp(self, atom=1):
+        return self._from_atom_config("vpp", atom=atom)
 
     def get_siw(self, dmft_iter="dmft-last", atom=1):
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/siw/value"][()]
@@ -45,6 +77,9 @@ class W2dynFile:
 
     def get_occ(self, dmft_iter="dmft-last", atom=1):
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/occ/value"][()]
+
+    def _from_atom_config(self, key, atom=1):
+        return self._file[".config"].attrs[f"atoms.{atom:1}.{key}"]
 
 
 class W2dynG4iwFile:

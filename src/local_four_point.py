@@ -105,8 +105,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
 
-        channel = self.channel if self.channel != Channel.NONE else other.channel
-
         if isinstance(other, (LocalFourPoint, LocalThreePoint)):
             if self.niw != other.niw or self.niv != other.niv or self.n_bands != other.n_bands:
                 raise ValueError(f"Shapes {self.current_shape} and {other.current_shape} do not match!")
@@ -114,6 +112,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 raise ValueError("Number of bosonic frequency dimensions do not match.")
 
         self_mat, other_mat = self.mat, other.mat
+        channel = self.channel if self.channel != Channel.NONE else other.channel
 
         if isinstance(other, LocalInteraction):
             if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:

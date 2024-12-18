@@ -1,16 +1,23 @@
+import matplotlib.pyplot as plt
 import numpy as np
 
-
 if __name__ == "__main__":
-    ggv_mat_working = np.load("/home/julpe/Desktop/Working_code/ggv_mat.npy")[0, 0, 0, 0]
-    ggv_mat_testing = np.load("/home/julpe/Desktop/Testing_code/ggv_mat.npy")[0, 0, 0, 0, 140]
+    siw_dmft = np.load("/home/julpe/Desktop/sigma_dmft.npy", allow_pickle=True)
+    siw_mycode = np.load("/home/julpe/Desktop/siw_sde_full.npy", allow_pickle=True)
+    siw_emery = np.load("/home/julpe/Desktop/siw_sde_emery.npy", allow_pickle=True)
 
-    res = np.allclose(ggv_mat_working, ggv_mat_testing)
+    niv = siw_emery.shape[-1] // 2
 
-    gamma_dens_working = np.load("/home/julpe/Desktop/Working_code/Gamma_dens.npy")[0, 0, 0, 0]
-    gamma_dens_testing = np.load("/home/julpe/Desktop/Testing_code/Gamma_dens.npy")[0, 0, 0, 0]
+    siw_dmft = siw_dmft[0, 0, siw_dmft.shape[-1] // 2 : siw_dmft.shape[-1] // 2 + niv]
+    siw_mycode = siw_mycode[0, 0, niv:]
+    siw_emery = siw_emery[niv:]
 
-    arr = np.abs(gamma_dens_working - gamma_dens_testing)
-    res2 = np.sum(np.abs(gamma_dens_working - gamma_dens_testing) > 0)
+    plt.figure()
+    plt.plot(siw_dmft.real, label="DMFT")
+    plt.plot(siw_mycode.real, label="My code")
+    plt.plot(siw_emery.real, label="Emery")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
     print("test")

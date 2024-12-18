@@ -19,7 +19,20 @@ def load_from_w2dyn_file_and_update_config() -> (LocalGreensFunction, LocalSelfE
     if config.n_dmft == 0:
         config.n_dmft = np.sum(np.diag(file.get_occ()[0, :, 0, :]))  # band spin band spin
     config.beta = file.get_beta()
-    config.u_dmft = file.get_udd()
+
+    config.interaction.udd = file.get_udd()
+    config.interaction.udp = file.get_udp()
+    config.interaction.upp = file.get_upp()
+    config.interaction.uppod = file.get_uppod()
+    config.interaction.jdd = file.get_jdd()
+    config.interaction.jdp = file.get_jdp()
+    config.interaction.jpp = file.get_jpp()
+    config.interaction.jppod = file.get_jppod()
+    config.interaction.vdd = file.get_vdd()
+    config.interaction.vpp = file.get_vpp()
+
+    config.n_bands = file.get_nd() + file.get_np()
+
     config.mu = file.get_mu()
 
     giw = LocalGreensFunction.from_dmft(np.mean(file.get_giw(), axis=1))
@@ -47,7 +60,8 @@ def update_frequency_boxes(niv: int, niw: int) -> None:
     elif config.niv > niv:
         config.niv = niv
         logger.info(
-            "Number of fermionic Matsubara frequencies cannot exceed available frequencies in the DMFT four-point object."
+            f"Number of fermionic Matsubara frequencies cannot exceed available "
+            f"frequencies in the DMFT four-point object. Taking niv = {niv}."
         )
 
     if config.niw == -1:
@@ -56,7 +70,8 @@ def update_frequency_boxes(niv: int, niw: int) -> None:
     elif config.niw > niw:
         config.niw = niw
         logger.info(
-            "Number of bosonic Matsubara frequencies cannot exceed available frequencies in the DMFT four-point object."
+            f"Number of bosonic Matsubara frequencies cannot exceed available "
+            f"frequencies in the DMFT four-point object. Taking niw = {niw}."
         )
 
 
