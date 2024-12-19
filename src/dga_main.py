@@ -10,6 +10,7 @@ from hamiltonian import Hamiltonian
 from local_greens_function import LocalGreensFunction
 from local_n_point import LocalNPoint
 from memory_helper import MemoryHelper
+from config_parser import ConfigParser
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -17,6 +18,10 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 @timeit
 def execute_dga_routine():
+    test = ConfigParser().parse_config()
+    print("Hallo")
+    exit()
+
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
     sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
@@ -34,7 +39,7 @@ def execute_dga_routine():
 
     # config.hamiltonian = (
     #    Hamiltonian()
-    #    .read_er_w2k(filename="wannier_hr.dat")
+    #    .read_er_w2k(filepath="/home/julpe/Documents/repos/MultiorbitalDGApy/", filename="wannier_hr.dat")
     #    .kanamori_interaction(config.n_bands, config.interaction.udd, config.interaction.jdd, config.interaction.vdd)
     # )
 
@@ -54,7 +59,7 @@ def execute_dga_routine():
     u_loc = config.hamiltonian.get_local_uq()
     # u_nonloc = config.hamiltonian.get_nonlocal_uq(config.q_grid)
 
-    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma = local_sde.perform_schwinger_dyson(
+    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma = local_sde.perform_local_schwinger_dyson(
         g_loc, g2_dens, g2_magn, u_loc
     )
 

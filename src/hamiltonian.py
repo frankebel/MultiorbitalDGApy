@@ -78,6 +78,10 @@ class Hamiltonian:
         return self.single_band_interaction_as_multiband(u, 1)
 
     def single_band_interaction_as_multiband(self, u: float, num_bands: int = 1) -> "Hamiltonian":
+        """
+        Mainly used for testing. Sets the local interaction term for a multi-band model from a floating point number.
+        The interaction matrix is going to be zero everywhere except for the [0,0,0,0] element, which is set to 'u'.
+        """
         interaction_elements = []
         for i, j, k, l in it.product(range(num_bands), repeat=4):
             if i == j == k == l == 0:
@@ -88,6 +92,10 @@ class Hamiltonian:
         return self._add_interaction_term(interaction_elements)
 
     def kanamori_interaction(self, n_bands: int, udd: float, jdd: float, vdd: float) -> "Hamiltonian":
+        """
+        Adds the Kanamori interaction terms to the Hamiltonian. The interaction terms are defined by the Hubbard U 'udd',
+        the exchange interaction 'jdd' and the pair hopping 'vdd'.
+        """
         r_loc = [0, 0, 0]
 
         interaction_elements = []
@@ -106,7 +114,7 @@ class Hamiltonian:
 
     def kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "Hamiltonian":
         """
-        Adds the kinetic terms for a one band model in 2D with nearest, next-nearest and next-next-nearest neighbor hopping.
+        Adds the kinetic terms for a one-band model in 2D with nearest, next-nearest and next-next-nearest neighbor hopping.
         """
         orbs = [1, 1]
         hopping_elements = [
@@ -126,13 +134,11 @@ class Hamiltonian:
 
         return self._add_kinetic_term(hopping_elements)
 
-    def read_er_w2k(self, filepath: str = "./", filename: str = "wannier90.dat") -> "Hamiltonian":
+    def read_er_w2k(self, filename: str = "./wannier_hr.dat") -> "Hamiltonian":
         """
-        Reads the 'wannier90.dat' file from the Wannier90 package and sets the Hamiltonian parameters accordingly.
+        Reads the 'wannier_hr.dat' file from a wien2k hr file and sets the real part of the kinetic hamiltonian.
         """
-        er_file = pd.read_csv(
-            os.path.join(filepath, filename), skiprows=1, names=np.arange(15), sep=r"\s+", dtype=float, engine="python"
-        )
+        er_file = pd.read_csv(filename, skiprows=1, names=np.arange(15), sep=r"\s+", dtype=float, engine="python")
         n_bands = er_file.values[0][0].astype(int)
         nr = er_file.values[1][0].astype(int)
 
@@ -150,7 +156,7 @@ class Hamiltonian:
         self._er = np.reshape(tmp[:, 5] + 1j * tmp[:, 6], (nr, n_bands, n_bands))
         return self
 
-    def write_hr_w2k(self, filename: str):
+    def write_hr_w2k(self, filename: str) -> None:
         """
         Write the real-space kinetic Hamiltonian in the format of w2k to a file.
         """
@@ -175,6 +181,36 @@ class Hamiltonian:
             )
             file.write(line + "\n")
 
+    def read_umatrix(self, filename: str) -> "Hamiltonian":
+        """
+        Reads a file and creates the interaction matrix from it. The file should contain the number of bands in the first line and the number of r values in the second line.
+        From the third line onwards it should contain the interaction matrix entries. It looks very similar to the format of a wannier_hr.dat file. The format is:
+        r_lat_x r_lat_y r_lat_z orb1 orb2 orb3 orb4 realvalue imagvalue, where r_lat is the relative lattice vector and orb1-4 are the orbital indices. However, the interaction
+        is assumed to be real. The ordering of the entries themselves does not matter.
+        Note: The file ~should not~ contain any comments or empty lines.
+        """
+        umatrix_file = pd.read_csv(filename, skiprows=0, names=np.arange(15), sep=r"\s+", dtype=float, engine="python")
+        values = umatrix_file.values
+
+        nr = values[1][0].astype(int)
+        values = values[~np.isnan(values)]
+
+        n_cols = 9
+        n_rows = np.size(values[2 + nr :]) // n_cols
+        values = np.reshape(values[2 + nr :], (n_rows, n_cols))
+
+        interaction_elements = []
+        for i in range(len(values)):
+            interaction_elements.append(
+                InteractionElement(
+                    r_lat=values[i, 0:3].astype(int).tolist(),
+                    orbs=values[i, 3:7].astype(int).tolist(),
+                    value=values[i, 7].astype(float),
+                )
+            )
+
+        return self._add_interaction_term(interaction_elements)
+
     def get_ek(self, k_grid: bz.KGrid) -> np.ndarray:
         """
         Returns the band dispersion for the Hamiltonian on the input k-grid.
@@ -185,7 +221,7 @@ class Hamiltonian:
 
     def get_local_uq(self) -> LocalInteraction:
         """
-        Returns the local interaction term in momentum space. Note, that due to the momentum-independence of the local interaction,
+        Returns the local interaction term in momentum space. Note that due to the momentum-independence of the local interaction,
         the momentum space representation is the same as the real space representation.
         """
         return self._local_interaction
@@ -336,6 +372,10 @@ class Hamiltonian:
         return r_to_index, n_rp, n_orbs
 
     def _perform_swapping_symmetry(self, ur_local: np.ndarray) -> np.ndarray:
+        """
+        Performs the swapping symmetry on the local interaction matrix. This symmetry is defined as:
+        U_{lm'ml'} = U_{m'll'm}
+        """
         n_bands = ur_local.shape[0]
         for l, mp, m, lp in np.ndindex((n_bands, n_bands, n_bands, n_bands)):
             if ur_local[l, mp, m, lp] != 0:

@@ -421,7 +421,7 @@ class KPath:
         ckps = self.ckps
         labels = []
         for k_p in ckps:
-            if k_p in KnownKPoints.__members__:
+            if k_p in [s.value for s in KnownSymmetries]:
                 labels.append(Labels[k_p].value)
             else:
                 labels.append(f"K{count}")
@@ -468,7 +468,7 @@ class KPath:
         ckps = self.ckps
         ckp = np.zeros((np.size(ckps), 3))
         for i, kps in enumerate(ckps):
-            if kps in KnownKPoints.__members__:
+            if kps in [s.value for s in KnownSymmetries]:
                 ckp[i, :] = KnownKPoints[kps].value
             else:
                 ckp[i, :] = get_k_point_from_string(kps)

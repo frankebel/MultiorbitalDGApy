@@ -24,16 +24,7 @@ class LocalGreensFunction(LocalTwoPoint):
         self._ek = ek
 
         if sigma is not None and ek is not None:
-            config.n, config.rho_orbs = self._get_fill()
-
-    @staticmethod
-    def from_dmft(mat: np.ndarray) -> "LocalGreensFunction":
-        """
-        Creates a LocalGreensFunction object from a given DMFT file input matrix.
-
-        """
-        mat = np.einsum("i...,ij->ij...", mat, np.eye(mat.shape[0]))
-        return LocalGreensFunction(mat)
+            config.n, config.occ = self._get_fill()
 
     @staticmethod
     def create_g_loc(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
@@ -70,9 +61,9 @@ class LocalGreensFunction(LocalTwoPoint):
                 rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
 
         rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
-        rho_new = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.beta
-        n_el = 2.0 * np.trace(rho_new).real
-        return n_el, rho_new
+        occ = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.beta
+        n_el = 2.0 * np.trace(occ).real
+        return n_el, occ
 
     def _get_gloc_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()

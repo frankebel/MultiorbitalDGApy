@@ -145,17 +145,17 @@ def get_self_energy(
 
     self_energy_mat = 1.0 / config.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
 
-    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.rho_orbs)
+    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.occ)
     self_energy_mat += hartree[..., np.newaxis]
 
     return LocalSelfEnergy(self_energy_mat)
 
 
-def perform_schwinger_dyson(
+def perform_local_schwinger_dyson(
     g_loc: LocalGreensFunction, g2_dens: LocalFourPoint, g2_magn: LocalFourPoint, u_loc: LocalInteraction
 ) -> (LocalSelfEnergy, LocalFourPoint, LocalFourPoint):
     """
-    Performs the Schwinger-Dyson equation calculation for the local self-energy.
+    Performs the local Schwinger-Dyson equation calculation for the local self-energy.
     Includes the calculation of the three-leg vertices, (auxiliary/bare/physical) susceptibilities and the irreducible vertices.
     """
     gchi_dens = create_generalized_chi(g2_dens, g_loc)
@@ -168,6 +168,7 @@ def perform_schwinger_dyson(
     gchi0 = create_generalized_chi0(g_loc)
 
     # testing block
+    # this will be removed later
     gchi_dens_copy = deepcopy(gchi0)
     gchi_dens_copy.mat[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
     gchi_dens = deepcopy(gchi_dens_copy)
@@ -198,11 +199,6 @@ def perform_schwinger_dyson(
     assert res is True, "Shit"
     # endtesting block
 
-    chi_dens_physical = create_physical_chi(gchi_dens)
-    chi_magn_physical = create_physical_chi(gchi_magn)
-
-    MemoryHelper.delete(gchi_magn)
-
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
     MemoryHelper.delete(gchi_aux_dens)
@@ -212,5 +208,10 @@ def perform_schwinger_dyson(
     MemoryHelper.delete(gchi0, gchi_aux_magn)
 
     sigma = get_self_energy(vrg_dens, gchi_dens, g_loc, u_loc)
+
+    chi_dens_physical = create_physical_chi(gchi_dens)
+    MemoryHelper.delete(gchi_dens)
+    chi_magn_physical = create_physical_chi(gchi_magn)
+    MemoryHelper.delete(gchi_magn)
 
     return gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma

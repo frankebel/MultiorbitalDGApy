@@ -10,24 +10,24 @@ from shutil import copyfile
 
 
 # not very pythonic utility function to unravel the band-spin compound index
-def index2component_general(Nbands, N, ind):
-    b = np.zeros((N), dtype=np.int_)
-    s = np.zeros((N), dtype=np.int_)
-    bs = np.zeros((N), dtype=np.int_)
+def index2component_general(n_bands, N, ind):
+    band = np.zeros((N), dtype=np.int_)
+    spin = np.zeros((N), dtype=np.int_)
+    bandspin = np.zeros((N), dtype=np.int_)
     # the proposed back conversion assumes the indices are
-    # given form 0 to max-1
+    # given from 0 to max-1
     ind_tmp = ind - 1
     tmp = np.zeros((N + 1), dtype=np.int_)
     for i in range(0, N + 1):
-        tmp[i] = (2 * Nbands) ** (N - i)
+        tmp[i] = (2 * n_bands) ** (N - i)
 
     for i in range(N):
-        bs[i] = ind_tmp // tmp[i + 1]
-        s[i] = bs[i] % 2
-        b[i] = (bs[i] - s[i]) // 2
-        ind_tmp = ind_tmp - tmp[i + 1] * bs[i]
+        bandspin[i] = ind_tmp // tmp[i + 1]
+        spin[i] = bandspin[i] % 2
+        band[i] = (bandspin[i] - spin[i]) // 2
+        ind_tmp = ind_tmp - tmp[i + 1] * bandspin[i]
 
-    return bs, b, s
+    return bandspin, band, spin
 
 
 # compute a compound index from orbital indices only.
