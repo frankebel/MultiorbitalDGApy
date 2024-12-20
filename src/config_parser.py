@@ -117,12 +117,14 @@ class ConfigParser:
             raise NotImplementedError(f"Hamiltonian type {er_type} not supported.")
 
         if int_type == "infer":
-            # get stuff from dmft files somehow
-            return ham
+            # TODO: get stuff from dmft files somehow
+            if not isinstance(int_input, list) or len(int_input) != 3:
+                raise ValueError("Invalid input for interaction.")
+            pass
         elif int_type == "kanamori":
-            if not isinstance(int_input, list):
+            if not isinstance(int_input, list) or not 3 <= len(int_input) <= 4:
                 raise ValueError("Invalid input for kanamori interaction.")
-            return ham.kanamori_interaction(int_input[0], int_input[1], int_input[2], int_input[3])
+            return ham.kanamori_interaction(*int_input)
         elif int_type == "custom":
             if not isinstance(int_input, str):
                 raise ValueError("Invalid input for umatrix file.")

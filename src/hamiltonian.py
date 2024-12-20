@@ -1,5 +1,4 @@
 import itertools as it
-import os
 
 import pandas as pd
 
@@ -77,13 +76,13 @@ class Hamiltonian:
         """
         return self.single_band_interaction_as_multiband(u, 1)
 
-    def single_band_interaction_as_multiband(self, u: float, num_bands: int = 1) -> "Hamiltonian":
+    def single_band_interaction_as_multiband(self, u: float, n_bands: int = 1) -> "Hamiltonian":
         """
         Mainly used for testing. Sets the local interaction term for a multi-band model from a floating point number.
         The interaction matrix is going to be zero everywhere except for the [0,0,0,0] element, which is set to 'u'.
         """
         interaction_elements = []
-        for i, j, k, l in it.product(range(num_bands), repeat=4):
+        for i, j, k, l in it.product(range(n_bands), repeat=4):
             if i == j == k == l == 0:
                 interaction_elements.append(InteractionElement([0, 0, 0], [i + 1, j + 1, k + 1, l + 1], u))
             else:
@@ -91,24 +90,26 @@ class Hamiltonian:
 
         return self._add_interaction_term(interaction_elements)
 
-    def kanamori_interaction(self, n_bands: int, udd: float, jdd: float, vdd: float) -> "Hamiltonian":
+    def kanamori_interaction(self, n_bands: int, udd: float, jdd: float, vdd: float = None) -> "Hamiltonian":
         """
-        Adds the Kanamori interaction terms to the Hamiltonian. The interaction terms are defined by the Hubbard U 'udd',
-        the exchange interaction 'jdd' and the pair hopping 'vdd'.
+        Adds the Kanamori interaction terms to the Hamiltonian. The interaction terms are defined by the Hubbard 'udd' (U),
+        the exchange interaction 'jdd' (J) and the pair hopping 'vdd' (V or sometimes U'). 'vdd' is an optional parameter, if left empty,
+        it is set to U-2J.
         """
+        if vdd is None:
+            vdd = udd - 2 * jdd
+
         r_loc = [0, 0, 0]
 
         interaction_elements = []
-        for i in range(1, n_bands + 1):
-            interaction_elements.append(InteractionElement(r_loc, [i, i, i, i], udd))
-        for i in range(1, n_bands):
-            interaction_elements.append(InteractionElement(r_loc, [i, i, i + 1, i + 1], jdd))
-            interaction_elements.append(InteractionElement(r_loc, [i + 1, i + 1, i, i], jdd))
-            interaction_elements.append(InteractionElement(r_loc, [i, i + 1, i + 1, i], jdd))
-            interaction_elements.append(InteractionElement(r_loc, [i + 1, i, i, i + 1], jdd))
-
-            interaction_elements.append(InteractionElement(r_loc, [i, i + 1, i, i + 1], vdd))
-            interaction_elements.append(InteractionElement(r_loc, [i + 1, i, i + 1, i], vdd))
+        for l, mp, m, lp in it.product(range(n_bands), repeat=4):
+            bands = [l + 1, mp + 1, m + 1, lp + 1]
+            if l == mp == m == lp:  # U_{llll}
+                interaction_elements.append(InteractionElement(r_loc, bands, udd))
+            elif (l == lp and mp == m) or (l == mp and m == lp):  # U_{lmml} or U_{llmm}
+                interaction_elements.append(InteractionElement(r_loc, bands, jdd))
+            elif l == m and mp == lp:  # U_{lmlm}
+                interaction_elements.append(InteractionElement(r_loc, bands, vdd))
 
         return self._add_interaction_term(interaction_elements)
 
@@ -277,24 +278,24 @@ class Hamiltonian:
         self._nonlocal_interaction = NonLocalInteraction(ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights)
         return self
 
-    def _create_er_grid(self, r2ind: dict[list, int], n_orbs: int) -> np.ndarray:
+    def _create_er_grid(self, r_to_index: dict[list, int], n_orbs: int) -> np.ndarray:
         """
         Creates the real-space grid for the kinetic Hamiltonian.
         """
-        n_rp = len(r2ind)
+        n_rp = len(r_to_index)
         r_grid = np.zeros((n_rp, n_orbs, n_orbs, 3))
-        for r_vec in r2ind.keys():
-            r_grid[r2ind[r_vec], :, :, :] = r_vec
+        for r_vec in r_to_index.keys():
+            r_grid[r_to_index[r_vec], :, :, :] = r_vec
         return r_grid
 
-    def _create_ur_grid(self, r2ind: dict[list, int], n_orbs: int) -> np.ndarray:
+    def _create_ur_grid(self, r_to_index: dict[list, int], n_orbs: int) -> np.ndarray:
         """
         Creates the real-space grid for the interaction Hamiltonian.
         """
-        n_rp = len(r2ind)
+        n_rp = len(r_to_index)
         r_grid = np.zeros((n_rp, n_orbs, n_orbs, n_orbs, n_orbs, 3))
-        for r_vec in r2ind.keys():
-            r_grid[r2ind[r_vec], :, :, :, :, :] = r_vec
+        for r_vec in r_to_index.keys():
+            r_grid[r_to_index[r_vec], :, :, :, :, :] = r_vec
         return r_grid
 
     def _create_er_orbs(self, n_rp: int, n_orbs: int) -> np.ndarray:
@@ -363,7 +364,7 @@ class Hamiltonian:
 
     def _prepare_indices_and_dimensions(self, elements: list) -> tuple:
         """
-        Helper method. Prepares the indices and dimensions for the Hamiltonian.
+        Helper method. Prepares the indices and dimensions for the matrices contained in the Hamiltonian.
         """
         unique_lat_r = set([el.r_lat for el in elements])
         r_to_index = {tup: index for index, tup in enumerate(unique_lat_r)}
@@ -377,7 +378,7 @@ class Hamiltonian:
         U_{lm'ml'} = U_{m'll'm}
         """
         n_bands = ur_local.shape[0]
-        for l, mp, m, lp in np.ndindex((n_bands, n_bands, n_bands, n_bands)):
+        for l, mp, m, lp in it.product(range(n_bands), repeat=4):
             if ur_local[l, mp, m, lp] != 0:
                 ur_local[mp, l, lp, m] = ur_local[l, mp, m, lp]
 

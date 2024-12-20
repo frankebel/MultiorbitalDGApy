@@ -8,7 +8,7 @@ from i_have_mat import IHaveMat
 
 class LocalNPoint(IHaveMat):
     """
-    Base class for all LocalNPoint objects, such as the (Full/Irreducible) Vertex functions, Susceptibilities,
+    Base class for all (Local)NPoint objects, such as the (Full/Irreducible) Vertex functions, Susceptibilities,
     Fermi-Bose Vertices, Green's Function, Self-Energy and the like.
     """
 
@@ -151,10 +151,18 @@ class LocalNPoint(IHaveMat):
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
     def to_compound_indices(self) -> "LocalNPoint":
-        """
-        Converts a fermionic frequency axis and two orbital axis into a single compound index. This is useful for
-        multiplications between and inversions of LocalNPoint objects. Depending on the number of fermionic frequency
-        dimensions, other strategies are used to form the compound indices.
+        r"""
+        Converts the indices of the LocalNPoint object
+
+        .. math:: F^{wvv'}_{lmm'l'}
+
+        to compound indices
+
+        .. math:: F^{w}_{c_1, c_2}.
+
+        for a couple of shape cases. We group {v, l, m} and {v',m',l'} into two indices.
+
+        .. math:: c_1 \;and\; c_2.
         """
         if len(self.current_shape) == 3:  # [w,x1,x2]
             return self
@@ -162,7 +170,7 @@ class LocalNPoint(IHaveMat):
         if self.num_bosonic_frequency_dimensions != 1:
             raise ValueError(f"Converting to compound indices with shape {self.current_shape} not supported.")
 
-        self.original_shape = self.mat.shape
+        self.original_shape = self.current_shape
 
         if self.num_fermionic_frequency_dimensions == 0:  # [o1,o2,o3,o4,w]
             self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(2 * self.niw + 1, self.n_bands**2, self.n_bands**2)
@@ -178,8 +186,7 @@ class LocalNPoint(IHaveMat):
 
     def to_full_indices(self, shape: tuple = None) -> "LocalNPoint":
         """
-        Converts an object stored with compound indices to an object that has unraveled orbital and frequency axis.
-        This needs to be done to have the object in the original shape present before the transformation to compound indices.
+        Converts an object stored with compound indices to an object that has unraveled orbital and frequency axes.
         """
         if (
             len(self.current_shape)
@@ -188,26 +195,25 @@ class LocalNPoint(IHaveMat):
             + self.num_fermionic_frequency_dimensions
         ):
             return self
-        elif len(self.current_shape) == 3:  # [w,x1,x2]
-            self.original_shape = shape if shape is not None else self.original_shape
-            if self.num_bosonic_frequency_dimensions == 1:
-                if self.num_fermionic_frequency_dimensions == 0:  # original was [o1,o2,o3,o4,w]
-                    self.mat = self.mat.reshape(
-                        (2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions
-                    ).transpose(1, 2, 3, 4, 0)
-                    return self
 
-                compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
-
-                self.mat = (self.mat.reshape((2 * self.niw + 1,) + compound_index_shape * 2)).transpose(
-                    1, 2, 4, 5, 0, 3, 6
-                )
-
-                if self.num_fermionic_frequency_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
-                    self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
-                return self
-        else:
+        if len(self.current_shape) != 3:
             raise ValueError(f"Converting to full indices with shape {self.current_shape} not supported.")
+
+        self.original_shape = shape if shape is not None else self.original_shape
+        if self.num_bosonic_frequency_dimensions == 1:
+            if self.num_fermionic_frequency_dimensions == 0:  # original was [o1,o2,o3,o4,w]
+                self.mat = self.mat.reshape(
+                    (2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions
+                ).transpose(1, 2, 3, 4, 0)
+                return self
+
+            compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
+
+            self.mat = (self.mat.reshape((2 * self.niw + 1,) + compound_index_shape * 2)).transpose(1, 2, 4, 5, 0, 3, 6)
+
+            if self.num_fermionic_frequency_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
+                self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
+            return self
 
     def invert(self) -> "LocalNPoint":
         """

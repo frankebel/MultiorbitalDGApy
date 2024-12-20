@@ -77,13 +77,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self.to_full_indices()
         other = other.to_full_indices()
 
-        if isinstance(other, LocalTwoPoint):
-            # TODO: or np.mean?
-            new_mat = np.sum(new_mat, -2)
-            return LocalTwoPoint(new_mat, full_niv_range=self.full_niv_range).to_full_indices(
-                self.original_shape if self.num_fermionic_frequency_dimensions == 0 else other.original_shape
-            )
-
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
         if isinstance(other, LocalThreePoint):
@@ -152,7 +145,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat)
         diff = len(split[0]) - len(split[1])
         self.original_shape = self.current_shape
-        self._num_orbital_dimensions = self.num_orbital_dimensions - diff
+        self._num_orbital_dimensions -= diff
         return self
 
     def sum_over_fermionic_dimensions(self, beta: float, axis: tuple = (-1,)) -> "LocalFourPoint":

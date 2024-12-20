@@ -13,7 +13,6 @@ class FrequencyShift(Enum):
 class MFHelper:
     @multimethod
     @staticmethod
-    # @multimethod
     def wn(niw: int, shift: int = 0, return_only_positive: bool = False) -> np.ndarray:
         """
         Returns integer numbers from [-niw, niw]. Additionally, a shift can be applied. If return_only_positive is
@@ -25,7 +24,6 @@ class MFHelper:
 
     @multimethod
     @staticmethod
-    # @wn.register(int, float, int, bool)
     def wn(niw: int, beta: float, shift: int = 0, return_only_positive: bool = False) -> np.ndarray:
         """
         Returns (real) bosonic matsubara frequencies from [-(2 niw)pi/beta, +(2 niw)pi/beta].
@@ -34,7 +32,6 @@ class MFHelper:
 
     @multimethod
     @staticmethod
-    # @multimethod
     def vn(niv: int, shift: int = 0, return_only_positive: bool = False) -> np.ndarray:
         """
         Returns integer numbers from [-niv, niv). Additionally, a shift can be applied. If return_only_positive is
@@ -46,7 +43,6 @@ class MFHelper:
 
     @multimethod
     @staticmethod
-    # @vn.register(int, float, int, bool)
     def vn(niv: int, beta: float, shift: int = 0, return_only_positive: bool = False) -> np.ndarray:
         """
         Returns (real) fermionic matsubara frequencies from [(-2 niv+1)pi/beta,  (+2 niv+1)pi/beta].

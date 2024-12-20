@@ -6,10 +6,10 @@ lattice:
   symmetries: [ "x-inv", "y-inv" ] # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
   type: "from_wannier90" # Specifies the hopping elements, either from a wannier90 file 'from_wannier90' or from tight-binding parameters 't_tp_tpp'
   hr_input: "/home/julpe/Documents/repos/MultiorbitalDGApy/wannier_hr.dat" # full path to the wannier_hr.dat file or list of tight-binding parameters [t, tp, tpp]
-  interaction_type: "custom" # Type of interaction. Available: ['infer', 'kanamori', 'custom']. If 'infer', the interaction is parsed from the DMFT
+  interaction_type: "kanamori" # Type of interaction. Available: ['infer', 'kanamori', 'custom']. If 'infer', the interaction is parsed from the DMFT
   # calculation. If 'kanamori', we expect the interaction input to be a list of three kanamori parameters, [n_bands, U, J, U'] (U' is also sometimes called V). If 'custom',
   # please specify the full path to a file in 'interaction_input' containing orbital entries for the interaction matrix.
-  interaction_input: "./umatrix.dat" # full path to the interaction file or list of interaction parameters [n_bands, U, J, U']
+  interaction_input: [ 2, 2, 0.5 ] # full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   nk: [ 16, 16, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
