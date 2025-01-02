@@ -1,12 +1,11 @@
 import h5py
-import numpy as np
 
-from i_have_channel import Channel
 import symmetrize as sym
+from n_point_base import *
 
 
 class W2dynFile:
-    def __init__(self, fname=None):
+    def __init__(self, fname: str):
         self._file = None
         self._fname = fname
         self.open()
@@ -92,7 +91,7 @@ class W2dynFile:
 
 
 class W2dynG4iwFile:
-    def __init__(self, fname: str = None):
+    def __init__(self, fname: str):
         self._fname = fname
         self._file = None
         self.open()

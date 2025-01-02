@@ -1,9 +1,6 @@
 import os
-from copy import deepcopy
 
-import numpy as np
-
-from i_have_mat import IHaveMat
+from n_point_base import *
 
 
 class LocalNPoint(IHaveMat):

@@ -1,12 +1,12 @@
-import numpy as np
 from matplotlib import pyplot as plt
 
-from i_have_channel import IHaveChannel, Channel
 from interaction import LocalInteraction
+from local_greens_function import LocalGreensFunction
 from local_n_point import LocalNPoint
 from local_three_point import LocalThreePoint
 from local_two_point import LocalTwoPoint
 from matsubara_frequencies import MFHelper
+from n_point_base import *
 
 
 class LocalFourPoint(LocalNPoint, IHaveChannel):
@@ -173,7 +173,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Permutes the orbitals of the four-point object.
         """
         split = permutation.split("->")
-        if len(split) != 2 or len(split[0]) != 4 or len(split[1]) != 4:
+        if (
+            len(split) != 2
+            or len(split[0]) != self.num_orbital_dimensions
+            or len(split[1]) != self.num_orbital_dimensions
+        ):
             raise ValueError("Invalid permutation.")
 
         permutation = f"{split[0]}...->{split[1]}..."
@@ -186,6 +190,42 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.full_niw_range,
             self.full_niv_range,
         )
+
+    def build_asympt_kernel_1(self, u_loc: LocalInteraction) -> "LocalFourPoint":
+        """
+        Builds the asymptotic 1-Kernel from the local susceptibility (only w dependent!).
+        See "Continuous-time quantum Monte Carlo calculation of multi-orbital vertex asymptotics" by Josef Kaufmann et al.
+        (arXiv:1703.09407v2), Eq. (26)
+        """
+        if self.num_fermionic_frequency_dimensions != 0:
+            raise ValueError("This method is only implemented for 0 fermionic frequency dimensions.")
+        if self.num_bosonic_frequency_dimensions != 1:
+            raise ValueError("This method is only implemented for 1 bosonic frequency dimension.")
+        mat = -np.einsum("ajbi,ijklw,lckd->abcdw", u_loc.mat, self.mat, u_loc.mat)
+        return LocalFourPoint(mat, self.channel, 1, 0, self.full_niw_range, self.full_niv_range)
+
+    def build_asympt_kernel_2(
+        self, u_loc: LocalInteraction, g_loc: LocalGreensFunction, asympt_kernel_1: "LocalFourPoint"
+    ) -> "LocalFourPoint":
+        """
+        Builds the asymptotic 2-Kernel from the local susceptibility (w and v dependent!).
+        See "Continuous-time quantum Monte Carlo calculation of multi-orbital vertex asymptotics" by Josef Kaufmann et al.
+        (arXiv:1703.09407v2), Eq. (29)
+        """
+        if self.num_fermionic_frequency_dimensions != 1:
+            raise ValueError("This method is only implemented for 1 fermionic frequency dimension.")
+        if self.num_bosonic_frequency_dimensions != 1:
+            raise ValueError("This method is only implemented for 1 bosonic frequency dimension.")
+
+        gav_inv = (~g_loc).mat
+        gawv = np.diagonal(MFHelper.wn_slices_gen(g_loc.mat, self.niv, self.niw), axis1=0, axis2=1)
+        gawv_inv = np.diagonal(np.linalg.inv(gawv.transpose(2, 3, 0, 1)).transpose(2, 3, 0, 1), axis1=0, axis2=1)
+
+        mat = (
+            -np.einsum("abjiwv,av,bwv,icjd->abcdwv", self.mat, gav_inv, gawv_inv, u_loc.mat)
+            - asympt_kernel_1.mat[..., np.newaxis]
+        )
+        return LocalFourPoint(mat, self.channel, 1, 1, self.full_niw_range, self.full_niv_range)
 
     def plot(
         self,

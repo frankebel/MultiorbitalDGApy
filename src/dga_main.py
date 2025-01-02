@@ -1,24 +1,27 @@
 import logging
 from copy import deepcopy
 
-import config
+from mpi4py import MPI
+
 import dga_io
 import local_sde
 import plotting
+from config_parser import ConfigParser
 from dga_decorators import timeit
 from hamiltonian import Hamiltonian
 from local_greens_function import LocalGreensFunction
 from local_n_point import LocalNPoint
 from memory_helper import MemoryHelper
-from config_parser import ConfigParser
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
+comm = MPI.COMM_WORLD
+
 
 @timeit
 def execute_dga_routine():
-    test = ConfigParser().parse_config()
+    _ = ConfigParser().parse_config(comm)
     print("Hallo")
     exit()
 
@@ -33,13 +36,13 @@ def execute_dga_routine():
     # )
     config.hamiltonian = (
         Hamiltonian()
-        .read_er_w2k(filepath="/home/julpe/Documents/repos/MultiorbitalDGApy/", filename="wannier_hr.dat")
-        .single_band_interaction_as_multiband(config.interaction.udd, 2)
+        .read_er_w2k(filename="/home/julpe/Documents/repos/MultiorbitalDGApy/wannier_hr.dat")
+        .single_band_interaction_as_multiband(config.lattice.interaction.udd, 2)
     )
 
     # config.hamiltonian = (
     #    Hamiltonian()
-    #    .read_er_w2k(filepath="/home/julpe/Documents/repos/MultiorbitalDGApy/", filename="wannier_hr.dat")
+    #    .read_er_w2k(filename="/home/julpe/Documents/repos/MultiorbitalDGApy/wannier_hr.dat")
     #    .kanamori_interaction(config.n_bands, config.interaction.udd, config.interaction.jdd, config.interaction.vdd)
     # )
 
@@ -48,13 +51,13 @@ def execute_dga_routine():
     dga_io.update_frequency_boxes(g2_dens.niv, g2_dens.niw)
     g2_dens, g2_magn = dga_io.update_g2_from_dmft(g2_dens, g2_magn)
 
-    if config.do_plotting:
+    if config.output.do_plotting:
         g2_dens.plot(omega=0, name=f"G2_dens")
         g2_magn.plot(omega=0, name=f"G2_magn")
         g2_magn.plot(omega=-10, name=f"G2_magn")
         g2_magn.plot(omega=10, name=f"G2_magn")
 
-    ek = config.hamiltonian.get_ek(config.k_grid)
+    ek = config.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = LocalGreensFunction.create_g_loc(sigma_dmft, ek)
     u_loc = config.hamiltonian.get_local_uq()
     # u_nonloc = config.hamiltonian.get_nonlocal_uq(config.q_grid)
@@ -63,7 +66,7 @@ def execute_dga_routine():
         g_loc, g2_dens, g2_magn, u_loc
     )
 
-    if config.save_quantities:
+    if config.output.save_quantities:
         gamma_dens.save(name="Gamma_dens")
         gamma_magn.save(name="Gamma_magn")
         sigma.save(name="siw_sde_full")
@@ -72,16 +75,16 @@ def execute_dga_routine():
         vrg_dens.save(name="vrg_dens")
         vrg_magn.save(name="vrg_magn")
 
-    if config.do_plotting:
+    if config.output.do_plotting:
         gamma_dens_copy = deepcopy(gamma_dens)
-        gamma_dens_copy = gamma_dens_copy.cut_niv(min(config.niv, 2 * int(config.beta)))
+        gamma_dens_copy = gamma_dens_copy.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
         gamma_dens_copy.plot(omega=0, name="Gamma_dens")
         gamma_dens_copy.plot(omega=10, name="Gamma_dens")
         gamma_dens_copy.plot(omega=-10, name="Gamma_dens")
         MemoryHelper.delete(gamma_dens_copy)
 
         gamma_magn_copy = deepcopy(gamma_magn)
-        gamma_magn_copy = gamma_magn_copy.cut_niv(min(config.niv, 2 * int(config.beta)))
+        gamma_magn_copy = gamma_magn_copy.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
         gamma_magn_copy.plot(omega=0, name="Gamma_magn")
         gamma_magn_copy.plot(omega=10, name="Gamma_magn")
         gamma_magn_copy.plot(omega=-10, name="Gamma_magn")
@@ -91,19 +94,19 @@ def execute_dga_routine():
         plotting.sigma_loc_checks(
             [sigma[0, 0], sigma[1, 0], sigma[0, 1], sigma[1, 1], sigma_dmft[0, 0]],
             ["SDE00", "SDE10", "SDE01", "SDE11", "Input"],
-            config.beta,
+            config.sys.beta,
             show=False,
             save=True,
-            xmax=config.niv,
+            xmax=config.box.niv,
             name="1",
         )
         plotting.sigma_loc_checks(
             [sigma[0, 0], sigma_dmft[0, 0]],
             ["SDE00", "Input"],
-            config.beta,
+            config.sys.beta,
             show=False,
             save=True,
-            xmax=config.niv,
+            xmax=config.box.niv,
             name="2",
         )
 

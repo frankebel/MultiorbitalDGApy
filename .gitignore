@@ -2,12 +2,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.idea
 
 # DGA output files
 *.png
 *.npy
 *.dat
+
+# IDE folders
+.idea/
 
 # other
 *.html

@@ -1,6 +1,6 @@
 import gc
 
-from i_have_mat import IHaveMat
+from n_point_base import *
 
 
 class MemoryHelper:

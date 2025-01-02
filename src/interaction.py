@@ -1,8 +1,5 @@
-import numpy as np
-
 import brillouin_zone as bz
-from i_have_channel import IHaveChannel, Channel
-from i_have_mat import IHaveMat
+from n_point_base import *
 
 
 class LocalInteraction(IHaveMat, IHaveChannel):

@@ -96,7 +96,7 @@ def chi_checks(
         axes[2].loglog(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
     axes[2].loglog(
         MFHelper.wn(niw_chi_input),
-        np.real(1 / (1j * MFHelper.wn(niw_chi_input, config.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
+        np.real(1 / (1j * MFHelper.wn(niw_chi_input, config.sys.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
         ls="--",
         label="Asympt",
         ms=0,
@@ -108,7 +108,7 @@ def chi_checks(
         axes[3].loglog(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
     axes[3].loglog(
         MFHelper.wn(niw_chi_input),
-        np.real(1 / (1j * MFHelper.wn(niw_chi_input, config.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
+        np.real(1 / (1j * MFHelper.wn(niw_chi_input, config.sys.beta) + 0.000001) ** 2 * g_loc.e_kin) * 2,
         "--",
         label="Asympt",
         ms=0,

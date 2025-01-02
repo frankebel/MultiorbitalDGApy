@@ -1,5 +1,4 @@
 import numpy as np
-import scipy
 
 import config
 from local_self_energy import LocalSelfEnergy
@@ -24,7 +23,7 @@ class LocalGreensFunction(LocalTwoPoint):
         self._ek = ek
 
         if sigma is not None and ek is not None:
-            config.n, config.occ = self._get_fill()
+            config.sys.n, config.sys.occ = self._get_fill()
 
     @staticmethod
     def create_g_loc(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
@@ -38,7 +37,7 @@ class LocalGreensFunction(LocalTwoPoint):
         """
         Returns the kinetic energy of the system.
         """
-        ekin = 1 / config.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
+        ekin = 1 / config.sys.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
         assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
         return ekin.real
 
@@ -50,9 +49,9 @@ class LocalGreensFunction(LocalTwoPoint):
         g_model = self._get_g_model_mat()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
-        mu_bands: np.ndarray = config.mu * np.eye(self.n_bands)
+        mu_bands: np.ndarray = config.sys.mu * np.eye(self.n_bands)
 
-        eigenvals, eigenvecs = np.linalg.eig(config.beta * (hloc.real + smom0 - mu_bands))
+        eigenvals, eigenvecs = np.linalg.eig(config.sys.beta * (hloc.real + smom0 - mu_bands))
         rho_loc_diag = np.zeros((self.n_bands, self.n_bands), dtype=np.complex64)
         for i in range(self.n_bands):
             if eigenvals[i] > 0:
@@ -61,7 +60,7 @@ class LocalGreensFunction(LocalTwoPoint):
                 rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
 
         rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
-        occ = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.beta
+        occ = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.sys.beta
         n_el = 2.0 * np.trace(occ).real
         return n_el, occ
 
@@ -83,7 +82,7 @@ class LocalGreensFunction(LocalTwoPoint):
 
     def _get_g_params_local(self):
         eye_bands = np.eye(self.n_bands, self.n_bands)
-        iv = 1j * MFHelper.vn(self.niv, config.beta)
+        iv = 1j * MFHelper.vn(self.niv, config.sys.beta)
         iv_bands = iv[None, None, :] * eye_bands[..., None]
-        mu_bands = config.mu * eye_bands[:, :, None]
+        mu_bands = config.sys.mu * eye_bands[:, :, None]
         return iv_bands, mu_bands

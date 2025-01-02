@@ -1,7 +1,5 @@
-import numpy as np
-
 from local_n_point import LocalNPoint
-from i_have_channel import IHaveChannel, Channel
+from n_point_base import *
 
 
 class LocalThreePoint(LocalNPoint, IHaveChannel):

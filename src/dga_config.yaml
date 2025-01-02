@@ -1,9 +1,10 @@
 box_sizes:
   niw: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv: -1 # Number of fermionic frequencies used from F(w,v,v'); default: -1 (all)
+  niv: -1 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_shell: 0 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
-  symmetries: [ "x-inv", "y-inv" ] # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
+  symmetries: "two_dimensional_square" # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
   type: "from_wannier90" # Specifies the hopping elements, either from a wannier90 file 'from_wannier90' or from tight-binding parameters 't_tp_tpp'
   hr_input: "/home/julpe/Documents/repos/MultiorbitalDGApy/wannier_hr.dat" # full path to the wannier_hr.dat file or list of tight-binding parameters [t, tp, tpp]
   interaction_type: "kanamori" # Type of interaction. Available: ['infer', 'kanamori', 'custom']. If 'infer', the interaction is parsed from the DMFT
@@ -18,7 +19,9 @@ dmft_input:
   input_path: "/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12.5_Nv140_U8" # Folder containing the input files. Default: current directory
   fname_1p: "1p-data.hdf5" # Filename of the one-particle DMFT calculation; default: 1p-data.hdf5
   fname_2p: "g4iw_sym.hdf5" # Name of the two-particle DMFT calculation; default: g4iw_sym.hdf5
+  do_sym_v_vp: True # If True, the code will symmetrize G2 in the v and vp indices
 
 output:
-  do_plotting: True
-  save_quantities: True
+  output_path: "" # Path, where the DGA output folders are created. If not specified, the output is created in the input folder directory of the DMFT files
+  do_plotting: True # If True, the code will plot the results into the output folder
+  save_quantities: True # If True, the code will save several quantities into the output folder
