@@ -30,8 +30,8 @@ class LatticeConfig:
         self.symmetries: list[bz.KnownSymmetries] = bz.two_dimensional_square_symmetries()
         self.type: str = "t_tp_tpp"
         self.er_input: list = [1, -0.25, 0.12]
-        self.nk: tuple = (16, 16, 1)
-        self.nq: tuple = self.nk
+        self.nk: tuple[int, int, int] = (16, 16, 1)
+        self.nq: tuple[int, int, int] = self.nk
 
         self.interaction: InteractionConfig = InteractionConfig()
         self.hamiltonian: Hamiltonian = Hamiltonian()

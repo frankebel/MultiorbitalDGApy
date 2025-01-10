@@ -1,5 +1,6 @@
 import brillouin_zone as bz
 from n_point_base import *
+import config
 
 
 class LocalInteraction(IHaveMat, IHaveChannel):
@@ -11,29 +12,21 @@ class LocalInteraction(IHaveMat, IHaveChannel):
     def n_bands(self) -> int:
         return self.mat.shape[0]
 
-    def as_channel(self, channel: Channel = Channel.DENS) -> "LocalInteraction":
-        copy = LocalInteraction(self.mat, channel)
-        if copy.channel == Channel.MAGN:
-            copy.mat *= -1
-        elif copy.channel != Channel.DENS:
-            raise ValueError(f"Invalid channel: {channel}.")
-        return copy
-
     def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalInteraction":
         return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
-    def __add__(self, other: "LocalInteraction") -> "LocalInteraction":
+    def __add__(self, other) -> "LocalInteraction":
         if not isinstance(other, LocalInteraction):
             raise ValueError(f"Addition {type(self)} + {type(other)} not supported.")
         return LocalInteraction(self.mat + other.mat, self.channel)
 
-    def __sub__(self, other: "LocalInteraction") -> "LocalInteraction":
+    def __sub__(self, other) -> "LocalInteraction":
         if not isinstance(other, LocalInteraction):
             raise ValueError(f"Subtraction {type(self)} - {type(other)} not supported.")
         return LocalInteraction(self.mat - other.mat, self.channel)
 
 
-class NonLocalInteraction(LocalInteraction):
+class NonLocalInteraction(LocalInteraction, IAmNonLocal):
     def __init__(
         self,
         mat: np.ndarray,
@@ -41,7 +34,8 @@ class NonLocalInteraction(LocalInteraction):
         ur_r_weights: np.ndarray,
         channel: Channel = Channel.NONE,
     ):
-        super().__init__(mat, channel)
+        LocalInteraction.__init__(self, mat, channel)
+        IAmNonLocal.__init__(self, config.lattice.nq, config.lattice.nk, 1, 2)
         self._ur_r_grid = ur_r_grid
         self._ur_r_weights = ur_r_weights
 

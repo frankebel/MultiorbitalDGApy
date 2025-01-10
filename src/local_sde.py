@@ -22,22 +22,11 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
     Returns the generalized susceptibility gchi_{r;lmm'l'}^{wvv'}:1/eV^3 = beta:1/eV * (G2_{r;lmm'l'}^{wvv'}:1/eV^2 - 2 * G_{ll'}^{v} G_{m'm}^{v}:1/eV^2 delta_dens delta_w0)
     """
     chi = config.sys.beta * g2
-    chi0_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)
 
-    """
     if g2.channel == Channel.DENS:
         wn = MFHelper.wn(g2.niw)
-        chi[:, :, :, :, wn == 0, ...] = config.beta * (
-            g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[:, :, :, :, wn == 0, ...]
-        )
-    """
-
-    # just for testing!
-    if g2.channel == Channel.DENS:
-        wn = MFHelper.wn(g2.niw)
-        chi[:, :, :, :, wn == 0, ...] = config.sys.beta * (
-            g2[:, :, :, :, wn == 0, ...] - 2.0 * chi0_mat[0, 0, 0, 0, wn == 0, ...]
-        )
+        chi0_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)[:, :, :, :, np.newaxis, ...]
+        chi[:, :, :, :, wn == 0, ...] -= 2.0 * chi0_mat
 
     return LocalFourPoint(
         chi.mat,
@@ -59,9 +48,7 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
         np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :]
         * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
     )
-    ggv_mat = g_left_mat * g_right_mat
-    ggv_mat = ggv_mat[:, :, :, :, np.newaxis, ...]
-    return np.tile(ggv_mat, (1, 1, 1, 1, 2 * config.box.niw + 1, 1, 1))
+    return g_left_mat * g_right_mat
 
 
 def create_generalized_chi0(
@@ -97,8 +84,7 @@ def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc:
     """
     Returns the auxiliary susceptibility gchi_aux_{r;lmm'l'} = ((gchi_{0;lmm'l'})^(-1) + gamma_{r;lmm'l'}-(u_{lmm'l'} - u_{ll'm'm})/beta^2)^(-1). See Eq. (3.68) in Paul Worm's thesis.
     """
-    u = u_loc.as_channel(gamma_r.channel)
-    return ~(~gchi_0 + gamma_r - (u - u.permute_orbitals("abcd->adcb")) / config.sys.beta**2)
+    return ~(~gchi_0 + gamma_r - (u_loc - u_loc.permute_orbitals("abcd->adcb")) / config.sys.beta**2)
 
 
 def create_physical_chi(gchi_r: LocalFourPoint) -> LocalFourPoint:
@@ -166,37 +152,8 @@ def perform_local_schwinger_dyson(
 
     gchi0 = create_generalized_chi0(g_loc)
 
-    # testing block
-    # this will be removed later
-    gchi_dens_copy = deepcopy(gchi0)
-    gchi_dens_copy.mat[0, 0, 0, 0, ...] = gchi_dens.mat[0, 0, 0, 0, ...]
-    gchi_dens = deepcopy(gchi_dens_copy)
-    gchi_dens._channel = Channel.DENS
-    MemoryHelper.delete(gchi_dens_copy)
-
-    gchi_magn_copy = deepcopy(gchi0)
-    gchi_magn_copy.mat[0, 0, 0, 0, ...] = gchi_magn.mat[0, 0, 0, 0, ...]
-    gchi_magn = deepcopy(gchi_magn_copy)
-    gchi_magn._channel = Channel.MAGN
-    MemoryHelper.delete(gchi_magn_copy)
-
-    assert np.allclose(gchi_dens[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Nooo"
-    assert np.allclose(gchi_magn[0, 0, 0, 0], gchi0[0, 0, 0, 0]) is False, "Nooo"
-    assert np.allclose(gchi_dens[1, 1, 1, 1], gchi0[1, 1, 1, 1]), "Nooo"
-    # endtesting block
-
     gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
     gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
-
-    # testing block
-    test = gamma_dens[0, 0, 0, 0, ...]
-    test1 = gamma_dens[1, 1, 1, 1, ...]
-    test1_zero = np.zeros_like(test1)
-    res = np.allclose(test, test1_zero)
-    assert res is False, "Shit"
-    res = np.allclose(test1, test1_zero)
-    assert res is True, "Shit"
-    # endtesting block
 
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)

@@ -248,8 +248,8 @@ class LocalNPoint(IHaveMat):
 
     def padding_along_fermionic(self, other: "LocalNPoint") -> "LocalNPoint":
         """
-        Symmetrically pads the larger of two LocalNPoint objects to the smaller one along the fermionic frequency dimensions.
-        Example: Object 1 is 'oooo', object 2 is 'nn'. The resulting object will be 'onno'.
+        Symmetrically pads the larger of two LocalNPoint objects to the smaller one along the fermionic frequency dimensions. \n
+        Example: self/other is 'nn', other/self is 'oooo'. The resulting object will be 'onno'.
         """
         if self.num_fermionic_frequency_dimensions != other.num_fermionic_frequency_dimensions:
             raise ValueError("Number of fermionic frequency dimensions do not match.")

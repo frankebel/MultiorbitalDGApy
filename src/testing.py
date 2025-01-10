@@ -1,7 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import symmetrize_new
 
 if __name__ == "__main__":
+    for idx in [1, 4, 7, 10, 13, 16]:
+        print(symmetrize_new.index2component_general(1, 4, idx))
+
+    exit()
     siw_dmft = np.load("/home/julpe/Desktop/sigma_dmft.npy", allow_pickle=True)
     siw_mycode = np.load("/home/julpe/Desktop/siw_sde_full.npy", allow_pickle=True)
     siw_emery = np.load("/home/julpe/Desktop/siw_sde_emery.npy", allow_pickle=True)

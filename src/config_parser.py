@@ -31,7 +31,6 @@ class ConfigParser:
 
         self._config_file = comm.bcast(self._config_file, root=0)
         self._build_config_from_file(self._config_file)
-        return self._config_file
 
     def save_config_file(self, path: str = "./", name: str = "dga_config.yaml") -> None:
         with open(os.path.join(path, name), "w+") as file:
@@ -58,12 +57,12 @@ class ConfigParser:
         conf = LatticeConfig()
         lattice_section = config_file["lattice"]
 
-        conf.nk = tuple(lattice_section["nk"])
+        conf.nk = tuple[int, int, int](lattice_section["nk"])
         if "nq" not in lattice_section:
             self._logger.info("'nq' not set in config. Setting 'nq' = 'nk'.")
             conf.nq = conf.nk
         else:
-            conf.nq = tuple(lattice_section["nq"])
+            conf.nq = tuple[int, int, int](lattice_section["nq"])
         conf.symmetries = self._set_lattice_symmetries(lattice_section["symmetries"])
         conf.hamiltonian = self._set_hamiltonian(
             lattice_section["type"],
@@ -147,7 +146,7 @@ class ConfigParser:
 
         return conf
 
-    def _build_system_config(self, config_file) -> SystemConfig:
+    def _build_system_config(self, _) -> SystemConfig:
         return SystemConfig()
 
     def _build_output_config(self, config_file) -> OutputConfig:

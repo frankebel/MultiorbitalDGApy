@@ -67,3 +67,8 @@ class MFHelper:
         niv = mat.shape[-1] // 2
         w = MFHelper.wn(niw)
         return np.moveaxis(np.array([mat[..., niv - niv_cut - iwn : niv + niv_cut - iwn] for iwn in w]), 0, -2)
+
+    @staticmethod
+    def fermionic_full_nu_range(mat: np.ndarray, axis=(-1,)):
+        """Build full Fermionic object from positive frequencies only along axis."""
+        return np.concatenate((np.conj(np.flip(mat, axis)), mat), axis=axis)

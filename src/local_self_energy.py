@@ -8,6 +8,7 @@ import config
 class LocalSelfEnergy(LocalTwoPoint):
     def __init__(self, mat: np.ndarray, full_niv_range: bool = True):
         super().__init__(mat, full_niv_range=full_niv_range)
+        self.niv_core_min = 20
         self._smom0, self._smom1 = self._fit_smom()
 
     @property
@@ -28,6 +29,40 @@ class LocalSelfEnergy(LocalTwoPoint):
         mom0 = np.mean(fitdata.real, axis=-1)
         mom1 = np.mean(fitdata.imag * iwfit.imag, axis=-1)
         return mom0, mom1
+
+    def _estimate_niv_core(self, err: float = 1e-4):
+        """check when the real and the imaginary part are within error margin of the asymptotic"""
+        asympt = self._get_asympt(niv_asympt=self.niv, n_min=0)
+
+        max_ind_real = 0
+        max_ind_imag = 0
+
+        for i in range(self.n_bands):
+            for j in range(self.n_bands):
+                k_mean = np.mean(self.mat[:, :, :, i, j, :], axis=(0, 1, 2))
+                ind_real = np.argmax(np.abs(k_mean.real - asympt.real) < err)
+                ind_imag = np.argmax(np.abs(k_mean.imag - asympt.imag) < err)
+
+                if ind_real > max_ind_real:
+                    max_ind_real = ind_real
+                if ind_imag > max_ind_imag:
+                    max_ind_imag = ind_imag
+
+        niv_core = max(max_ind_real, max_ind_imag)
+        if niv_core < self.niv_core_min:
+            return self.niv_core_min
+        return niv_core
+
+    def _get_asympt(self, niv_asympt: int, n_min: int = None, return_only_positive: bool = True):
+        if n_min is None:
+            n_min = self.niv
+        iv_asympt = 1j * MFHelper.vn(niv_asympt, config.sys.beta, shift=n_min, return_only_positive=True)
+        asympt = (self._smom0 - 1.0 / iv_asympt * self._smom1)[None, None, None, ...] * np.ones(config.lattice.nk)[
+            ..., None, None, None
+        ]
+        if return_only_positive:
+            return asympt
+        return MFHelper.fermionic_full_nu_range(asympt)
 
     def extend_to_multi_orbital(self, padding_object: "LocalSelfEnergy", n_bands: int) -> "LocalSelfEnergy":
         """

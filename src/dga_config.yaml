@@ -11,12 +11,12 @@ lattice:
   # calculation. If 'kanamori', we expect the interaction input to be a list of three kanamori parameters, [n_bands, U, J, U'] (U' is also sometimes called V). If 'custom',
   # please specify the full path to a file in 'interaction_input' containing orbital entries for the interaction matrix.
   interaction_input: [ 2, 2, 0.5 ] # full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
-  nk: [ 16, 16, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
+  nk: [ 40, 40, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
 dmft_input:
   type: "w2dyn" # Input format. Available is 'w2dyn'
-  input_path: "/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12.5_Nv140_U8" # Folder containing the input files. Default: current directory
+  input_path: "/home/julpe/Documents/DATA/Multiorb-DATA/" # Folder containing the input files. Default: current directory
   fname_1p: "1p-data.hdf5" # Filename of the one-particle DMFT calculation; default: 1p-data.hdf5
   fname_2p: "g4iw_sym.hdf5" # Name of the two-particle DMFT calculation; default: g4iw_sym.hdf5
   do_sym_v_vp: True # If True, the code will symmetrize G2 in the v and vp indices

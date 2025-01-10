@@ -31,7 +31,9 @@ def load_from_w2dyn_file_and_update_config() -> (LocalGreensFunction, LocalSelfE
     config.sys.n = file.get_totdens()
 
     if config.sys.n == 0:
-        config.sys.n = np.sum(np.diag(file.get_occ()[0, :, 0, :]))  # band spin band spin
+        config.sys.n += sum(
+            np.sum(np.diag(file.get_occ()[i, :, i, :])) for i in range(config.sys.n_bands)
+        )  # band spin band spin
 
     giw_spin_mean = np.mean(file.get_giw(), axis=1)
     giw = LocalGreensFunction(np.einsum("i...,ij->ij...", giw_spin_mean, np.eye(config.sys.n_bands)))

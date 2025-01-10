@@ -1,3 +1,5 @@
+import itertools as it
+
 from matplotlib import pyplot as plt
 
 from interaction import LocalInteraction
@@ -132,6 +134,22 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Symmetrize with respect to (v,v'). This is justified for SU(2) symmetric systems. (Thesis Rohringer p. 72)
         """
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
+        return self
+
+    def apply_time_reversal_symmetry(self) -> "LocalFourPoint":
+        """
+        Checks and applies time-reversal symmetry for the Four-Point object in-place. This is useful if only a fraction of the object was stored initially.
+        Keep in mind that the time reversal symmetry for local quantities is very simple. F^{wvv'}_{lmm'l'}=F^{wvv'}_{m'l'ml}
+        """
+        for l, m, mp, lp in it.product(range(self.n_bands), repeat=4):
+            slice_original = self[l, m, mp, lp, ...]
+            slice_symmetric = self[lp, mp, m, l, ...]
+
+            mask = slice_original == 0
+            slice_original[mask] = slice_symmetric[mask]
+            mask = slice_symmetric == 0
+            slice_symmetric[mask] = slice_original[mask]
+
         return self
 
     def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad") -> "LocalFourPoint":
