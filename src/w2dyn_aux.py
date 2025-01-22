@@ -1,6 +1,6 @@
 import h5py
 
-import symmetrize_new
+import symmetrize_new as sym
 from n_point_base import *
 
 
@@ -119,7 +119,7 @@ class W2dynG4iwFile:
         for wn in range(niw_full):
             wn_group_string = f"{channel_group_string}/{wn:05}"
             for ind in self._file[wn_group_string].keys():
-                bands = create_g4.index2component_band(n_bands, 4, int(ind))
+                bands = sym.index2component_band(n_bands, 4, int(ind))
                 val = self._file[f"{wn_group_string}/{ind}/value"][()].T
                 g2[bands[0], bands[1], bands[2], bands[3], wn, ...] = val
 

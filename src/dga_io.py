@@ -1,15 +1,19 @@
 import logging
 import os
 
+import brillouin_zone as bz
 import config
 import w2dyn_aux
+from hamiltonian import Hamiltonian
 from local_four_point import LocalFourPoint
 from local_greens_function import LocalGreensFunction
 from local_self_energy import LocalSelfEnergy
 from n_point_base import *
 
 
-def load_from_w2dyn_file_and_update_config() -> (LocalGreensFunction, LocalSelfEnergy, LocalFourPoint, LocalFourPoint):
+def load_from_w2dyn_file_and_update_config() -> (
+    tuple[LocalGreensFunction, LocalSelfEnergy, LocalFourPoint, LocalFourPoint]
+):
     file = w2dyn_aux.W2dynFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_1p)))
 
     config.sys.beta = file.get_beta()
@@ -30,8 +34,10 @@ def load_from_w2dyn_file_and_update_config() -> (LocalGreensFunction, LocalSelfE
     config.sys.n_bands = file.get_nd() + file.get_np()
     config.sys.n = file.get_totdens()
 
+    config.sys.occ_dmft = 2 * np.diag(np.diag(np.mean(file.get_occ(), axis=(1, 3))))
+
     if config.sys.n == 0:
-        config.sys.n += sum(
+        config.sys.n = sum(
             np.sum(np.diag(file.get_occ()[i, :, i, :])) for i in range(config.sys.n_bands)
         )  # band spin band spin
 
@@ -50,6 +56,10 @@ def load_from_w2dyn_file_and_update_config() -> (LocalGreensFunction, LocalSelfE
         file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.MAGN), channel=Channel.MAGN
     )
     file.close()
+
+    config.lattice.hamiltonian = set_hamiltonian(
+        config.lattice.type, config.lattice.er_input, config.lattice.interaction_type, config.lattice.interaction_input
+    )
 
     return giw, siw, g2_dens, g2_magn
 
@@ -84,3 +94,60 @@ def update_g2_from_dmft(g2_dens: LocalFourPoint, g2_magn: LocalFourPoint) -> (Lo
         g2_dens = g2_dens.symmetrize_v_vp()
         g2_magn = g2_magn.symmetrize_v_vp()
     return g2_dens, g2_magn
+
+
+def set_hamiltonian(er_type: str, er_input: str | list, int_type: str, int_input: str | list) -> Hamiltonian:
+    """
+    Sets the Hamiltonian based on the input from the config file. \n
+    The kinetic part can be set in two ways: \n
+    1. By providing the single-band hopping parameters t, tp, tpp. \n
+    2. By providing the path + filename to the wannier_hr file. \n
+    The interaction can be set in three ways: \n
+    1. By retrieving the data from the DMFT files. \n
+    2. By providing the Kanamori interaction parameters [n_bands, U, J, (V)]. \n
+    3. By providing the full path + filename to the U-matrix file. \n
+    """
+    ham = Hamiltonian()
+    if er_type == "t_tp_tpp":
+        if not isinstance(er_input, list):
+            raise ValueError("Invalid input for t, tp, tpp.")
+        ham = ham.kinetic_one_band_2d_t_tp_tpp(*er_input)
+    elif er_type == "from_wannier90":
+        if not isinstance(er_input, str):
+            raise ValueError("Invalid input for wannier_hr.dat.")
+        ham = ham.read_er_w2k(er_input)
+    elif er_type == "from_wannierHK":
+        # currently this is only implemented for 2D systems
+        if not isinstance(er_input, str):
+            raise ValueError("Invalid input for wannier.hk.")
+        ham, k_grid = ham.read_hk_w2k(er_input)
+        if k_grid is not None:
+            logger = logging.getLogger()
+            logger.log(logging.INFO, "Using q- and k-grid from wannier.hk file.")
+            ek = ham.get_ek()
+            config.lattice.nk = (int(np.sqrt(ek[:, 0, 0].size)), int(np.sqrt(ek[:, 0, 0].size)), 1)
+            config.lattice.nq = config.lattice.nk
+            config.lattice.k_grid = bz.KGrid(config.lattice.nk, config.lattice.symmetries)
+            config.lattice.q_grid = bz.KGrid(config.lattice.nq, config.lattice.symmetries)
+    else:
+        raise NotImplementedError(f"Hamiltonian type {er_type} not supported.")
+
+    if int_type == "local_from_dmft" or int_type == "" or int_type is None:
+        return ham.single_band_interaction(config.lattice.interaction.udd)
+    elif int_type == "kanamori_from_dmft":
+        return ham.kanamori_interaction(
+            config.sys.n_bands,
+            config.lattice.interaction.udd,
+            config.lattice.interaction.jdd,
+            config.lattice.interaction.vdd,
+        )
+    elif int_type == "kanamori":
+        if not isinstance(int_input, list) or not 3 <= len(int_input) <= 4:
+            raise ValueError("Invalid input for kanamori interaction.")
+        return ham.kanamori_interaction(*int_input)
+    elif int_type == "custom":
+        if not isinstance(int_input, str):
+            raise ValueError("Invalid input for umatrix file.")
+        return ham.read_umatrix(int_input)
+    else:
+        raise NotImplementedError(f"Interaction type {int_type} not supported.")

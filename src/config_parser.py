@@ -8,6 +8,8 @@ import config
 from config import *
 from mpi4py import MPI
 
+from src.dga_io import set_hamiltonian
+
 
 class ConfigParser:
     def __init__(self):
@@ -64,15 +66,12 @@ class ConfigParser:
         else:
             conf.nq = tuple[int, int, int](lattice_section["nq"])
         conf.symmetries = self._set_lattice_symmetries(lattice_section["symmetries"])
-        conf.hamiltonian = self._set_hamiltonian(
-            lattice_section["type"],
-            lattice_section["hr_input"],
-            lattice_section["interaction_type"],
-            lattice_section["interaction_input"],
-        )
+        conf.type = lattice_section["type"]
+        conf.er_input = lattice_section["hr_input"]
+        conf.interaction_type = lattice_section["interaction_type"]
+        conf.interaction_input = lattice_section["interaction_input"]
         conf.k_grid = bz.KGrid(conf.nk, conf.symmetries)
         conf.q_grid = bz.KGrid(conf.nq, conf.symmetries)
-
         return conf
 
     def _set_lattice_symmetries(self, lattice_section) -> list[bz.KnownSymmetries]:
@@ -95,44 +94,6 @@ class ConfigParser:
             return symmetries
         else:
             raise NotImplementedError(f"Symmetry {lattice_section} not supported.")
-
-    def _set_hamiltonian(self, er_type: str, er_input: str | list, int_type: str, int_input: str | list) -> Hamiltonian:
-        """
-        Sets the Hamiltonian based on the input from the config file. \n
-        The kinetic part can be set in two ways: \n
-        1. By providing the single-band hopping parameters t, tp, tpp. \n
-        2. By providing the path + filename to the wannier_hr file. \n
-        The interaction can be set in three ways: \n
-        1. By retrieving the data from the DMFT files. \n
-        2. By providing the Kanamori interaction parameters [n_bands, U, J, (V)]. \n
-        3. By providing the full path + filename to the U-matrix file. \n
-        """
-        ham = Hamiltonian()
-        if er_type == "t_tp_tpp":
-            if not isinstance(er_input, list):
-                raise ValueError("Invalid input for t, tp, tpp.")
-            ham = ham.kinetic_one_band_2d_t_tp_tpp(*er_input)
-        elif er_type == "from_wannier90":
-            if not isinstance(er_input, str):
-                raise ValueError("Invalid input for wannier_hr.dat.")
-            ham = ham.read_er_w2k(er_input)
-        else:
-            raise NotImplementedError(f"Hamiltonian type {er_type} not supported.")
-
-        if int_type == "infer":
-            # TODO: get stuff from dmft files somehow. Maybe put it somewhere else?
-            # the data is already been read in the dga_io file
-            pass
-        elif int_type == "kanamori":
-            if not isinstance(int_input, list) or not 3 <= len(int_input) <= 4:
-                raise ValueError("Invalid input for kanamori interaction.")
-            return ham.kanamori_interaction(*int_input)
-        elif int_type == "custom":
-            if not isinstance(int_input, str):
-                raise ValueError("Invalid input for umatrix file.")
-            return ham.read_umatrix(int_input)
-        else:
-            raise NotImplementedError(f"Interaction type {int_type} not supported.")
 
     def _build_dmft_config(self, config_file) -> DmftConfig:
         conf = DmftConfig()

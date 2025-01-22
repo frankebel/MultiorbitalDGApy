@@ -3,11 +3,13 @@ from local_two_point import LocalTwoPoint
 from matsubara_frequencies import MFHelper
 
 import config
+import itertools as it
 
 
 class LocalSelfEnergy(LocalTwoPoint):
     def __init__(self, mat: np.ndarray, full_niv_range: bool = True):
         super().__init__(mat, full_niv_range=full_niv_range)
+        # TODO: check if this is a reasonable value. I'd suggest it depends on the input data size.
         self.niv_core_min = 20
         self._smom0, self._smom1 = self._fit_smom()
 
@@ -31,22 +33,19 @@ class LocalSelfEnergy(LocalTwoPoint):
         return mom0, mom1
 
     def _estimate_niv_core(self, err: float = 1e-4):
-        """check when the real and the imaginary part are within error margin of the asymptotic"""
+        """Check when the real and the imaginary part are within error margin of the asymptotic"""
         asympt = self._get_asympt(niv_asympt=self.niv, n_min=0)
 
         max_ind_real = 0
         max_ind_imag = 0
 
-        for i in range(self.n_bands):
-            for j in range(self.n_bands):
-                k_mean = np.mean(self.mat[:, :, :, i, j, :], axis=(0, 1, 2))
-                ind_real = np.argmax(np.abs(k_mean.real - asympt.real) < err)
-                ind_imag = np.argmax(np.abs(k_mean.imag - asympt.imag) < err)
+        for i, j in it.product(range(self.n_bands), repeat=2):
+            k_mean = np.mean(self.mat[:, :, :, i, j, :], axis=(0, 1, 2))
+            ind_real = np.argmax(np.abs(k_mean.real - asympt.real) < err)
+            ind_imag = np.argmax(np.abs(k_mean.imag - asympt.imag) < err)
 
-                if ind_real > max_ind_real:
-                    max_ind_real = ind_real
-                if ind_imag > max_ind_imag:
-                    max_ind_imag = ind_imag
+            max_ind_real = max(max_ind_real, ind_real)
+            max_ind_imag = max(max_ind_imag, ind_imag)
 
         niv_core = max(max_ind_real, max_ind_imag)
         if niv_core < self.niv_core_min:
@@ -54,6 +53,10 @@ class LocalSelfEnergy(LocalTwoPoint):
         return niv_core
 
     def _get_asympt(self, niv_asympt: int, n_min: int = None, return_only_positive: bool = True):
+        """
+        Returns purely the asymptotic behaviour of the self-energy for the given frequency range niv_asympt.
+        Not intended to be used solely but intended to be padded to the self-energy as an asymptotic tail.
+        """
         if n_min is None:
             n_min = self.niv
         iv_asympt = 1j * MFHelper.vn(niv_asympt, config.sys.beta, shift=n_min, return_only_positive=True)
@@ -82,5 +85,5 @@ class LocalSelfEnergy(LocalTwoPoint):
         )
 
         new_mat = np.tile(padding_object.mat, shape)
-        new_mat[0, 0, ...] = self.mat[0, 0, :]
+        new_mat[0, 0, ...] = self.mat[0, 0, ...]
         return LocalSelfEnergy(new_mat, True)

@@ -11,17 +11,28 @@ class Channel(Enum):
     NONE: str = "none"
 
 
+class FrequencyNotation(Enum):
+    PH: str = "ph"
+    PH_BAR: str = "ph_bar"
+    PP: str = "pp"
+
+
 class IHaveChannel(ABC):
     """
     Abstract interface for classes that have a channel attribute.
     """
 
-    def __init__(self, channel: Channel = Channel.NONE):
+    def __init__(self, channel: Channel = Channel.NONE, frequency_notation: FrequencyNotation = FrequencyNotation.PH):
         self._channel = channel
+        self._frequency_notation = frequency_notation
 
     @property
     def channel(self) -> Channel:
         return self._channel
+
+    @property
+    def frequency_notation(self) -> FrequencyNotation:
+        return self._frequency_notation
 
 
 class IHaveMat(ABC):
@@ -66,7 +77,7 @@ class IHaveMat(ABC):
 
     def __mul__(self, other) -> "IHaveMat":
         if not isinstance(other, int | float | complex):
-            raise ValueError("Multiplication/division only supported with numbers.")
+            raise ValueError("Multiplication only supported with numbers.")
 
         copy = deepcopy(self)
         copy.mat *= other
@@ -79,6 +90,8 @@ class IHaveMat(ABC):
         return self.__mul__(-1.0)
 
     def __truediv__(self, other) -> "IHaveMat":
+        if not isinstance(other, int | float | complex):
+            raise ValueError("Division only supported with numbers.")
         return self.__mul__(1.0 / other)
 
     def __getitem__(self, item):

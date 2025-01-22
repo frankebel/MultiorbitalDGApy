@@ -3,7 +3,6 @@ import itertools as it
 from matplotlib import pyplot as plt
 
 from interaction import LocalInteraction
-from local_greens_function import LocalGreensFunction
 from local_n_point import LocalNPoint
 from local_three_point import LocalThreePoint
 from local_two_point import LocalTwoPoint
@@ -25,6 +24,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         num_fermionic_frequency_dimensions: int = 2,
         full_niw_range: bool = True,
         full_niv_range: bool = True,
+        frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ):
         LocalNPoint.__init__(
             self,
@@ -35,7 +35,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             full_niw_range,
             full_niv_range,
         )
-        IHaveChannel.__init__(self, channel)
+        IHaveChannel.__init__(self, channel, frequency_notation)
 
     def __matmul__(self, other) -> LocalNPoint:
         return self._execute_matmul(other, left_hand_side=True)
@@ -175,7 +175,12 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         remaining_fermionic_dimensions = self.num_fermionic_frequency_dimensions - len(axis)
         copy_mat = 1 / beta ** len(axis) * np.sum(self.mat, axis=axis)
         return LocalFourPoint(
-            copy_mat, self.channel, 1, remaining_fermionic_dimensions, self.full_niw_range, self.full_niv_range
+            copy_mat,
+            self.channel,
+            self.num_bosonic_frequency_dimensions,
+            remaining_fermionic_dimensions,
+            self.full_niw_range,
+            self.full_niv_range,
         )
 
     def contract_legs(self, beta: float) -> "LocalFourPoint":
@@ -184,7 +189,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         if self.num_fermionic_frequency_dimensions != 2:
             raise ValueError("This method is only implemented for 2 fermionic frequency dimensions.")
-        return self.sum_over_fermionic_dimensions(beta, axis=(-1, -2))
+        return self.sum_over_fermionic_dimensions(beta, axis=(-1, -2)).sum_over_orbitals("abcd->ad")
 
     def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalFourPoint":
         """
@@ -209,41 +214,76 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.full_niv_range,
         )
 
-    def build_asympt_kernel_1(self, u_loc: LocalInteraction) -> "LocalFourPoint":
+    def change_frequency_notation_ph_to_pp(self) -> "LocalFourPoint":
         """
-        Builds the asymptotic 1-Kernel from the local susceptibility (only w dependent!).
-        See "Continuous-time quantum Monte Carlo calculation of multi-orbital vertex asymptotics" by Josef Kaufmann et al.
-        (arXiv:1703.09407v2), Eq. (26)
+        Changes the frequency notation of the object from ph to pp and returns the object.
         """
-        if self.num_fermionic_frequency_dimensions != 0:
-            raise ValueError("This method is only implemented for 0 fermionic frequency dimensions.")
-        if self.num_bosonic_frequency_dimensions != 1:
-            raise ValueError("This method is only implemented for 1 bosonic frequency dimension.")
-        mat = -np.einsum("ajbi,ijklw,lckd->abcdw", u_loc.mat, self.mat, u_loc.mat)
-        return LocalFourPoint(mat, self.channel, 1, 0, self.full_niw_range, self.full_niv_range)
+        if self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions != 3:
+            raise ValueError("Only objects with three frequency dimensions are supported.")
 
-    def build_asympt_kernel_2(
-        self, u_loc: LocalInteraction, g_loc: LocalGreensFunction, asympt_kernel_1: "LocalFourPoint"
-    ) -> "LocalFourPoint":
-        """
-        Builds the asymptotic 2-Kernel from the local susceptibility (w and v dependent!).
-        See "Continuous-time quantum Monte Carlo calculation of multi-orbital vertex asymptotics" by Josef Kaufmann et al.
-        (arXiv:1703.09407v2), Eq. (29)
-        """
-        if self.num_fermionic_frequency_dimensions != 1:
-            raise ValueError("This method is only implemented for 1 fermionic frequency dimension.")
-        if self.num_bosonic_frequency_dimensions != 1:
-            raise ValueError("This method is only implemented for 1 bosonic frequency dimension.")
+        if self.channel != Channel.DENS and self.channel != Channel.MAGN:
+            raise ValueError("Only density and magnetic objects are supported.")
 
-        gav_inv = (~g_loc).mat
-        gawv = np.diagonal(MFHelper.wn_slices_gen(g_loc.mat, self.niv, self.niw), axis1=0, axis2=1)
-        gawv_inv = np.diagonal(np.linalg.inv(gawv.transpose(2, 3, 0, 1)).transpose(2, 3, 0, 1), axis1=0, axis2=1)
+        iw_pp, iv_pp, ivp_pp = MFHelper.get_frequencies_for_ph_to_pp_channel_conversion(self.niw, self.niv)
 
-        mat = (
-            -np.einsum("abjiwv,av,bwv,icjd->abcdwv", self.mat, gav_inv, gawv_inv, u_loc.mat)
-            - asympt_kernel_1.mat[..., np.newaxis]
+        return LocalFourPoint(
+            self[..., iw_pp, iv_pp, ivp_pp],
+            self.channel,
+            1,
+            2,
+            full_niw_range=True,
+            full_niv_range=True,
+            frequency_notation=FrequencyNotation.PP,
         )
-        return LocalFourPoint(mat, self.channel, 1, 1, self.full_niw_range, self.full_niv_range)
+
+    def change_frequency_notation_ph_to_ph_bar(
+        self, other: "LocalFourPoint"
+    ) -> tuple["LocalFourPoint", "LocalFourPoint"]:
+        """
+        Changes the frequency notation of the object from ph to ph_bar and returns the object as a tuple in (d, m) channels.
+        Requires a density and a magnetic object.
+        """
+        if (
+            self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions != 3
+            or other.num_fermionic_frequency_dimensions + other.num_bosonic_frequency_dimensions != 3
+        ):
+            raise ValueError("Only objects with three frequency dimensions are supported.")
+
+        if self.niw != other.niw or self.niv != other.niv:
+            raise ValueError("Both objects must have the same number of frequencies.")
+
+        if self.channel == other.channel and self.channel != Channel.NONE:
+            raise ValueError(
+                "Channel of both objects must be different, one 'density' and one 'magnetic' object are needed."
+            )
+
+        iw_ph_bar, iv_ph_bar, ivp_ph_bar = MFHelper.get_frequencies_for_ph_to_ph_bar_channel_conversion(
+            self.niw, self.niv
+        )
+
+        mat_ph_dens = (self if self.channel == Channel.DENS else other).mat[..., iw_ph_bar, iv_ph_bar, ivp_ph_bar]
+        mat_ph_magn = (self if self.channel == Channel.MAGN else other).mat[..., iw_ph_bar, iv_ph_bar, ivp_ph_bar]
+
+        return (
+            LocalFourPoint(
+                0.5 * mat_ph_dens + 1.5 * mat_ph_magn,
+                self.channel,
+                1,
+                2,
+                full_niw_range=True,
+                full_niv_range=True,
+                frequency_notation=FrequencyNotation.PH_BAR,
+            ),
+            LocalFourPoint(
+                0.5 * (mat_ph_dens - mat_ph_magn),
+                self.channel,
+                1,
+                2,
+                full_niw_range=True,
+                full_niv_range=True,
+                frequency_notation=FrequencyNotation.PH_BAR,
+            ),
+        )
 
     def plot(
         self,

@@ -51,6 +51,9 @@ class MFHelper:
 
     @staticmethod
     def get_frequency_shift(wn: int, freq_notation: FrequencyShift) -> (int, int):
+        """
+        Returns w and v for the given frequency shift notation.
+        """
         if freq_notation == FrequencyShift.PLUS:  # for something like chi_0[w,v] = -beta G(v) * G(v+w)
             return 0, wn
         elif freq_notation == FrequencyShift.MINUS:  # for something like chi_0[w,v] = -beta G(v) * G(v-w)
@@ -63,6 +66,41 @@ class MFHelper:
             )
 
     @staticmethod
+    def get_frequencies_for_ph_to_pp_channel_conversion(
+        niw: int, niv: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Returns the new
+        .. math:: (w', v_1', v_2')
+        indices for the conversion of a ph to a pp channel.\n
+        .. math::  F_{ph_bar}[...] = F_ph[w',v_1',v_2'] \n
+        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)
+        """
+        niw, niv = niw // 2, min(niw // 2, niv // 2)
+        iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
+        return niw + iv + ivp - iw, niv + iv, niv + ivp
+
+    @staticmethod
+    def get_frequencies_for_ph_to_ph_bar_channel_conversion(
+        niw: int, niv: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Returns the new
+        .. math:: (w',v_1',v_2')
+        indices for the conversion of a ph to a ph_bar channel.\n
+        .. math::  F_ph_bar[...] = F_ph[w',v_1',v_2'] \n
+        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_1-v_2, v_1, v_1-w) \n
+        """
+        niw, niv = niw // 2, min(niw // 2, niv // 2)
+        iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
+        return niw + iv - ivp, niv + iv, niv + iv - iw
+
+    @staticmethod
+    def _get_frequencies_for_channel_conversion(niw: int, niv: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        wn, vn = MFHelper.wn(niw), MFHelper.vn(niv)
+        return wn[:, None, None], vn[None, :, None], vn[None, None, :]
+
+    @staticmethod
     def wn_slices_gen(mat: np.ndarray, niv_cut: int, niw: int) -> np.ndarray:
         niv = mat.shape[-1] // 2
         w = MFHelper.wn(niw)
@@ -70,5 +108,5 @@ class MFHelper:
 
     @staticmethod
     def fermionic_full_nu_range(mat: np.ndarray, axis=(-1,)):
-        """Build full Fermionic object from positive frequencies only along axis."""
+        """Build full fermionic object from positive frequencies only along axis."""
         return np.concatenate((np.conj(np.flip(mat, axis)), mat), axis=axis)

@@ -299,7 +299,7 @@ class LocalNPoint(IHaveMat):
             + (2 * niv,) * num_fermionic_frequency_dimensions
         )
         return LocalNPoint(
-            np.full(shape, value, dtype=np.complex64),
+            np.full(shape, value, dtype=np.complex128),
             num_orbital_dimensions,
             num_bosonic_frequency_dimensions,
             num_fermionic_frequency_dimensions,

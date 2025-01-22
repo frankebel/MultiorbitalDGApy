@@ -1,3 +1,4 @@
+import itertools as it
 import logging
 from copy import deepcopy
 
@@ -9,7 +10,6 @@ import local_sde
 import plotting
 from config_parser import ConfigParser
 from dga_decorators import timeit
-from hamiltonian import Hamiltonian
 from local_greens_function import LocalGreensFunction
 from memory_helper import MemoryHelper
 
@@ -25,21 +25,22 @@ def execute_dga_routine():
 
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
-    ek, _ = Hamiltonian().read_hk_w2k("/home/julpe/Documents/DATA/Multiorb-DATA/wannier.hk")
-    ek = ek.reshape(config.lattice.nk + (config.sys.n_bands,) * 2)
-    config.lattice.hamiltonian = Hamiltonian().kanamori_interaction(
-        config.sys.n_bands,
-        config.lattice.interaction.udd,
-        config.lattice.interaction.jdd,
-        config.lattice.interaction.vdd,
-    )
+    # g2_dens_pp = g2_dens.change_frequency_notation_ph_to_pp()
+    # g2_dens_ph_bar, g2_magn_ph_bar = g2_dens.change_frequency_notation_ph_to_ph_bar(g2_magn)
+
+    # ek, _ = Hamiltonian().read_hk_w2k("/home/julpe/Documents/DATA/Multiorb-DATA/kanamori/wannier.hk")
+    # ek = ek.reshape(config.lattice.nk + (config.sys.n_bands,) * 2)
+    # config.lattice.hamiltonian = Hamiltonian().kanamori_interaction(
+    #    config.sys.n_bands,
+    #    config.lattice.interaction.udd,
+    #    config.lattice.interaction.jdd,
+    #    config.lattice.interaction.vdd,
+    # )
 
     # sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
 
     # config.hamiltonian = (
-    #    Hamiltonian()
-    #    .kinetic_one_band_2d_t_tp_tpp(*config.lattice_er_input)
-    #    .single_band_interaction(config.interaction.udd)
+    #    Hamiltonian().read_er_w2k(config.lattice.er_input).single_band_interaction(config.lattice.interaction.udd)
     # )
     # config.hamiltonian = (
     # Hamiltonian()
@@ -64,7 +65,7 @@ def execute_dga_routine():
         g2_magn.plot(omega=-10, name=f"G2_magn")
         g2_magn.plot(omega=10, name=f"G2_magn")
 
-    # ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
+    ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = LocalGreensFunction.create_g_loc(sigma_dmft, ek)
     u_loc = config.lattice.hamiltonian.get_local_uq()
     # u_nonloc = config.hamiltonian.get_nonlocal_uq(config.q_grid)
@@ -98,32 +99,26 @@ def execute_dga_routine():
         MemoryHelper.delete(gamma_magn_copy)
 
         plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
+
+        sigma_list = []
+        sigma_names = []
+        for i, j in it.product(range(config.sys.n_bands), repeat=2):
+            try:
+                sigma_list.append(sigma[i, j])
+                sigma_list.append(sigma_dmft[i, j])
+                sigma_names.append(f"SDE{i}{j}")
+                sigma_names.append(f"Input{i}{j}")
+            except IndexError:
+                break
+
         plotting.sigma_loc_checks(
-            [
-                sigma[0, 0],
-                sigma[1, 0],
-                sigma[0, 1],
-                sigma[1, 1],
-                sigma_dmft[0, 0],
-                sigma_dmft[1, 0],
-                sigma_dmft[0, 1],
-                sigma_dmft[1, 1],
-            ],
-            ["SDE00", "SDE10", "SDE01", "SDE11", "Input00", "Input10", "Input01", "Input11"],
+            sigma_list,
+            sigma_names,
             config.sys.beta,
             show=False,
             save=True,
             xmax=config.box.niv,
             name="1",
-        )
-        plotting.sigma_loc_checks(
-            [sigma[0, 0], sigma_dmft[0, 0]],
-            ["SDE00", "Input"],
-            config.sys.beta,
-            show=False,
-            save=True,
-            xmax=config.box.niv,
-            name="2",
         )
 
     print("Done!")

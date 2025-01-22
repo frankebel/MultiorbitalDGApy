@@ -10,11 +10,18 @@ from memory_helper import MemoryHelper
 from n_point_base import *
 
 
-def create_irreducible_vertex(gchi_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
+def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
     """
     Returns the irreducible vertex gamma_r = (gchi_r)^(-1) - (gchi0)^(-1)
     """
-    return ~gchi_r - ~gchi0
+    return config.sys.beta**2 * (~gchi_r - ~gchi0)
+
+
+def create_gamma_0(u_loc: LocalInteraction) -> LocalInteraction:
+    """
+    Returns the zero-th order vertex gamma_0 = U_{abcd} - U_{abdc} for a given channel.
+    """
+    return u_loc - u_loc.permute_orbitals("abcd->adcb")
 
 
 def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> LocalFourPoint:
@@ -28,12 +35,7 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
         chi0_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)[:, :, :, :, np.newaxis, ...]
         chi[:, :, :, :, wn == 0, ...] -= 2.0 * chi0_mat
 
-    return LocalFourPoint(
-        chi.mat,
-        chi.channel,
-        full_niw_range=chi.full_niw_range,
-        full_niv_range=chi.full_niv_range,
-    )
+    return chi
 
 
 def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
@@ -57,7 +59,7 @@ def create_generalized_chi0(
     """
     Returns the generalized bare susceptibility gchi0_{lmm'l'}^{wvv}:1/eV^3 = -beta:1/eV * G_{ll'}^{v}:1/eV * G_{m'm}^{v-w}:1/eV
     """
-    gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.box.niw + 1, 2 * config.box.niv), dtype=np.complex64)
+    gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.box.niw + 1, 2 * config.box.niv), dtype=np.complex128)
 
     wn = MFHelper.wn(config.box.niw)
     for index, current_wn in enumerate(wn):
@@ -84,20 +86,21 @@ def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc:
     """
     Returns the auxiliary susceptibility gchi_aux_{r;lmm'l'} = ((gchi_{0;lmm'l'})^(-1) + gamma_{r;lmm'l'}-(u_{lmm'l'} - u_{ll'm'm})/beta^2)^(-1). See Eq. (3.68) in Paul Worm's thesis.
     """
-    return ~(~gchi_0 + gamma_r - (u_loc - u_loc.permute_orbitals("abcd->adcb")) / config.sys.beta**2)
+    gamma_0 = create_gamma_0(u_loc)
+    return ~(~gchi_0 + (gamma_r - gamma_0) / config.sys.beta**2)
 
 
 def create_physical_chi(gchi_r: LocalFourPoint) -> LocalFourPoint:
     """
     Returns the physical susceptibility chi_phys_{r;ll'}^{w} = 1/beta^2 [sum_v sum_{mm'} gchi_{r;lmm'l'}]. See Eq. (3.51) in Paul Worm's thesis.
     """
-    return gchi_r.contract_legs(config.sys.beta).sum_over_orbitals("abcd->ad")
+    return gchi_r.contract_legs(config.sys.beta)
 
 
 def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalThreePoint:
     """
     Returns the three-leg vertex vrg = beta * (gchi0)^(-1) * (sum_v gchi_aux). sum_v is performed over the fermionic
-    frequency dimensions and includes a factor 1/beta^2. See Eq. (3.71) in Paul Worm's thesis.
+    frequency dimensions and includes a factor 1/beta. See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_sum = gchi_aux.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1,))
     vrg_mat = (
@@ -118,20 +121,22 @@ def get_self_energy(
     n_bands = vrg_dens.n_bands
 
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
-
     g_1 = MFHelper.wn_slices_gen(g_loc.mat, vrg_dens.niv, vrg_dens.niw)
-    deltas = np.einsum("io,lp->ilpo", np.eye(n_bands), np.eye(n_bands))
+    deltas = np.einsum("io,lp->iolp", np.eye(n_bands), np.eye(n_bands))
 
-    gchi_dens = gchi_dens.contract_legs(config.sys.beta)
+    gchi_dens = gchi_dens.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1, -2))
 
-    inner_sum_left = np.einsum("abcd,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat)
-    inner_sum_right = np.einsum("adcb,ilbawv,dcpow->ilpowv", u_loc.mat, vrg_dens.mat, gchi_dens.mat)
-    inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum_left - inner_sum_right
+    gamma_0_dens = create_gamma_0(u_loc)
+    inner_sum = np.einsum("abcd,ilbawv,dcpow->ilpowv", gamma_0_dens.mat, vrg_dens.mat, gchi_dens.mat)
+    inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum
 
-    self_energy_mat = 1.0 / config.sys.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
+    self_energy_mat = 1.0 / config.sys.beta * np.einsum("kjop,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
 
-    hartree = np.einsum("abcd,bd->ac", u_loc.mat, config.sys.occ)
-    self_energy_mat += hartree[..., np.newaxis]
+    u_loc_hartree = 2 * u_loc - u_loc.permute_orbitals("abcd->adcb")
+    hartree = np.einsum("abcd,dc->ab", u_loc_hartree.mat, config.sys.occ)
+    hartree_dmft = np.einsum("abcd,dc->ab", u_loc_hartree.mat, config.sys.occ_dmft)
+
+    self_energy_mat += hartree_dmft[..., np.newaxis]
 
     return LocalSelfEnergy(self_energy_mat)
 
@@ -144,7 +149,9 @@ def perform_local_schwinger_dyson(
     Includes the calculation of the three-leg vertices, (auxiliary/bare/physical) susceptibilities and the irreducible vertices.
     """
     gchi_dens = create_generalized_chi(g2_dens, g_loc)
+    MemoryHelper.delete(g2_dens)
     gchi_magn = create_generalized_chi(g2_magn, g_loc)
+    MemoryHelper.delete(g2_magn)
 
     if config.output.do_plotting:
         gchi_dens.plot(omega=0, name=f"Gchi_dens")
@@ -152,8 +159,8 @@ def perform_local_schwinger_dyson(
 
     gchi0 = create_generalized_chi0(g_loc)
 
-    gamma_dens = create_irreducible_vertex(gchi_dens, gchi0)
-    gamma_magn = create_irreducible_vertex(gchi_magn, gchi0)
+    gamma_dens = create_gamma_r(gchi_dens, gchi0)
+    gamma_magn = create_gamma_r(gchi_magn, gchi0)
 
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)

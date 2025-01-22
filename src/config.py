@@ -29,7 +29,9 @@ class LatticeConfig:
     def __init__(self):
         self.symmetries: list[bz.KnownSymmetries] = bz.two_dimensional_square_symmetries()
         self.type: str = "t_tp_tpp"
-        self.er_input: list = [1, -0.25, 0.12]
+        self.er_input: str | list
+        self.interaction_type: str = ""
+        self.interaction_input: str | list
         self.nk: tuple[int, int, int] = (16, 16, 1)
         self.nq: tuple[int, int, int] = self.nk
 
@@ -55,6 +57,7 @@ class SystemConfig:
         self.n: float = 0.0
         self.n_bands: int = 1
         self.occ: np.ndarray = np.ndarray(0)
+        self.occ_dmft: np.ndarray = np.ndarray(0)
 
 
 class OutputConfig:

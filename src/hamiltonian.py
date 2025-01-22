@@ -64,6 +64,7 @@ class Hamiltonian:
 
     def __init__(self):
         self._er = None
+        self._ek = None
         self._er_r_grid = None
         self._er_orbs = None
         self._er_r_weights = None
@@ -103,19 +104,19 @@ class Hamiltonian:
         r_loc = [0, 0, 0]
 
         interaction_elements = []
-        for l, mp, m, lp in it.product(range(n_bands), repeat=4):
-            bands = [l + 1, mp + 1, m + 1, lp + 1]
-            if l == mp == m == lp:  # U_{llll}
+        for a, b, c, d in it.product(range(n_bands), repeat=4):
+            bands = [a + 1, b + 1, c + 1, d + 1]
+            if a == b == c == d:  # U_{llll}
                 interaction_elements.append(InteractionElement(r_loc, bands, udd))
-            elif (l == lp and mp == m) or (l == mp and m == lp):  # U_{lmml} or U_{llmm}
+            elif a == d and b == c or (a == c and b == d):  # U_{lmml} or U_{lmlm}
                 interaction_elements.append(InteractionElement(r_loc, bands, jdd))
-            elif l == m and mp == lp:  # U_{lmlm}
+            elif a == b and c == d:  # U_{llmm}
                 interaction_elements.append(InteractionElement(r_loc, bands, vdd))
 
         return self._add_interaction_term(interaction_elements)
 
     def kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "Hamiltonian":
-        """
+        """q
         Adds the kinetic terms for a one-band model in 2D with nearest, next-nearest and next-next-nearest neighbor hopping.
         """
         orbs = [1, 1]
@@ -239,8 +240,10 @@ class Hamiltonian:
         hk_file.close()
 
         hk = np.squeeze(hk)
+        ham = Hamiltonian()
+        ham._ek = hk
 
-        return hk, kpoints.T
+        return ham, kpoints.T
 
     def write_hr_w2k(self, filename: str) -> None:
         """
@@ -297,13 +300,16 @@ class Hamiltonian:
 
         return self._add_interaction_term(interaction_elements)
 
-    def get_ek(self, k_grid: bz.KGrid) -> np.ndarray:
+    def get_ek(self, k_grid: bz.KGrid = None) -> np.ndarray:
         """
         Returns the band dispersion for the Hamiltonian on the input k-grid.
         """
-        ek = self._convham_2_orbs(k_grid.kmesh.reshape(3, -1))
-        n_orbs = ek.shape[-1]
-        return ek.reshape(*k_grid.nk, n_orbs, n_orbs)
+        if self._ek is not None:
+            return self._ek
+        self._ek = self._convham_2_orbs(k_grid.kmesh.reshape(3, -1))
+        n_bands = self._ek.shape[-1]
+        self._ek = self._ek.reshape(*k_grid.nk, n_bands, n_bands)
+        return self._ek
 
     def get_local_uq(self) -> LocalInteraction:
         """
@@ -357,7 +363,7 @@ class Hamiltonian:
             else:
                 self._insert_ur_element(ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
 
-        ur_local = self._perform_swapping_symmetry(ur_local)
+        self._check_swapping_symmetry(ur_local)
 
         self._local_interaction = LocalInteraction(ur_local)
         self._nonlocal_interaction = NonLocalInteraction(ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights)
@@ -457,14 +463,11 @@ class Hamiltonian:
         n_orbs = int(max(np.array([el.orbs for el in elements]).flatten()))
         return r_to_index, n_rp, n_orbs
 
-    def _perform_swapping_symmetry(self, ur_local: np.ndarray) -> np.ndarray:
+    def _check_swapping_symmetry(self, ur_local: np.ndarray) -> None:
         """
-        Performs the swapping symmetry on the local interaction matrix. This symmetry is defined as:
+        Checks the swapping symmetry on the local interaction matrix. This symmetry is defined as:
         U_{lm'ml'} = U_{m'll'm}
         """
-        n_bands = ur_local.shape[0]
-        for l, mp, m, lp in it.product(range(n_bands), repeat=4):
-            if ur_local[l, mp, m, lp] != 0:
-                ur_local[mp, l, lp, m] = ur_local[l, mp, m, lp]
-
-        return ur_local
+        assert np.allclose(
+            ur_local, np.einsum("abcd->badc", ur_local)
+        ), "Swapping symmetry of the interaction is not satisfied!"
