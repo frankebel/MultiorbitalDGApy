@@ -11,6 +11,21 @@ from local_self_energy import LocalSelfEnergy
 from n_point_base import *
 
 
+def _uniquify_path(path: str = None):
+    """
+    path: path to be checked for uniqueness
+    return: updated unique path
+    """
+    filename, extension = os.path.splitext(path)
+    counter = 1
+
+    while os.path.exists(path):
+        path = filename + "_" + str(counter) + extension
+        counter += 1
+
+    return path
+
+
 def load_from_w2dyn_file_and_update_config() -> (
     tuple[LocalGreensFunction, LocalSelfEnergy, LocalFourPoint, LocalFourPoint]
 ):
@@ -61,10 +76,26 @@ def load_from_w2dyn_file_and_update_config() -> (
         config.lattice.type, config.lattice.er_input, config.lattice.interaction_type, config.lattice.interaction_input
     )
 
+    _update_frequency_boxes(g2_dens.niw, g2_dens.niv)
+
+    output_format = "LDGA_Nk{}_Nq{}_wc{}_vc{}_vs{}".format(
+        config.lattice.k_grid.nk_tot,
+        config.lattice.q_grid.nk_tot,
+        config.box.niw,
+        config.box.niv,
+        config.box.niv_asympt,
+    )
+    config.output.output_path = _uniquify_path(os.path.join(config.output.output_path, output_format))
+
+    if not os.path.exists(config.output.output_path):
+        os.makedirs(config.output.output_path)
+
+    g2_dens, g2_magn = _update_g2_from_dmft(g2_dens, g2_magn)
+
     return giw, siw, g2_dens, g2_magn
 
 
-def update_frequency_boxes(niv: int, niw: int) -> None:
+def _update_frequency_boxes(niw: int, niv: int) -> None:
     logger = logging.getLogger()
     if config.box.niv == -1:
         config.box.niv = niv
@@ -86,8 +117,10 @@ def update_frequency_boxes(niv: int, niw: int) -> None:
             f"frequencies in the DMFT four-point object. Using niw = {niw}."
         )
 
+    config.box.niv_full = config.box.niv + config.box.niv_asympt
 
-def update_g2_from_dmft(g2_dens: LocalFourPoint, g2_magn: LocalFourPoint) -> (LocalFourPoint, LocalFourPoint):
+
+def _update_g2_from_dmft(g2_dens: LocalFourPoint, g2_magn: LocalFourPoint) -> (LocalFourPoint, LocalFourPoint):
     g2_dens = g2_dens.cut_niw_and_niv(config.box.niw, config.box.niv)
     g2_magn = g2_magn.cut_niw_and_niv(config.box.niw, config.box.niv)
     if config.dmft.do_sym_v_vp:

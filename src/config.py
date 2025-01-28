@@ -22,16 +22,17 @@ class BoxConfig:
     def __init__(self):
         self.niw: int = -1
         self.niv: int = -1
-        self.niv_shell: int = 0
+        self.niv_asympt: int = 0
+        self.niv_full: int = 0
 
 
 class LatticeConfig:
     def __init__(self):
         self.symmetries: list[bz.KnownSymmetries] = bz.two_dimensional_square_symmetries()
         self.type: str = "t_tp_tpp"
-        self.er_input: str | list
+        self.er_input: str | list = ""
         self.interaction_type: str = ""
-        self.interaction_input: str | list
+        self.interaction_input: str | list = ""
         self.nk: tuple[int, int, int] = (16, 16, 1)
         self.nq: tuple[int, int, int] = self.nk
 

@@ -8,6 +8,8 @@ import numpy as np
 class Channel(Enum):
     DENS: str = "dens"
     MAGN: str = "magn"
+    SING: str = "sing"
+    TRIP: str = "trip"
     NONE: str = "none"
 
 

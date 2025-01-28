@@ -285,6 +285,20 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             ),
         )
 
+    def concatenate_local_u(self, u_loc: LocalInteraction, niv_full: int) -> "LocalFourPoint":
+        pad_size = niv_full - self.niv
+
+        if pad_size <= 0:
+            return self
+
+        mat_padded = np.broadcast_to(
+            u_loc.mat[..., None, None, None], (self.n_bands,) * 4 + (2 * self.niw + 1,) + (2 * niv_full,) * 2
+        ).copy()
+        mat_padded[..., pad_size : pad_size + 2 * self.niv, pad_size : pad_size + 2 * self.niv] = self.mat
+        return LocalFourPoint(
+            mat_padded, self.channel, self.num_bosonic_frequency_dimensions, self.num_fermionic_frequency_dimensions
+        )
+
     def plot(
         self,
         orbs: np.ndarray | list = [0, 0, 0, 0],

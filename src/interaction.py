@@ -15,6 +15,18 @@ class LocalInteraction(IHaveMat, IHaveChannel):
     def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalInteraction":
         return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
+    def as_channel(self, channel: Channel, beta: float) -> "LocalInteraction":
+        if channel == Channel.DENS:
+            return 1.0 / beta**2 * (2 * self - self.permute_orbitals("abcd->adcb"))
+        elif channel == Channel.MAGN:
+            return -1.0 / beta**2 * self.permute_orbitals("abcd->adcb")
+        elif channel == Channel.SING:
+            return 1.0 / beta**2 * (self + self.permute_orbitals("abcd->adcb"))
+        elif channel == Channel.TRIP:
+            return 1.0 / beta**2 * (self - self.permute_orbitals("abcd->adcb"))
+        else:
+            raise ValueError(f"Channel {channel} not supported.")
+
     def __add__(self, other) -> "LocalInteraction":
         if not isinstance(other, LocalInteraction):
             raise ValueError(f"Addition {type(self)} + {type(other)} not supported.")

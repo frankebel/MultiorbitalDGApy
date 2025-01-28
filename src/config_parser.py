@@ -51,7 +51,8 @@ class ConfigParser:
 
         conf.niw = int(box_section["niw"])
         conf.niv = int(box_section["niv"])
-        conf.niv_shell = int(box_section["niv_shell"])
+        conf.niv_asympt = int(box_section["niv_asympt"])
+        conf.niv_full = conf.niv + conf.niv_asympt
 
         return conf
 

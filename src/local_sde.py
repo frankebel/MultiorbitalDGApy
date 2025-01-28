@@ -10,16 +10,52 @@ from memory_helper import MemoryHelper
 from n_point_base import *
 
 
-def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
+def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
     """
     Returns the irreducible vertex gamma_r = (gchi_r)^(-1) - (gchi0)^(-1)
     """
-    return config.sys.beta**2 * (~gchi_r - ~gchi0)
+    gamma_loc = config.sys.beta**2 * (~gchi_r - ~(gchi0.cut_niv(config.box.niv)))
+    gamma_hh = gamma_loc.concatenate_local_u(u_loc.as_channel(gchi_r.channel, config.sys.beta), config.box.niv_full)
+    gamma_copy = deepcopy(gamma_hh)
+    gamma_copy[
+        ...,
+        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
+        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
+    ] = 0.0
+
+    gamma_lh = (
+        gamma_copy[..., gamma_copy.niv - config.box.niv : gamma_copy.niv + config.box.niv, :]
+        .transpose(4, 0, 1, 5, 2, 3, 6)
+        .reshape(2 * gchi_r.niw + 1, gchi_r.n_bands**2 * 2 * gchi_r.niv, gchi_r.n_bands**2 * 2 * gchi0.niv)
+    )
+    gamma_hl = (
+        gamma_copy[..., :, gamma_copy.niv - config.box.niv : gamma_copy.niv + config.box.niv]
+        .transpose(4, 0, 1, 5, 2, 3, 6)
+        .reshape(2 * gchi_r.niw + 1, gchi_r.n_bands**2 * 2 * gchi0.niv, gchi_r.n_bands**2 * 2 * gchi_r.niv)
+    )
+    inner = (
+        (~(gamma_copy + config.sys.beta**2 * (~gchi0)))
+        .mat.transpose(4, 0, 1, 5, 2, 3, 6)
+        .reshape(2 * gchi_r.niw + 1, gchi0.n_bands**2 * 2 * gchi0.niv, gchi_r.n_bands**2 * 2 * gchi0.niv)
+    )
+    correction = gamma_lh @ inner @ gamma_hl
+    compound_index_shape = (gchi_r.n_bands, gchi_r.n_bands, 2 * gchi_r.niv)
+
+    correction = correction.reshape((2 * gchi_r.niw + 1,) + compound_index_shape * 2).transpose(1, 2, 4, 5, 0, 3, 6)
+
+    gamma_hh[
+        ...,
+        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
+        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
+    ] = (
+        gamma_loc.mat + correction
+    )
+    return gamma_hh
 
 
 def create_gamma_0(u_loc: LocalInteraction) -> LocalInteraction:
     """
-    Returns the zero-th order vertex gamma_0 = U_{abcd} - U_{abdc} for a given channel.
+    Returns the zero-th order vertex gamma_0 = U_{abcd} - U_{abdc}.
     """
     return u_loc - u_loc.permute_orbitals("abcd->adcb")
 
@@ -59,7 +95,7 @@ def create_generalized_chi0(
     """
     Returns the generalized bare susceptibility gchi0_{lmm'l'}^{wvv}:1/eV^3 = -beta:1/eV * G_{ll'}^{v}:1/eV * G_{m'm}^{v-w}:1/eV
     """
-    gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.box.niw + 1, 2 * config.box.niv), dtype=np.complex128)
+    gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.box.niw + 1, 2 * config.box.niv_full), dtype=np.complex128)
 
     wn = MFHelper.wn(config.box.niw)
     for index, current_wn in enumerate(wn):
@@ -67,19 +103,21 @@ def create_generalized_chi0(
 
         # this is basically the same as _get_ggv_mat, but I don't know how to avoid the code duplication in a smart way
         g_left_mat = (
-            g_loc.mat[..., g_loc.niv - config.box.niv + iws : g_loc.niv + config.box.niv + iws][:, None, None, :, :]
+            g_loc.mat[..., g_loc.niv - config.box.niv_full + iws : g_loc.niv + config.box.niv_full + iws][
+                :, None, None, :, :
+            ]
             * np.eye(g_loc.n_bands)[None, :, :, None, None]
         )
         g_right_mat = (
-            np.swapaxes(g_loc.mat, 0, 1)[..., g_loc.niv - config.box.niv + iws2 : g_loc.niv + config.box.niv + iws2][
-                None, :, :, None, :
-            ]
+            np.swapaxes(g_loc.mat, 0, 1)[
+                ..., g_loc.niv - config.box.niv_full + iws2 : g_loc.niv + config.box.niv_full + iws2
+            ][None, :, :, None, :]
             * np.eye(g_loc.n_bands)[:, None, None, :, None]
         )
 
         gchi0_mat[..., index, :] = -config.sys.beta * g_left_mat * g_right_mat
 
-    return LocalFourPoint(gchi0_mat, Channel.NONE, 1, 1).extend_last_frequency_axis_to_diagonal()
+    return LocalFourPoint(gchi0_mat, Channel.NONE, 1, 1)
 
 
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
@@ -154,18 +192,17 @@ def perform_local_schwinger_dyson(
     MemoryHelper.delete(g2_magn)
 
     if config.output.do_plotting:
-        gchi_dens.plot(omega=0, name=f"Gchi_dens")
-        gchi_magn.plot(omega=0, name=f"Gchi_magn")
+        gchi_dens.plot(omega=0, name=f"Gchi_dens", output_dir=config.output.output_path)
+        gchi_magn.plot(omega=0, name=f"Gchi_magn", output_dir=config.output.output_path)
 
     gchi0 = create_generalized_chi0(g_loc)
 
-    gamma_dens = create_gamma_r(gchi_dens, gchi0)
-    gamma_magn = create_gamma_r(gchi_magn, gchi0)
-
+    gamma_dens = create_gamma_r(gchi_dens, gchi0, u_loc)
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
     MemoryHelper.delete(gchi_aux_dens)
 
+    gamma_magn = create_gamma_r(gchi_magn, gchi0, u_loc)
     gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
     vrg_magn = create_vrg(gchi_aux_magn, gchi0)
     MemoryHelper.delete(gchi0, gchi_aux_magn)

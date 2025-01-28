@@ -85,8 +85,7 @@ class LocalNPoint(IHaveMat):
 
     def cut_niw(self, niw_cut: int) -> "LocalNPoint":
         """
-        Allows to place a cutoff on the number of bosonic frequencies in the object.
-        Cuts all bosonic frequency dimensions, modifies and returns the original object without creating a copy.
+        Allows to place a cutoff on the number of bosonic frequencies of the object.
         """
         if self.num_bosonic_frequency_dimensions == 0:
             raise ValueError("Cannot cut bosonic frequencies if there are none.")
@@ -94,28 +93,29 @@ class LocalNPoint(IHaveMat):
         if niw_cut > self.niw:
             raise ValueError("Cannot cut more bosonic frequencies than the object has.")
 
-        if self.full_niw_range:
-            if self.num_fermionic_frequency_dimensions == 2:
-                self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1, :, :]
-            elif self.num_fermionic_frequency_dimensions == 1:
-                self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1, :]
-            elif self.num_fermionic_frequency_dimensions == 0:
-                self.mat = self.mat[..., self.niw - niw_cut : self.niw + niw_cut + 1]
-        else:
-            if self.num_fermionic_frequency_dimensions == 2:
-                self.mat = self.mat[..., :niw_cut, :, :]
-            elif self.num_fermionic_frequency_dimensions == 1:
-                self.mat = self.mat[..., :niw_cut, :]
-            elif self.num_fermionic_frequency_dimensions == 0:
-                self.mat = self.mat[..., :niw_cut]
+        copy = deepcopy(self)
 
-        self.original_shape = self.mat.shape
-        return self
+        if copy.full_niw_range:
+            if copy.num_fermionic_frequency_dimensions == 2:
+                copy.mat = copy.mat[..., copy.niw - niw_cut : copy.niw + niw_cut + 1, :, :]
+            elif copy.num_fermionic_frequency_dimensions == 1:
+                copy.mat = copy.mat[..., copy.niw - niw_cut : copy.niw + niw_cut + 1, :]
+            elif copy.num_fermionic_frequency_dimensions == 0:
+                copy.mat = copy.mat[..., copy.niw - niw_cut : copy.niw + niw_cut + 1]
+        else:
+            if copy.num_fermionic_frequency_dimensions == 2:
+                copy.mat = copy.mat[..., :niw_cut, :, :]
+            elif copy.num_fermionic_frequency_dimensions == 1:
+                copy.mat = copy.mat[..., :niw_cut, :]
+            elif copy.num_fermionic_frequency_dimensions == 0:
+                copy.mat = copy.mat[..., :niw_cut]
+
+        copy.original_shape = copy.mat.shape
+        return copy
 
     def cut_niv(self, niv_cut: int) -> "LocalNPoint":
         """
-        Allows to place a cutoff on the number of fermionic frequencies in the object.
-        Cuts all fermionic frequency dimensions, modifies and returns the original object without creating a copy.
+        Allows to place a cutoff on the number of fermionic frequencies of the object.
         """
         if self.num_fermionic_frequency_dimensions == 0:
             raise ValueError("Cannot cut fermionic frequencies if there are none.")
@@ -123,27 +123,27 @@ class LocalNPoint(IHaveMat):
         if niv_cut > self.niv:
             raise ValueError("Cannot cut more fermionic frequencies than the object has.")
 
-        if self.full_niv_range:
-            if self.num_fermionic_frequency_dimensions == 2:
-                self.mat = self.mat[
-                    ..., self.niv - niv_cut : self.niv + niv_cut, self.niv - niv_cut : self.niv + niv_cut
-                ]
-            elif self.num_fermionic_frequency_dimensions == 1:
-                self.mat = self.mat[..., self.niv - niv_cut : self.niv + niv_cut]
-        else:
-            if self.num_fermionic_frequency_dimensions == 2:
-                self.mat = self.mat[..., :niv_cut, :niv_cut]
-            elif self.num_fermionic_frequency_dimensions == 1:
-                self.mat = self.mat[..., :niv_cut]
+        copy = deepcopy(self)
 
-        self.original_shape = self.mat.shape
-        return self
+        if copy.full_niv_range:
+            if copy.num_fermionic_frequency_dimensions == 2:
+                copy.mat = copy.mat[
+                    ..., copy.niv - niv_cut : copy.niv + niv_cut, copy.niv - niv_cut : copy.niv + niv_cut
+                ]
+            elif copy.num_fermionic_frequency_dimensions == 1:
+                copy.mat = copy.mat[..., copy.niv - niv_cut : copy.niv + niv_cut]
+        else:
+            if copy.num_fermionic_frequency_dimensions == 2:
+                copy.mat = copy.mat[..., :niv_cut, :niv_cut]
+            elif copy.num_fermionic_frequency_dimensions == 1:
+                copy.mat = copy.mat[..., :niv_cut]
+
+        copy.original_shape = copy.mat.shape
+        return copy
 
     def cut_niw_and_niv(self, niw_cut: int, niv_cut: int) -> "LocalNPoint":
         """
-        Allows to place a cutoff on the number of bosonic and fermionic frequencies in the object.
-        Cuts all fermionic and bosonic frequency dimensions, modifies
-        and returns the original object without creating a copy.
+        Allows to place a cutoff on the number of bosonic and fermionic frequencies of the object.
         """
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
@@ -266,10 +266,10 @@ class LocalNPoint(IHaveMat):
 
         if other.niv > self.niv:
             niv = other.niv - self.niv
-            copy.mat = np.concatenate((other.mat[..., :niv], copy.mat, other.mat[..., 2 * copy.niv + niv :]), axis=axis)
+            copy.mat = np.concatenate([other.mat[..., :niv], copy.mat, other.mat[..., 2 * copy.niv + niv :]], axis=axis)
         else:
             niv = self.niv - other.niv
-            copy.mat = np.concatenate((copy.mat[..., :niv], other.mat, copy.mat[..., 2 * other.niv + niv :]), axis=axis)
+            copy.mat = np.concatenate([copy.mat[..., :niv], other.mat, copy.mat[..., 2 * other.niv + niv :]], axis=axis)
 
         copy.original_shape = copy.current_shape
         return copy

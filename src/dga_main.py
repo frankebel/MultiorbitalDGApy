@@ -1,6 +1,5 @@
 import itertools as it
 import logging
-from copy import deepcopy
 
 from mpi4py import MPI
 
@@ -25,45 +24,13 @@ def execute_dga_routine():
 
     g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
-    # g2_dens_pp = g2_dens.change_frequency_notation_ph_to_pp()
-    # g2_dens_ph_bar, g2_magn_ph_bar = g2_dens.change_frequency_notation_ph_to_ph_bar(g2_magn)
-
-    # ek, _ = Hamiltonian().read_hk_w2k("/home/julpe/Documents/DATA/Multiorb-DATA/kanamori/wannier.hk")
-    # ek = ek.reshape(config.lattice.nk + (config.sys.n_bands,) * 2)
-    # config.lattice.hamiltonian = Hamiltonian().kanamori_interaction(
-    #    config.sys.n_bands,
-    #    config.lattice.interaction.udd,
-    #    config.lattice.interaction.jdd,
-    #    config.lattice.interaction.vdd,
-    # )
-
-    # sigma_dmft = sigma_dmft.extend_to_multi_orbital(LocalNPoint.from_constant(1, 0, sigma_dmft.niv, 2, 0, 1, 0.0), 2)
-
-    # config.hamiltonian = (
-    #    Hamiltonian().read_er_w2k(config.lattice.er_input).single_band_interaction(config.lattice.interaction.udd)
-    # )
-    # config.hamiltonian = (
-    # Hamiltonian()
-    # .read_er_w2k(filename="/home/julpe/Documents/repos/MultiorbitalDGApy/wannier_hr.dat")
-    # .single_band_interaction_as_multiband(config.lattice.interaction.udd, 2)
-    # )
-
-    # config.hamiltonian = (
-    #    Hamiltonian()
-    #    .read_er_w2k(filename="/home/julpe/Documents/repos/MultiorbitalDGApy/wannier_hr.dat")
-    #    .kanamori_interaction(config.n_bands, config.interaction.udd, config.interaction.jdd, config.interaction.vdd)
-    # )
-
-    sigma_dmft.save(name="sigma_dmft")
-
-    dga_io.update_frequency_boxes(g2_dens.niv, g2_dens.niw)
-    g2_dens, g2_magn = dga_io.update_g2_from_dmft(g2_dens, g2_magn)
+    sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
 
     if config.output.do_plotting:
-        g2_dens.plot(omega=0, name=f"G2_dens")
-        g2_magn.plot(omega=0, name=f"G2_magn")
-        g2_magn.plot(omega=-10, name=f"G2_magn")
-        g2_magn.plot(omega=10, name=f"G2_magn")
+        g2_dens.plot(omega=0, name=f"G2_dens", output_dir=config.output.output_path)
+        g2_magn.plot(omega=0, name=f"G2_magn", output_dir=config.output.output_path)
+        g2_magn.plot(omega=-10, name=f"G2_magn", output_dir=config.output.output_path)
+        g2_magn.plot(omega=10, name=f"G2_magn", output_dir=config.output.output_path)
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = LocalGreensFunction.create_g_loc(sigma_dmft, ek)
@@ -75,30 +42,30 @@ def execute_dga_routine():
     )
 
     if config.output.save_quantities:
-        gamma_dens.save(name="Gamma_dens")
-        gamma_magn.save(name="Gamma_magn")
-        sigma.save(name="siw_sde_full")
-        chi_dens.save(name="chi_dens")
-        chi_magn.save(name="chi_magn")
-        vrg_dens.save(name="vrg_dens")
-        vrg_magn.save(name="vrg_magn")
+        gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
+        gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
+        sigma.save(name="siw_sde_full", output_dir=config.output.output_path)
+        chi_dens.save(name="chi_dens", output_dir=config.output.output_path)
+        chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
+        vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
+        vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
 
     if config.output.do_plotting:
-        gamma_dens_copy = deepcopy(gamma_dens)
-        gamma_dens_copy = gamma_dens_copy.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
-        gamma_dens_copy.plot(omega=0, name="Gamma_dens")
-        gamma_dens_copy.plot(omega=10, name="Gamma_dens")
-        gamma_dens_copy.plot(omega=-10, name="Gamma_dens")
-        MemoryHelper.delete(gamma_dens_copy)
+        gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
+        gamma_dens_plot.plot(omega=0, name="Gamma_dens", output_dir=config.output.output_path)
+        gamma_dens_plot.plot(omega=10, name="Gamma_dens", output_dir=config.output.output_path)
+        gamma_dens_plot.plot(omega=-10, name="Gamma_dens", output_dir=config.output.output_path)
+        MemoryHelper.delete(gamma_dens_plot)
 
-        gamma_magn_copy = deepcopy(gamma_magn)
-        gamma_magn_copy = gamma_magn_copy.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
-        gamma_magn_copy.plot(omega=0, name="Gamma_magn")
-        gamma_magn_copy.plot(omega=10, name="Gamma_magn")
-        gamma_magn_copy.plot(omega=-10, name="Gamma_magn")
-        MemoryHelper.delete(gamma_magn_copy)
+        gamma_magn_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
+        gamma_magn_plot.plot(omega=0, name="Gamma_magn", output_dir=config.output.output_path)
+        gamma_magn_plot.plot(omega=10, name="Gamma_magn", output_dir=config.output.output_path)
+        gamma_magn_plot.plot(omega=-10, name="Gamma_magn", output_dir=config.output.output_path)
+        MemoryHelper.delete(gamma_magn_plot)
 
-        plotting.chi_checks([chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc")
+        plotting.chi_checks(
+            [chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc", output_dir=config.output.output_path
+        )
 
         sigma_list = []
         sigma_names = []
@@ -119,6 +86,7 @@ def execute_dga_routine():
             save=True,
             xmax=config.box.niv,
             name="1",
+            output_dir=config.output.output_path,
         )
 
     print("Done!")
