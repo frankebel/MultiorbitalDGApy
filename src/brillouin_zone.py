@@ -246,7 +246,7 @@ class KGrid:
     @property
     def kmesh_ind(self) -> np.ndarray:
         """
-        indizes of {kx,ky,kz}
+        indices of {kx,ky,kz}
         Only works for meshes that go from 0 to 2pi
         """
         ind_x = np.arange(0, self.nk[0])
@@ -257,7 +257,7 @@ class KGrid:
     @property
     def irrk_mesh_ind(self) -> np.ndarray:
         """
-        indizes of {kx,ky,kz} in the irreducible BZ
+        indices of {kx,ky,kz} in the irreducible BZ
         """
         return np.array([self.kmesh_ind[i].flatten()[self.irrk_ind] for i in range(3)])
 
@@ -280,11 +280,11 @@ class KGrid:
             raise ValueError("Shape has to be 'mesh' or 'list'.")
 
     def get_q_list(self) -> np.ndarray:
-        """Return list of all q-point indizes in the BZ"""
+        """Return list of all q-point indices in the BZ"""
         return np.array([self.kmesh_ind[i].flatten() for i in range(3)]).T
 
     def get_irrq_list(self) -> np.ndarray:
-        """Return list of all q-point indizes in the irreduzible BZ"""
+        """Return list of all q-point indices in the irreduzible BZ"""
         return np.array([self.kmesh_ind[i].flatten()[self.irrk_ind] for i in range(3)]).T
 
     def k_mean(self, mat: np.ndarray, shape: str = "irrk") -> np.ndarray:

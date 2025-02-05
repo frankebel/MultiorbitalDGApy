@@ -54,7 +54,7 @@ def extract_g2_general(group_string: str, indices: list):
     bands, spins = zip(*(index2component_general(n_bands, 4, int(i))[1:3] for i in indices))
 
     # since we are SU(2) symmetric, we only have to pick out the elements, where spin is either
-    # [0,0,0,0] or [1,1,1,1] for uu component and [0,0,1,1] or [1,1,0,0] for ud component
+    # [0,0,0,0] or [1,1,1,1] for uu component, [0,0,1,1] or [1,1,0,0] for ud component and [0,1,1,0] or [1,0,0,1] for ud_bar component
     # that means for each band, we only have to pick two spin combinations
     g2_uuuu, g2_dddd, g2_dduu, g2_uudd, g2_uddu, g2_duud = (
         np.zeros((n_bands, n_bands, n_bands, n_bands, 2 * niw + 1, 2 * niv, 2 * niv), dtype=np.complex128)
@@ -81,24 +81,25 @@ def extract_g2_general(group_string: str, indices: list):
             for spin in (spin_dddd, spin_dduu, spin_uudd, spin_uuuu, spin_uddu, spin_duud)
         )
 
-        if (
-            idx_dddd is None
-            or idx_dduu is None
-            or idx_uudd is None
-            or idx_uuuu is None
-            or idx_uddu is None
-            or idx_duud is None
-        ):
+        if None in (idx_dddd, idx_dduu, idx_uudd, idx_uuuu, idx_uddu, idx_duud):
             continue
 
-        g2_uuuu[a, b, c, d] = elements[idx_uuuu]
-        g2_dddd[a, b, c, d] = elements[idx_dddd]
-        g2_dduu[a, b, c, d] = elements[idx_dduu]
-        g2_uudd[a, b, c, d] = elements[idx_uudd]
-        g2_uddu[a, b, c, d] = elements[idx_uddu]
-        g2_duud[a, b, c, d] = elements[idx_duud]
+        for g2, idx in zip(
+            (g2_uuuu, g2_dddd, g2_dduu, g2_uudd, g2_uddu, g2_duud),
+            (idx_uuuu, idx_dddd, idx_dduu, idx_uudd, idx_uddu, idx_duud),
+        ):
+            g2[a, b, c, d] = elements[idx]
 
     return g2_uuuu, g2_dddd, g2_dduu, g2_uudd, g2_uddu, g2_duud
+
+
+def save_to_file(g2_list: list[np.ndarray], spin_comb_list: list[str], niw: int, n_bands: int):
+    assert len(g2_list) == len(spin_comb_list)
+    for wn in range(2 * niw + 1):
+        for i, j, k, l in it.product(range(n_bands), repeat=4):
+            idx = component2index_band(n_bands, 4, [i, j, k, l])
+            output_file[f"ineq-001/{spin_comb_list[0]}/{wn:05}/{idx:05}/value"] = g2_list[0][i, j, k, l, wn].transpose()
+            output_file[f"ineq-001/{spin_comb_list[1]}/{wn:05}/{idx:05}/value"] = g2_list[1][i, j, k, l, wn].transpose()
 
 
 if __name__ == "__main__":
@@ -118,12 +119,17 @@ if __name__ == "__main__":
 
     g4iw_ph_groupstring = "worm-last/ineq-001/g4iw-worm"
     g4iw_pp_groupstring = "worm-last/ineq-001/g4iwpp-worm"
-    indices_ph = list(vertex_file[g4iw_ph_groupstring].keys())
-    indices_pp = None
+
+    try:
+        indices_ph = list(vertex_file[g4iw_ph_groupstring].keys())
+    except KeyError:
+        logging.getLogger().warning("No g4iw-worm group found in the input file. Aborting.")
+        exit()
 
     try:
         indices_pp = list(vertex_file[g4iw_pp_groupstring].keys())
     except KeyError:
+        indices_pp = None
         logging.getLogger().warning("No g4iwpp-worm group found in the input file. No vertex asymptotics will be used.")
 
     # determination of niw and niv
@@ -141,19 +147,18 @@ if __name__ == "__main__":
     g2_uuuu_ph, g2_dddd_ph, g2_dduu_ph, g2_uudd_ph, g2_uddu_ph, g2_duud_ph = extract_g2_general(
         g4iw_ph_groupstring, indices_ph
     )
-    print("G2ph extracted. Calculating G2_dens and G2_magn for ph.")
+    print("G2ph extracted. Calculating G2_dens and G2_magn for ph ...")
     g2_dens_ph = 0.5 * (g2_uuuu_ph + g2_dddd_ph + g2_uudd_ph + g2_dduu_ph)
     g2_magn_ph = 0.5 * (g2_uddu_ph + g2_duud_ph)
+
+    del g2_uuuu_ph, g2_dddd_ph, g2_dduu_ph, g2_uudd_ph, g2_uddu_ph, g2_duud_ph
+    gc.collect()
     print("G2_dens and G2_magn calculated. Writing to file ...")
 
-    for wn in range(2 * niw + 1):
-        for i, j, k, l in it.product(range(n_bands), repeat=4):
-            compound_index = component2index_band(n_bands, 4, [i, j, k, l])
-            output_file[f"ineq-001/dens/{wn:05}/{compound_index:05}/value"] = g2_dens_ph[i, j, k, l, wn].transpose()
-            output_file[f"ineq-001/magn/{wn:05}/{compound_index:05}/value"] = g2_magn_ph[i, j, k, l, wn].transpose()
-
-    del g2_uuuu_ph, g2_dddd_ph, g2_dduu_ph, g2_uudd_ph, g2_uddu_ph, g2_duud_ph, g2_dens_ph, g2_magn_ph
+    save_to_file([g2_dens_ph, g2_magn_ph], ["dens", "magn"], niw, n_bands)
+    del g2_dens_ph, g2_magn_ph
     gc.collect()
+    print("G2_dens and G2_magn successfully written to file.")
 
     if indices_pp is None:
         output_file.close()
@@ -162,16 +167,19 @@ if __name__ == "__main__":
         exit()
 
     print("Extracting G2pp ...")
-    _, _, g2_dduu_pp, g2_uudd_pp, _, _ = extract_g2_general(g4iw_pp_groupstring, indices_pp)
-    print("G2pp extracted. Writing G2pp_ud to file ...")
-    g2_uudd_pp = 0.5 * (g2_uudd_pp + g2_dduu_pp)
-    del g2_dduu_pp
-    gc.collect()
+    _, _, g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph = extract_g2_general(g4iw_pp_groupstring, indices_pp)
+    print("G2pp extracted. Calculating G2_sing and G2_trip for pp ...")
+    g2_sing_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp - g2_uddu_pp - g2_duud_ph)
+    g2_trip_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp + g2_uddu_pp + g2_duud_ph)
 
-    for wn in range(2 * niw + 1):
-        for i, j, k, l in it.product(range(n_bands), repeat=4):
-            compound_index = component2index_band(n_bands, 4, [i, j, k, l])
-            output_file[f"ineq-001/g2pp_ud/{wn:05}/{compound_index:05}/value"] = g2_uudd_pp[i, j, k, l, wn].transpose()
+    del g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph
+    gc.collect()
+    print("G2_sing and G2_trip calculated. Writing to file ...")
+
+    save_to_file([g2_sing_pp, g2_trip_pp], ["sing", "trip"], niw, n_bands)
+    del g2_sing_pp, g2_trip_pp
+    gc.collect()
+    print("G2_sing and G2_trip successfully written to file.")
 
     output_file.close()
     vertex_file.close()

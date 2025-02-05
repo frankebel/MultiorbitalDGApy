@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import config
 
 from matsubara_frequencies import MFHelper
-from local_greens_function import LocalGreensFunction
+from greens_function import GreensFunction
 
 
 def sigma_loc_checks(
@@ -68,7 +68,7 @@ def chi_checks(
     chi_dens: list[np.ndarray],
     chi_magn: list[np.ndarray],
     labels: list[str],
-    g_loc: LocalGreensFunction,
+    g_loc: GreensFunction,
     output_dir: str = "./",
     orbs=[0, 0],
     show: bool = False,

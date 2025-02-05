@@ -16,6 +16,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
     def as_channel(self, channel: Channel, beta: float) -> "LocalInteraction":
+        self._channel = channel
         if channel == Channel.DENS:
             return 1.0 / beta**2 * (2 * self - self.permute_orbitals("abcd->adcb"))
         elif channel == Channel.MAGN:

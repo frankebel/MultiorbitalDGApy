@@ -2,6 +2,7 @@ import numpy as np
 
 import brillouin_zone as bz
 from hamiltonian import Hamiltonian
+from dga_logger import DgaLogger
 
 
 class InteractionConfig:
@@ -68,6 +69,8 @@ class OutputConfig:
         self.output_path: str = "./"
 
 
+current_rank: int = 0
+logger: DgaLogger
 box: BoxConfig = BoxConfig()
 lattice: LatticeConfig = LatticeConfig()
 dmft: DmftConfig = DmftConfig()

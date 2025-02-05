@@ -77,6 +77,13 @@ class IHaveMat(ABC):
     def original_shape(self, value) -> None:
         self._original_shape = value
 
+    @property
+    def memory_usage_in_gb(self) -> float:
+        """
+        Returns the memory usage of the matrix in GigaBytes (GB).
+        """
+        return self.mat.nbytes * 1e-9
+
     def __mul__(self, other) -> "IHaveMat":
         if not isinstance(other, int | float | complex):
             raise ValueError("Multiplication only supported with numbers.")
@@ -143,3 +150,8 @@ class IAmNonLocal(ABC):
     @property
     def num_k_dimensions(self) -> int:
         return self._num_k_dimensions
+
+    def shift_k_by_q(self, index=(0, 0, 0)):
+        copy = deepcopy(self)
+        copy.mat = np.roll(copy.mat, index, axis=(0, 1, 2))
+        return copy

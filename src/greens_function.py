@@ -1,36 +1,43 @@
 import numpy as np
 
 import config
-from local_self_energy import LocalSelfEnergy
+from local_self_energy import SelfEnergy
 from local_two_point import LocalTwoPoint
 from matsubara_frequencies import MFHelper
+from n_point_base import IAmNonLocal
 
 
-class LocalGreensFunction(LocalTwoPoint):
+class GreensFunction(LocalTwoPoint, IAmNonLocal):
     """
-    Represents a momentum-independent Green's function.
+    Represents a Green's function.
     """
 
     def __init__(
         self,
         mat: np.ndarray,
-        sigma: LocalSelfEnergy = None,
+        sigma: SelfEnergy = None,
         ek: np.ndarray = None,
         full_niv_range: bool = True,
+        calc_filling: bool = True,
     ):
-        super().__init__(mat, full_niv_range=full_niv_range)
+        LocalTwoPoint.__init__(self, mat, full_niv_range=full_niv_range)
+        IAmNonLocal.__init__(self, config.lattice.nq, config.lattice.nk, 0, 1)
         self._sigma = sigma
         self._ek = ek
 
-        if sigma is not None and ek is not None:
+        if sigma is not None and ek is not None and calc_filling:
+            self.mat = self._get_gloc_mat()
             config.sys.n, config.sys.occ = self._get_fill()
 
+    def get_g_full(self) -> "GreensFunction":
+        return GreensFunction(self._get_gfull_mat(), self._sigma, self._ek, True, False)
+
     @staticmethod
-    def create_g_loc(siw: LocalSelfEnergy, ek: np.ndarray) -> "LocalGreensFunction":
+    def create_g_loc(siw: SelfEnergy, ek: np.ndarray) -> "GreensFunction":
         """
         Returns a local Green's function object from a given self-energy and band dispersion.
         """
-        return LocalGreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
+        return GreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
 
     @property
     def e_kin(self):  # be careful about the on-site energy
@@ -45,7 +52,7 @@ class LocalGreensFunction(LocalTwoPoint):
         """
         Returns the total filling and the filling of each band.
         """
-        self.mat = self._get_gloc_mat()
+        mat = self._get_gloc_mat()
         g_model = self._get_g_model_mat()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
@@ -60,18 +67,23 @@ class LocalGreensFunction(LocalTwoPoint):
                 rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
 
         rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
-        occ = rho_loc + np.sum(self.mat.real - g_model.real, axis=-1) / config.sys.beta
+        occ = rho_loc + np.sum(mat.real - g_model.real, axis=-1) / config.sys.beta
         n_el = 2.0 * np.trace(occ).real
         return n_el, occ
 
-    def _get_gloc_mat(self):
+    def _get_gfull_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()
         iv_bands = iv_bands[None, None, None, ...]
         mu_bands = mu_bands[None, None, None, ...]
 
-        mat = iv_bands + mu_bands - self._ek[..., None] - self._sigma.mat[None, None, None, :]
-        mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
-        return np.mean(mat, axis=(0, 1, 2))
+        sigma_mat = self._sigma.mat
+        if len(self._sigma.mat.shape) == 3:  # (o1,o1,v)
+            sigma_mat = sigma_mat[None, None, None, ...]
+        mat = iv_bands + mu_bands - self._ek[..., None] - sigma_mat
+        return np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
+
+    def _get_gloc_mat(self):
+        return np.mean(self._get_gfull_mat(), axis=(0, 1, 2))
 
     def _get_g_model_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()

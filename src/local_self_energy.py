@@ -6,7 +6,7 @@ import config
 import itertools as it
 
 
-class LocalSelfEnergy(LocalTwoPoint):
+class SelfEnergy(LocalTwoPoint):
     def __init__(self, mat: np.ndarray, full_niv_range: bool = True):
         super().__init__(mat, full_niv_range=full_niv_range)
         # TODO: check if this is a reasonable value. I'd suggest it depends on the input data size.
@@ -67,7 +67,7 @@ class LocalSelfEnergy(LocalTwoPoint):
             return asympt
         return MFHelper.fermionic_full_nu_range(asympt)
 
-    def extend_to_multi_orbital(self, padding_object: "LocalSelfEnergy", n_bands: int) -> "LocalSelfEnergy":
+    def extend_to_multi_orbital(self, padding_object: "SelfEnergy", n_bands: int) -> "SelfEnergy":
         """
         Mainly for testing. Extends the single-orbital object to a multi-orbital object, putting padding_mat in the new bands.
         """
@@ -86,4 +86,4 @@ class LocalSelfEnergy(LocalTwoPoint):
 
         new_mat = np.tile(padding_object.mat, shape)
         new_mat[0, 0, ...] = self.mat[0, 0, ...]
-        return LocalSelfEnergy(new_mat, True)
+        return SelfEnergy(new_mat, True)

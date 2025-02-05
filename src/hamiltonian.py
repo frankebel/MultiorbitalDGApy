@@ -241,7 +241,8 @@ class Hamiltonian:
 
         hk = np.squeeze(hk)
         ham = Hamiltonian()
-        ham._ek = hk
+        k_grid = (int(np.sqrt(kpoints[:, 0].size)), int(np.sqrt(kpoints[:, 0].size)), 1)
+        ham._ek = hk.reshape(*k_grid, nbands, nbands)
 
         return ham, kpoints.T
 

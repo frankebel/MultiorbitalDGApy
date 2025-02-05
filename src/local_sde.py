@@ -2,65 +2,95 @@ import config
 
 from interaction import LocalInteraction
 from local_four_point import LocalFourPoint
-from local_greens_function import LocalGreensFunction
-from local_self_energy import LocalSelfEnergy
+from greens_function import GreensFunction
+from local_self_energy import SelfEnergy
 from local_three_point import LocalThreePoint
 from matsubara_frequencies import MFHelper, FrequencyShift
 from memory_helper import MemoryHelper
 from n_point_base import *
 
 
+def create_gamma_r_v2(gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
+    """
+    Returns the irreducible vertex gamma_r with an rpa-approach to the urange.
+    """
+    u = u_loc.as_channel(gchi_r.channel, config.sys.beta)
+    chi_tilde_shell = ~(~gchi0 + u)
+    chi_tilde_core = ~(chi_tilde_shell.cut_niv(config.box.niv))
+    return config.sys.beta**2 * (~gchi_r - chi_tilde_core + u)
+
+
 def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
     """
     Returns the irreducible vertex gamma_r = (gchi_r)^(-1) - (gchi0)^(-1)
     """
-    gamma_loc = config.sys.beta**2 * (~gchi_r - ~(gchi0.cut_niv(config.box.niv)))
-    gamma_hh = gamma_loc.concatenate_local_u(u_loc.as_channel(gchi_r.channel, config.sys.beta), config.box.niv_full)
-    gamma_copy = deepcopy(gamma_hh)
-    gamma_copy[
-        ...,
-        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
-        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
-    ] = 0.0
+    gamma_ll = config.sys.beta**2 * (~gchi_r - ~(gchi0.cut_niv(config.box.niv)))
 
-    gamma_lh = (
-        gamma_copy[..., gamma_copy.niv - config.box.niv : gamma_copy.niv + config.box.niv, :]
-        .transpose(4, 0, 1, 5, 2, 3, 6)
-        .reshape(2 * gchi_r.niw + 1, gchi_r.n_bands**2 * 2 * gchi_r.niv, gchi_r.n_bands**2 * 2 * gchi0.niv)
+    if config.box.niv_asympt == 0:
+        return gamma_ll
+
+    u_r = u_loc.as_channel(gchi_r.channel, config.sys.beta)
+    gamma_lh, gamma_hl, gamma_hh = (
+        np.tile(u_r.mat[..., None, None, None], (1,) * 4 + (2 * config.box.niw + 1,) + (2 * niv1,) + (2 * niv2,))
+        for niv1, niv2 in [
+            (config.box.niv, config.box.niv_full),
+            (config.box.niv_full, config.box.niv),
+            (config.box.niv_full, config.box.niv_full),
+        ]
     )
-    gamma_hl = (
-        gamma_copy[..., :, gamma_copy.niv - config.box.niv : gamma_copy.niv + config.box.niv]
-        .transpose(4, 0, 1, 5, 2, 3, 6)
-        .reshape(2 * gchi_r.niw + 1, gchi_r.n_bands**2 * 2 * gchi0.niv, gchi_r.n_bands**2 * 2 * gchi_r.niv)
+
+    for gamma in (gamma_lh, gamma_hl, gamma_hh):
+        gamma[
+            ...,
+            config.box.niv_asympt : config.box.niv_full + config.box.niv,
+            config.box.niv_asympt : config.box.niv_full + config.box.niv,
+        ] = 0
+
+    gamma_lh = gamma_lh.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
+        2 * config.box.niw + 1,
+        config.sys.n_bands**2 * 2 * config.box.niv,
+        config.sys.n_bands**2 * 2 * config.box.niv_full,
     )
+    gamma_hl = gamma_hl.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
+        2 * config.box.niw + 1,
+        config.sys.n_bands**2 * 2 * config.box.niv_full,
+        config.sys.n_bands**2 * 2 * config.box.niv,
+    )
+    gamma_hh = LocalFourPoint(gamma_hh, gchi_r.channel)
     inner = (
-        (~(gamma_copy + config.sys.beta**2 * (~gchi0)))
+        (~(gamma_hh + config.sys.beta**2 * (~gchi0)))
         .mat.transpose(4, 0, 1, 5, 2, 3, 6)
-        .reshape(2 * gchi_r.niw + 1, gchi0.n_bands**2 * 2 * gchi0.niv, gchi_r.n_bands**2 * 2 * gchi0.niv)
+        .reshape(
+            2 * config.box.niw + 1,
+            config.sys.n_bands**2 * 2 * config.box.niv_full,
+            config.sys.n_bands**2 * 2 * config.box.niv_full,
+        )
     )
-    correction = gamma_lh @ inner @ gamma_hl
-    compound_index_shape = (gchi_r.n_bands, gchi_r.n_bands, 2 * gchi_r.niv)
+    correction = np.matmul(np.matmul(gamma_lh, inner), gamma_hl)
+    MemoryHelper.delete(gamma_lh, gamma_hl, inner)
 
-    correction = correction.reshape((2 * gchi_r.niw + 1,) + compound_index_shape * 2).transpose(1, 2, 4, 5, 0, 3, 6)
+    compound_index_shape = (config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv)
+    correction = correction.reshape((2 * config.box.niw + 1,) + compound_index_shape * 2).transpose(1, 2, 4, 5, 0, 3, 6)
 
     gamma_hh[
         ...,
-        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
-        gamma_hh.niv - config.box.niv : gamma_hh.niv + config.box.niv,
+        config.box.niv_asympt : config.box.niv_full + config.box.niv,
+        config.box.niv_asympt : config.box.niv_full + config.box.niv,
     ] = (
-        gamma_loc.mat + correction
+        gamma_ll.mat + correction
     )
+
     return gamma_hh
 
 
 def create_gamma_0(u_loc: LocalInteraction) -> LocalInteraction:
     """
-    Returns the zero-th order vertex gamma_0 = U_{abcd} - U_{abdc}.
+    Returns the zero-th order vertex gamma_0 = (U_{abcd} - U_{adcb}).
     """
     return u_loc - u_loc.permute_orbitals("abcd->adcb")
 
 
-def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> LocalFourPoint:
+def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFourPoint:
     """
     Returns the generalized susceptibility gchi_{r;lmm'l'}^{wvv'}:1/eV^3 = beta:1/eV * (G2_{r;lmm'l'}^{wvv'}:1/eV^2 - 2 * G_{ll'}^{v} G_{m'm}^{v}:1/eV^2 delta_dens delta_w0)
     """
@@ -74,7 +104,7 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: LocalGreensFunction) -> Lo
     return chi
 
 
-def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
+def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
     """
     Returns G_{ll'}^{v}:1/eV * G_{m'm}^{v}:1/eV
     """
@@ -90,34 +120,24 @@ def _get_ggv_mat(g_loc: LocalGreensFunction, niv_slice: int = -1) -> np.ndarray:
 
 
 def create_generalized_chi0(
-    g_loc: LocalGreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
+    g_loc: GreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
 ) -> LocalFourPoint:
     """
     Returns the generalized bare susceptibility gchi0_{lmm'l'}^{wvv}:1/eV^3 = -beta:1/eV * G_{ll'}^{v}:1/eV * G_{m'm}^{v-w}:1/eV
     """
-    gchi0_mat = np.empty((g_loc.n_bands,) * 4 + (2 * config.box.niw + 1, 2 * config.box.niv_full), dtype=np.complex128)
-
     wn = MFHelper.wn(config.box.niw)
-    for index, current_wn in enumerate(wn):
-        iws, iws2 = MFHelper.get_frequency_shift(current_wn, frequency_shift)
+    iws, iws2 = np.array([MFHelper.get_frequency_shift(wn_i, frequency_shift) for wn_i in wn], dtype=int).T
 
-        # this is basically the same as _get_ggv_mat, but I don't know how to avoid the code duplication in a smart way
-        g_left_mat = (
-            g_loc.mat[..., g_loc.niv - config.box.niv_full + iws : g_loc.niv + config.box.niv_full + iws][
-                :, None, None, :, :
-            ]
-            * np.eye(g_loc.n_bands)[None, :, :, None, None]
-        )
-        g_right_mat = (
-            np.swapaxes(g_loc.mat, 0, 1)[
-                ..., g_loc.niv - config.box.niv_full + iws2 : g_loc.niv + config.box.niv_full + iws2
-            ][None, :, :, None, :]
-            * np.eye(g_loc.n_bands)[:, None, None, :, None]
-        )
-
-        gchi0_mat[..., index, :] = -config.sys.beta * g_left_mat * g_right_mat
-
-    return LocalFourPoint(gchi0_mat, Channel.NONE, 1, 1)
+    niv_range = np.arange(-config.box.niv_full, config.box.niv_full)
+    g_left_mat = (
+        g_loc.mat[:, None, None, :, g_loc.niv + niv_range[None, :] + iws[:, None]]
+        * np.eye(g_loc.n_bands)[None, :, :, None, None, None]
+    )
+    g_right_mat = (
+        g_loc.mat[None, :, :, None, g_loc.niv + niv_range[None, :] + iws2[:, None]]
+        * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
+    )
+    return LocalFourPoint(-config.sys.beta * g_left_mat * g_right_mat, Channel.NONE, 1, 1)
 
 
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
@@ -150,9 +170,9 @@ def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalThreePoi
 def get_self_energy(
     vrg_dens: LocalThreePoint,
     gchi_dens: LocalFourPoint,
-    g_loc: LocalGreensFunction,
+    g_loc: GreensFunction,
     u_loc: LocalInteraction,
-) -> LocalSelfEnergy:
+) -> SelfEnergy:
     """
     Performs the local self-energy calculation using the Schwinger-Dyson equation, see Paul Worm's thesis, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
@@ -164,54 +184,69 @@ def get_self_energy(
 
     gchi_dens = gchi_dens.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1, -2))
 
-    gamma_0_dens = create_gamma_0(u_loc)
-    inner_sum = np.einsum("abcd,ilbawv,dcpow->ilpowv", gamma_0_dens.mat, vrg_dens.mat, gchi_dens.mat)
+    gamma_0 = create_gamma_0(u_loc)
+    inner_sum = np.einsum("abcd,ilbawv,dcpow->ilpowv", gamma_0.mat, vrg_dens.mat, gchi_dens.mat)
     inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum
 
     self_energy_mat = 1.0 / config.sys.beta * np.einsum("kjop,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
 
-    u_loc_hartree = 2 * u_loc - u_loc.permute_orbitals("abcd->adcb")
-    hartree = np.einsum("abcd,dc->ab", u_loc_hartree.mat, config.sys.occ)
-    hartree_dmft = np.einsum("abcd,dc->ab", u_loc_hartree.mat, config.sys.occ_dmft)
+    u_loc_hartree = config.sys.beta**2 * u_loc.as_channel(Channel.DENS, config.sys.beta)
+    hartree = np.einsum("abcd,dc->ab", u_loc_hartree.mat, config.sys.occ_dmft)
 
-    self_energy_mat += hartree_dmft[..., np.newaxis]
+    self_energy_mat += hartree[..., np.newaxis]
 
-    return LocalSelfEnergy(self_energy_mat)
+    return SelfEnergy(self_energy_mat)
 
 
 def perform_local_schwinger_dyson(
-    g_loc: LocalGreensFunction, g2_dens: LocalFourPoint, g2_magn: LocalFourPoint, u_loc: LocalInteraction
-) -> (LocalSelfEnergy, LocalFourPoint, LocalFourPoint):
+    g_loc: GreensFunction, g2_dens: LocalFourPoint, g2_magn: LocalFourPoint, u_loc: LocalInteraction
+) -> (SelfEnergy, LocalFourPoint, LocalFourPoint):
     """
     Performs the local Schwinger-Dyson equation calculation for the local self-energy.
     Includes the calculation of the three-leg vertices, (auxiliary/bare/physical) susceptibilities and the irreducible vertices.
     """
+    logger = config.logger
+
     gchi_dens = create_generalized_chi(g2_dens, g_loc)
     MemoryHelper.delete(g2_dens)
+    logger.log_info("Generalized susceptibilitiy (dens) done.")
     gchi_magn = create_generalized_chi(g2_magn, g_loc)
     MemoryHelper.delete(g2_magn)
+    logger.log_info("Generalized susceptibilitiy (magn) done.")
 
-    if config.output.do_plotting:
+    if config.output.do_plotting and config.current_rank == 0:
         gchi_dens.plot(omega=0, name=f"Gchi_dens", output_dir=config.output.output_path)
         gchi_magn.plot(omega=0, name=f"Gchi_magn", output_dir=config.output.output_path)
+        logger.log_info("Generalized susceptibilities plotted.")
 
     gchi0 = create_generalized_chi0(g_loc)
 
     gamma_dens = create_gamma_r(gchi_dens, gchi0, u_loc)
+    logger.log_info("Irreducible vertex (dens) done.")
+    # gamma_dens = create_gamma_r_2(gchi_dens, gchi0, u_loc)
     gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
+    logger.log_info("Auxiliary susceptibility (dens) done.")
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
+    logger.log_info("Three-leg vertex (dens) done.")
     MemoryHelper.delete(gchi_aux_dens)
 
     gamma_magn = create_gamma_r(gchi_magn, gchi0, u_loc)
+    logger.log_info("Irreducible vertex (magn) done.")
+    # gamma_magn = create_gamma_r_2(gchi_magn, gchi0, u_loc)
     gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
+    logger.log_info("Auxiliary susceptibility (magn) done.")
     vrg_magn = create_vrg(gchi_aux_magn, gchi0)
+    logger.log_info("Three-leg vertex (magn) done.")
     MemoryHelper.delete(gchi0, gchi_aux_magn)
 
     sigma = get_self_energy(vrg_dens, gchi_dens, g_loc, u_loc)
+    logger.log_info("Self-energy done.")
 
     chi_dens_physical = create_physical_chi(gchi_dens)
     MemoryHelper.delete(gchi_dens)
+    logger.log_info("Physical susceptibility (dens) done.")
     chi_magn_physical = create_physical_chi(gchi_magn)
     MemoryHelper.delete(gchi_magn)
+    logger.log_info("Physical susceptibility (magn) done.")
 
     return gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma

@@ -1,11 +1,8 @@
-import itertools as it
-
 from matplotlib import pyplot as plt
 
 from interaction import LocalInteraction
 from local_n_point import LocalNPoint
 from local_three_point import LocalThreePoint
-from local_two_point import LocalTwoPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import *
 
@@ -37,10 +34,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
         IHaveChannel.__init__(self, channel, frequency_notation)
 
-    def __matmul__(self, other) -> LocalNPoint:
+    def __matmul__(self, other: "LocalFourPoint") -> "LocalFourPoint":
         return self._execute_matmul(other, left_hand_side=True)
 
-    def __rmatmul__(self, other) -> LocalNPoint:
+    def __rmatmul__(self, other: "LocalFourPoint") -> "LocalFourPoint":
         return self._execute_matmul(other, left_hand_side=False)
 
     def __add__(self, other) -> "LocalFourPoint":
@@ -55,21 +52,15 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def __rsub__(self, other) -> "LocalFourPoint":
         return self.__sub__(other)
 
-    def _execute_matmul(self, other, left_hand_side: bool = True) -> LocalNPoint:
+    def _execute_matmul(self, other: "LocalFourPoint", left_hand_side: bool = True) -> "LocalFourPoint":
         """
         Helper method that allows for matrix multiplication for LocalFourPoint objects. Depending on the
         number of frequency dimensions, the objects have to be multiplied differently.
         """
-        if not isinstance(other, (LocalTwoPoint, LocalThreePoint, LocalFourPoint)):
+        if not isinstance(other, LocalFourPoint):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
-        if isinstance(other, (LocalThreePoint, LocalFourPoint)):
-            if self.niw != other.niw:
-                raise ValueError(
-                    f"Shapes {self.current_shape} and {other.current_shape} do not match for multiplication!"
-                )
-
-        if self.niv != other.niv or self.n_bands != other.n_bands:
+        if self.niw != other.niw or self.niv != other.niv or self.n_bands != other.n_bands:
             raise ValueError(f"Shapes {self.current_shape} and {other.current_shape} do not match for multiplication!")
 
         self.to_compound_indices()
@@ -81,13 +72,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
-        if isinstance(other, LocalThreePoint):
-            return LocalThreePoint(
-                new_mat, channel, 1, 1, full_niw_range=self.full_niw_range, full_niv_range=self.full_niw_range
-            ).to_full_indices(
-                self.original_shape if self.num_fermionic_frequency_dimensions == 1 else other.original_shape
-            )
-
         return LocalFourPoint(
             new_mat, channel, 1, 2, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
         ).to_full_indices(self.original_shape if self.num_fermionic_frequency_dimensions == 2 else other.original_shape)
@@ -97,7 +81,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Helper method that allows for in-place addition and subtraction for LocalFourPoint objects. Depending on the
         number of frequency dimensions, the objects have to be added differently.
         """
-        if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint)):
+        if not isinstance(other, (LocalInteraction, LocalFourPoint, LocalThreePoint, np.ndarray)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
 
         if isinstance(other, (LocalFourPoint, LocalThreePoint)):
@@ -134,22 +118,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Symmetrize with respect to (v,v'). This is justified for SU(2) symmetric systems. (Thesis Rohringer p. 72)
         """
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
-        return self
-
-    def apply_time_reversal_symmetry(self) -> "LocalFourPoint":
-        """
-        Checks and applies time-reversal symmetry for the Four-Point object in-place. This is useful if only a fraction of the object was stored initially.
-        Keep in mind that the time reversal symmetry for local quantities is very simple. F^{wvv'}_{lmm'l'}=F^{wvv'}_{m'l'ml}
-        """
-        for l, m, mp, lp in it.product(range(self.n_bands), repeat=4):
-            slice_original = self[l, m, mp, lp, ...]
-            slice_symmetric = self[lp, mp, m, l, ...]
-
-            mask = slice_original == 0
-            slice_original[mask] = slice_symmetric[mask]
-            mask = slice_symmetric == 0
-            slice_symmetric[mask] = slice_original[mask]
-
         return self
 
     def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad") -> "LocalFourPoint":
