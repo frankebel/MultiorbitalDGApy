@@ -26,7 +26,7 @@ def execute_dga_routine():
     ConfigParser().parse_config(comm)
     logger = config.logger
     logger.log_info("Starting DGA routine.")
-    logger.log_info(f"Running on {str(comm.size)} processes.")
+    logger.log_info(f"Running on {str(comm.size)} {"process" if comm.size == 1 else "processes"}.")
 
     if is_root():
         g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
@@ -58,12 +58,12 @@ def execute_dga_routine():
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = GreensFunction.create_g_loc(sigma_dmft, ek)
     u_loc = config.lattice.hamiltonian.get_local_uq()
-    # u_nonloc = config.hamiltonian.get_nonlocal_uq(config.q_grid)
+    v_nonloc = config.lattice.hamiltonian.get_uq(config.lattice.q_grid)
 
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
-    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma = local_sde.perform_local_schwinger_dyson(
-        g_loc, g2_dens, g2_magn, u_loc
+    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dc_kernel_dens, f_dc_kernel_magn, sigma = (
+        local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
     )
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
@@ -75,6 +75,8 @@ def execute_dga_routine():
         chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
+        f_dc_kernel_dens.save(name="f_dc_kernel_dens", output_dir=config.output.output_path)
+        f_dc_kernel_magn.save(name="f_dc_kernel_magn", output_dir=config.output.output_path)
         logger.log_info("Saved quantities as numpy files.")
 
     if config.output.do_plotting and is_root():
@@ -121,7 +123,8 @@ def execute_dga_routine():
 
     logger.log_info("Local DGA routine finished.")
     logger.log_info("Starting nonlocal ladder-DGA routine.")
-    test = nonlocal_sde.calculate_self_energy_q(comm, g_loc)
+    exit()
+    sigma_full = nonlocal_sde.calculate_self_energy_q(comm, g_loc, gamma_magn, gamma_dens)
 
 
 if __name__ == "__main__":

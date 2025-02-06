@@ -43,6 +43,14 @@ class LatticeConfig:
         self.q_grid: bz.KGrid = bz.KGrid(self.nq, self.symmetries)
 
 
+class SelfConsistencyConfig:
+    def __init__(self):
+        self.max_iter: int = 20
+        self.save_iter: bool = True
+        self.epsilon: float = 1e-4
+        self.mixing: float = 0.3
+
+
 class DmftConfig:
     def __init__(self):
         self.type: str = "w2dyn"

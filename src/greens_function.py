@@ -1,7 +1,7 @@
 import numpy as np
 
 import config
-from local_self_energy import SelfEnergy
+from self_energy import SelfEnergy
 from local_two_point import LocalTwoPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import IAmNonLocal

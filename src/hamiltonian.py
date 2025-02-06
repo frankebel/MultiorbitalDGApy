@@ -69,6 +69,12 @@ class Hamiltonian:
         self._er_orbs = None
         self._er_r_weights = None
 
+        self._ur_local = None
+        self._ur_nonlocal = None
+        self._ur_r_grid = None
+        self._ur_orbs = None
+        self._ur_r_weights = None
+
         self._local_interaction = None
         self._nonlocal_interaction = None
 
@@ -317,13 +323,12 @@ class Hamiltonian:
         Returns the local interaction term in momentum space. Note that due to the momentum-independence of the local interaction,
         the momentum space representation is the same as the real space representation.
         """
-        return self._local_interaction
+        return LocalInteraction(self._ur_local)
 
-    def get_nonlocal_uq(self, q_grid: bz.KGrid) -> NonLocalInteraction:
-        """
-        Returns the nonlocal interaction term V^q in momentum space.
-        """
-        return self._nonlocal_interaction.get_uq(q_grid)
+    def get_uq(self, q_grid: bz.KGrid) -> "NonLocalInteraction":
+        uq = self._convham_4_orbs(q_grid.kmesh.reshape(3, -1))
+        n_bands = uq.shape[-1]
+        return NonLocalInteraction(uq.reshape(*q_grid.nk + (n_bands,) * 4))
 
     def _add_kinetic_term(self, hopping_elements: list) -> "Hamiltonian":
         """
@@ -334,7 +339,7 @@ class Hamiltonian:
         if any(np.allclose(el.r_lat, [0, 0, 0]) for el in hopping_elements):
             raise ValueError("Local hopping is not allowed!")
 
-        r_to_index, n_rp, n_orbs = self._prepare_indices_and_dimensions(hopping_elements)
+        r_to_index, n_rp, n_orbs = self._prepare_lattice_indices_and_orbs(hopping_elements)
 
         self._er_r_grid = self._create_er_grid(r_to_index, n_orbs)
         self._er_orbs = self._create_er_orbs(n_rp, n_orbs)
@@ -350,24 +355,22 @@ class Hamiltonian:
         Creates the interaction term of the Hamiltonian from the interaction elements.
         """
         interaction_elements = self._parse_elements(interaction_elements, InteractionElement)
-        r_to_index, n_rp, n_orbs = self._prepare_indices_and_dimensions(interaction_elements)
+        r_to_index, n_rp, n_orbs = self._prepare_lattice_indices_and_orbs(interaction_elements)
+        # we need local interactions in a separate object, hence we do not care about the [0,0,0] r_lat in here
+        n_rp -= 1
+        r_to_index.pop((0, 0, 0))
 
-        ur_nonlocal_r_grid = self._create_ur_grid(r_to_index, n_orbs)
-        ur_orbs = self._create_ur_orbs(n_rp, n_orbs)
-        ur_nonlocal_r_weights = np.ones(n_rp)[:, None]
+        self._ur_r_grid = self._create_ur_grid(r_to_index, n_orbs)
+        self._ur_orbs = self._create_ur_orbs(n_rp, n_orbs)
+        self._ur_r_weights = np.ones(n_rp)[:, None]
 
-        ur_local = np.zeros((n_orbs, n_orbs, n_orbs, n_orbs))
-        ur_nonlocal = np.zeros((n_rp, n_orbs, n_orbs, n_orbs, n_orbs))
+        self._ur_local = np.zeros((n_orbs, n_orbs, n_orbs, n_orbs))
+        self._ur_nonlocal = np.zeros((n_rp, n_orbs, n_orbs, n_orbs, n_orbs))
         for ie in interaction_elements:
             if np.allclose(ie.r_lat, [0, 0, 0]):
-                self._insert_ur_element(ur_local, None, None, *ie.orbs, ie.value)
+                self._insert_ur_element(self._ur_local, None, None, *ie.orbs, ie.value)
             else:
-                self._insert_ur_element(ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
-
-        self._check_swapping_symmetry(ur_local)
-
-        self._local_interaction = LocalInteraction(ur_local)
-        self._nonlocal_interaction = NonLocalInteraction(ur_nonlocal, ur_nonlocal_r_grid, ur_nonlocal_r_weights)
+                self._insert_ur_element(self._ur_nonlocal, r_to_index, ie.r_lat, *ie.orbs, ie.value)
         return self
 
     def _create_er_grid(self, r_to_index: dict[list, int], n_orbs: int) -> np.ndarray:
@@ -439,12 +442,19 @@ class Hamiltonian:
         index = r_to_index[r_vec]
         ur_mat[index, orb1 - 1, orb2 - 1, orb3 - 1, orb4 - 1] = value
 
-    def _convham_2_orbs(self, k_mesh: np.ndarray = None) -> np.ndarray:
+    def _convham_2_orbs(self, k_mesh: np.ndarray) -> np.ndarray:
         """
         Fourier transforms the kinetic Hamiltonian to momentum space.
         """
         fft_grid = np.exp(1j * np.matmul(self._er_r_grid, k_mesh)) / self._er_r_weights[:, None, None]
         return np.transpose(np.sum(fft_grid * self._er[..., None], axis=0), axes=(2, 0, 1))
+
+    def _convham_4_orbs(self, k_mesh: np.ndarray) -> np.ndarray:
+        """
+        Fourier transforms the interaction Hamiltonian to momentum space.
+        """
+        fft_grid = np.exp(1j * np.matmul(self._ur_r_grid, k_mesh)) / self._ur_r_weights[:, None, None, None, None]
+        return np.transpose(np.sum(fft_grid * self._ur_nonlocal[..., None], axis=0), axes=(4, 0, 1, 2, 3))
 
     def _parse_elements(self, elements: list, element_type: type) -> list:
         """
@@ -454,7 +464,7 @@ class Hamiltonian:
             return [element_type(**element) for element in elements]
         return elements
 
-    def _prepare_indices_and_dimensions(self, elements: list) -> tuple:
+    def _prepare_lattice_indices_and_orbs(self, elements: list) -> tuple:
         """
         Helper method. Prepares the indices and dimensions for the matrices contained in the Hamiltonian.
         """
@@ -464,11 +474,15 @@ class Hamiltonian:
         n_orbs = int(max(np.array([el.orbs for el in elements]).flatten()))
         return r_to_index, n_rp, n_orbs
 
-    def _check_swapping_symmetry(self, ur_local: np.ndarray) -> None:
+    def _check_interaction_swapping_symmetry(self, uq_local: np.ndarray, uq_nonlocal: np.ndarray):
         """
         Checks the swapping symmetry on the local interaction matrix. This symmetry is defined as:
-        U_{lm'ml'} = U_{m'll'm}
+        U_{lm'ml'} = U_{m'll'm} for the local part and V^{q}_{lmm'l'} = V^{-q}_{mll'm'} for the nonlocal part.
         """
         assert np.allclose(
-            ur_local, np.einsum("abcd->badc", ur_local)
+            uq_local, np.einsum("abcd->badc", uq_local)
+        ), "Swapping symmetry of the interaction is not satisfied!"
+
+        assert np.allclose(
+            uq_nonlocal, np.einsum(":abcd->:bcda", np.flip(uq_nonlocal, axis=0))
         ), "Swapping symmetry of the interaction is not satisfied!"

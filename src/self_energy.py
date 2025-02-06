@@ -52,10 +52,10 @@ class SelfEnergy(LocalTwoPoint):
             return self.niv_core_min
         return niv_core
 
-    def _get_asympt(self, niv_asympt: int, n_min: int = None, return_only_positive: bool = True):
+    def _get_asympt(self, niv_asympt: int, n_min: int = None):
         """
         Returns purely the asymptotic behaviour of the self-energy for the given frequency range niv_asympt.
-        Not intended to be used solely but intended to be padded to the self-energy as an asymptotic tail.
+        Not intended to be used as its own but intended to be padded to the self-energy as an asymptotic tail.
         """
         if n_min is None:
             n_min = self.niv
@@ -63,9 +63,7 @@ class SelfEnergy(LocalTwoPoint):
         asympt = (self._smom0 - 1.0 / iv_asympt * self._smom1)[None, None, None, ...] * np.ones(config.lattice.nk)[
             ..., None, None, None
         ]
-        if return_only_positive:
-            return asympt
-        return MFHelper.fermionic_full_nu_range(asympt)
+        return SelfEnergy(asympt, full_niv_range=False)
 
     def extend_to_multi_orbital(self, padding_object: "SelfEnergy", n_bands: int) -> "SelfEnergy":
         """

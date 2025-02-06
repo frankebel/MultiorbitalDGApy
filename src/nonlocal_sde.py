@@ -1,24 +1,25 @@
 import mpi4py.MPI as MPI
 
 import config
-from greens_function import GreensFunction
-from matsubara_frequencies import *
-from mpi_aux import MpiDistributor
 from four_point import FourPoint
+from greens_function import GreensFunction
+from local_four_point import LocalFourPoint
+from matsubara_frequencies import *
+from mpi_distributor import MpiDistributor
 from n_point_base import Channel
 
 
-def get_gchi_q_mat(giwk: GreensFunction, q_list: np.ndarray):
+def get_gchi_q_mat(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
     """
-    Returns -beta * G^k_ll' * G^(k-q)_m'm
+    Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
-    wn = MFHelper.wn(config.box.niw)
+    wn = MFHelper.wn(config.box.niw, return_only_positive=True)
     iws, iws2 = np.array([MFHelper.get_frequency_shift(wn_i, FrequencyShift.MINUS) for wn_i in wn], dtype=int).T
 
     niv_asympt_range = np.arange(-config.box.niv_full, config.box.niv_full)
 
     gchi0_q = np.zeros(
-        (len(q_list),) + (config.sys.n_bands,) * 4 + (2 * config.box.niw + 1, 2 * config.box.niv_full),
+        (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * config.box.niv_full),
         dtype=np.complex128,
     )
 
@@ -36,10 +37,12 @@ def get_gchi_q_mat(giwk: GreensFunction, q_list: np.ndarray):
         )
         gchi0_q[idx] = -config.sys.beta * np.mean(g_left_mat * g_right_mat, axis=(0, 1, 2))
 
-    return FourPoint(gchi0_q, Channel.NONE, config.lattice.nq, config.lattice.nk, 1, 0, 1, 1)
+    return FourPoint(gchi0_q, Channel.NONE, config.lattice.nq, config.lattice.nk, 1, 0, 1, 1, False)
 
 
-def calculate_self_energy_q(comm: MPI.Comm, giwk: GreensFunction):
+def calculate_self_energy_q(
+    comm: MPI.Comm, giwk: GreensFunction, gamma_dens: LocalFourPoint, gamma_magn: LocalFourPoint
+):
     logger = config.logger
     logger.log_info("Initializing MPI distributor.")
     mpi_distributor = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_irr, comm=comm, name="Q")
@@ -48,7 +51,14 @@ def calculate_self_energy_q(comm: MPI.Comm, giwk: GreensFunction):
 
     giwk_full = giwk.get_g_full()
 
+    # check why paul has an extra 1/beta in the frequency sums here
     gchi0_q = get_gchi_q_mat(giwk_full, my_q_list)
     logger.log_info("Calculated gchi0_q.")
+    logger.log_memory_usage("gchi0_q", gchi0_q, n_exists=1)
+    chi0_q = gchi0_q.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1,))
+    logger.log_info("Calculated chi0_q.")
+    gchi0_q_core = gchi0_q.cut_niv(config.box.niv)
+    chi0_q_core = gchi0_q_core.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1,))
+    logger.log_info("Calculated chi0_q_core.")
 
     # comm.Allreduce(MPI.IN_PLACE, local_gchi0_q, op=MPI.SUM)

@@ -76,7 +76,7 @@ class MFHelper:
         .. math::  F_{ph_bar}[...] = F_ph[w',v_1',v_2'] \n
         .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)
         """
-        niw, niv = niw // 2, min(niw // 2, niv // 2)
+        niw, niv = niw // 3, min(niw // 3, niv // 3)
         iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
         return niw + iv + ivp - iw, niv + iv, niv + ivp
 
@@ -85,15 +85,15 @@ class MFHelper:
         niw: int, niv: int
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Returns the new
+        Returns the new frequency
         .. math:: (w',v_1',v_2')
         indices for the conversion of a ph to a ph_bar channel.\n
         .. math::  F_ph_bar[...] = F_ph[w',v_1',v_2'] \n
-        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_1-v_2, v_1, v_1-w) \n
+        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_2-v_1, v_2-w, v_2) \n
         """
         niw, niv = niw // 2, min(niw // 2, niv // 2)
         iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
-        return niw + iv - ivp, niv + iv, niv + iv - iw
+        return niw + ivp - iv, niv + ivp - iw, niv + ivp
 
     @staticmethod
     def _get_frequencies_for_channel_conversion(niw: int, niv: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -107,6 +107,14 @@ class MFHelper:
         return np.moveaxis(np.array([mat[..., niv - niv_cut - iwn : niv + niv_cut - iwn] for iwn in w]), 0, -2)
 
     @staticmethod
-    def fermionic_full_nu_range(mat: np.ndarray, axis=(-1,)):
+    def fermionic_full_niv_range(mat: np.ndarray, axis=(-1,)):
         """Build full fermionic object from positive frequencies only along axis."""
         return np.concatenate((np.conj(np.flip(mat, axis)), mat), axis=axis)
+
+    @staticmethod
+    def bosonic_full_niw_range(mat: np.ndarray, axis=(-1,), freq_axes=None):
+        """Build full Bosonic object from positive frequencies only along axis."""
+        ind = np.arange(1, np.shape(mat)[axis])
+        if freq_axes is None:
+            freq_axes = axis
+        return np.concatenate((np.conj(np.flip(np.take(mat, ind, axis=axis), freq_axes)), mat), axis=axis)

@@ -6,7 +6,7 @@ import w2dyn_aux
 from hamiltonian import Hamiltonian
 from local_four_point import LocalFourPoint
 from greens_function import GreensFunction
-from local_self_energy import SelfEnergy
+from self_energy import SelfEnergy
 from n_point_base import *
 
 

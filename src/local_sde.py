@@ -3,7 +3,7 @@ import config
 from interaction import LocalInteraction
 from local_four_point import LocalFourPoint
 from greens_function import GreensFunction
-from local_self_energy import SelfEnergy
+from self_energy import SelfEnergy
 from local_three_point import LocalThreePoint
 from matsubara_frequencies import MFHelper, FrequencyShift
 from memory_helper import MemoryHelper
@@ -167,6 +167,11 @@ def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalThreePoi
     return LocalThreePoint(vrg_mat, gchi_aux.channel, 1, 1, gchi_aux.full_niw_range, gchi_aux.full_niv_range)
 
 
+def create_local_double_counting_kernel(gamma_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
+    eye = np.eye(2 * config.box.niv_full, dtype=np.complex128)[None, None, None, None, None, :, :]
+    return -gamma_r @ ~((gamma_r @ gchi0) - eye)
+
+
 def get_self_energy(
     vrg_dens: LocalThreePoint,
     gchi_dens: LocalFourPoint,
@@ -229,6 +234,8 @@ def perform_local_schwinger_dyson(
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
     logger.log_info("Three-leg vertex (dens) done.")
     MemoryHelper.delete(gchi_aux_dens)
+    f_dc_kernel_dens = create_local_double_counting_kernel(gamma_dens, gchi0)
+    logger.log_info("Double-counting kernel (dens) done.")
 
     gamma_magn = create_gamma_r(gchi_magn, gchi0, u_loc)
     logger.log_info("Irreducible vertex (magn) done.")
@@ -237,7 +244,10 @@ def perform_local_schwinger_dyson(
     logger.log_info("Auxiliary susceptibility (magn) done.")
     vrg_magn = create_vrg(gchi_aux_magn, gchi0)
     logger.log_info("Three-leg vertex (magn) done.")
-    MemoryHelper.delete(gchi0, gchi_aux_magn)
+    MemoryHelper.delete(gchi_aux_magn)
+    f_dc_kernel_magn = create_local_double_counting_kernel(gamma_magn, gchi0)
+    logger.log_info("Double-counting kernel (magn) done.")
+    MemoryHelper.delete(gchi0)
 
     sigma = get_self_energy(vrg_dens, gchi_dens, g_loc, u_loc)
     logger.log_info("Self-energy done.")
@@ -249,4 +259,14 @@ def perform_local_schwinger_dyson(
     MemoryHelper.delete(gchi_magn)
     logger.log_info("Physical susceptibility (magn) done.")
 
-    return gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma
+    return (
+        gamma_dens,
+        gamma_magn,
+        chi_dens_physical,
+        chi_magn_physical,
+        vrg_dens,
+        vrg_magn,
+        f_dc_kernel_dens,
+        f_dc_kernel_magn,
+        sigma,
+    )

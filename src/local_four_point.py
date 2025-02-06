@@ -90,6 +90,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             if self.num_bosonic_frequency_dimensions != other.num_bosonic_frequency_dimensions:
                 raise ValueError("Number of bosonic frequency dimensions do not match.")
 
+        if isinstance(other, np.ndarray):
+            self_mat = self.mat
+            np.add(self_mat, other, out=self_mat) if is_addition else np.subtract(self_mat, other, out=self_mat)
+            return LocalFourPoint(self_mat, self.channel, 1, 2, self.full_niw_range, self.full_niv_range)
+
         self_mat, other_mat = self.mat, other.mat
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
@@ -159,7 +164,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             raise ValueError("This method is only implemented for 2 fermionic frequency dimensions.")
         return self.sum_over_fermionic_dimensions(beta, axis=(-1, -2)).sum_over_orbitals("abcd->ad")
 
-    def permute_orbitals(self, permutation: str = "ijkl->ijkl") -> "LocalFourPoint":
+    def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalFourPoint":
         """
         Permutes the orbitals of the four-point object.
         """
@@ -234,23 +239,23 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         return (
             LocalFourPoint(
-                0.5 * mat_ph_dens + 1.5 * mat_ph_magn,
-                self.channel,
+                -0.5 * mat_ph_dens - 1.5 * mat_ph_magn,
+                Channel.DENS,
                 1,
                 2,
                 full_niw_range=True,
                 full_niv_range=True,
                 frequency_notation=FrequencyNotation.PH_BAR,
-            ),
+            ).permute_orbitals("abcd->cbad"),
             LocalFourPoint(
-                0.5 * (mat_ph_dens - mat_ph_magn),
-                self.channel,
+                -0.5 * (mat_ph_dens - mat_ph_magn),
+                Channel.MAGN,
                 1,
                 2,
                 full_niw_range=True,
                 full_niv_range=True,
                 frequency_notation=FrequencyNotation.PH_BAR,
-            ),
+            ).permute_orbitals("abcd->cbad"),
         )
 
     def concatenate_local_u(self, u_loc: LocalInteraction, niv_full: int) -> "LocalFourPoint":

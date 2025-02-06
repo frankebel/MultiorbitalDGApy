@@ -30,7 +30,11 @@ class LocalNPoint(IHaveMat):
         self._num_bosonic_frequency_dimensions = num_bosonic_frequency_dimensions
 
         self._full_niv_range = full_niv_range
+        if not self._full_niv_range:
+            self.to_full_niv_range()
         self._full_niw_range = full_niw_range
+        if not self._full_niw_range:
+            self.to_full_niw_range()
 
     @property
     def n_bands(self) -> int:
@@ -276,6 +280,44 @@ class LocalNPoint(IHaveMat):
 
         copy.original_shape = copy.current_shape
         return copy
+
+    def to_full_niw_range(self):
+        """
+        Converts the object to the full bosonic frequency range.
+        """
+        if self.num_bosonic_frequency_dimensions == 0:
+            raise ValueError("Cannot convert to full bosonic frequency range if there are no bosonic frequencies.")
+        if self.full_niw_range:
+            return self
+
+        niw_axis = -(self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions)
+        ind = np.arange(1, self.current_shape[niw_axis])
+        freq_axis = niw_axis
+        if self.num_fermionic_frequency_dimensions == 1:
+            freq_axis = niw_axis, -1
+        if self.num_fermionic_frequency_dimensions == 2:
+            freq_axis = niw_axis, -2, -1
+        self.mat = np.concatenate(
+            (np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)), self.mat), axis=niw_axis
+        )
+        self.original_shape = self.current_shape
+        self._full_niw_range = True
+        return self
+
+    def to_full_niv_range(self):
+        """
+        Converts the object to the full fermionic frequency range.
+        """
+        if self.num_fermionic_frequency_dimensions == 0:
+            raise ValueError("Cannot convert to full fermionic frequency range if there are no fermionic frequencies.")
+        if self.full_niv_range:
+            return self
+
+        axis = (-2, -1) if self.num_fermionic_frequency_dimensions == 2 else -1
+        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis)), self.mat), axis=axis)
+        self.original_shape = self.current_shape
+        self._full_niv_range = True
+        return self
 
     def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """

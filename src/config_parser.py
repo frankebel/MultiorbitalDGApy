@@ -42,6 +42,7 @@ class ConfigParser:
     def _build_config_from_file(self, conf_file):
         config.dmft = self._build_dmft_config(conf_file)
         config.output = self._build_output_config(conf_file)
+        config.self_consistency = self._build_self_consistency_config(conf_file)
         config.box = self._build_box_config(conf_file)
         config.lattice = self._build_lattice_config(conf_file)
         config.sys = self._build_system_config(conf_file)
@@ -71,9 +72,9 @@ class ConfigParser:
         else:
             conf.nq = tuple[int, int, int](lattice_section["nq"])
         conf.symmetries = self._set_lattice_symmetries(lattice_section["symmetries"])
-        conf.type = lattice_section["type"]
+        conf.type = str(lattice_section["type"])
         conf.er_input = lattice_section["hr_input"]
-        conf.interaction_type = lattice_section["interaction_type"]
+        conf.interaction_type = str(lattice_section["interaction_type"])
         conf.interaction_input = lattice_section["interaction_input"]
         conf.k_grid = bz.KGrid(conf.nk, conf.symmetries)
         conf.q_grid = bz.KGrid(conf.nq, conf.symmetries)
@@ -104,10 +105,10 @@ class ConfigParser:
         conf = DmftConfig()
         dmft_section = config_file["dmft_input"]
 
-        conf.type = dmft_section["type"]
-        conf.input_path = dmft_section["input_path"]
-        conf.fname_1p = dmft_section["fname_1p"]
-        conf.fname_2p = dmft_section["fname_2p"]
+        conf.type = str(dmft_section["type"])
+        conf.input_path = str(dmft_section["input_path"])
+        conf.fname_1p = str(dmft_section["fname_1p"])
+        conf.fname_2p = str(dmft_section["fname_2p"])
         conf.do_sym_v_vp = bool(dmft_section["do_sym_v_vp"])
 
         return conf
@@ -122,11 +123,22 @@ class ConfigParser:
         conf.do_plotting = bool(output_section["do_plotting"])
         conf.save_quantities = bool(output_section["save_quantities"])
 
-        conf.output_path = output_section["output_path"]
+        conf.output_path = str(output_section["output_path"])
         if not conf.output_path or conf.output_path == "":
             config.logger.log_info(
                 f"'output_path' not set in config. Setting 'output_path' = '{config.dmft.input_path}'."
             )
             conf.output_path = config.dmft.input_path
+
+        return conf
+
+    def _build_self_consistency_config(self, conf_file):
+        conf = SelfConsistencyConfig()
+        sc_section = conf_file["self_consistency"]
+
+        conf.max_iter = int(sc_section["max_iter"])
+        conf.save_iter = bool(sc_section["save_iter"])
+        conf.epsilon = float(sc_section["epsilon"])
+        conf.mixing = float(sc_section["mixing"])
 
         return conf
