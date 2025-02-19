@@ -124,7 +124,7 @@ def execute_dga_routine():
     logger.log_info("Local DGA routine finished.")
     logger.log_info("Starting nonlocal ladder-DGA routine.")
     exit()
-    sigma_full = nonlocal_sde.calculate_self_energy_q(comm, g_loc, gamma_magn, gamma_dens)
+    sigma = nonlocal_sde.calculate_self_energy_q(comm, g_loc, gamma_magn, gamma_dens)
 
 
 if __name__ == "__main__":

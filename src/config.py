@@ -67,7 +67,6 @@ class SystemConfig:
         self.n: float = 0.0
         self.n_bands: int = 1
         self.occ: np.ndarray = np.ndarray(0)
-        self.occ_dmft: np.ndarray = np.ndarray(0)
 
 
 class OutputConfig:

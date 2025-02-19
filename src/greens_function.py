@@ -40,11 +40,11 @@ class GreensFunction(LocalTwoPoint, IAmNonLocal):
         return GreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
 
     @property
-    def e_kin(self):  # be careful about the on-site energy
+    def e_kin(self):
         """
-        Returns the kinetic energy of the system.
+        Returns the kinetic energy of the system, see Eq (22) in G. Rohringer & A. Toschi PHYSICAL REVIEW B 94, 125144 (2016).
         """
-        ekin = 1 / config.sys.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
+        ekin = 2 / config.sys.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
         assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
         return ekin.real
 

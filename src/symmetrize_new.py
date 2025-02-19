@@ -40,10 +40,10 @@ def component2index_band(num_bands: int, n: int, b: list) -> int:
     return ind
 
 
-def extract_g2_general(group_string: str, indices: list):
+def extract_g2_general(group_string: str, indices: list, file: h5py.File) -> tuple:
     print(f"Nonzero number of elements of g2 in dataset: {len(indices)} / {(2 * n_bands) ** 4}")
 
-    elements = np.array([vertex_file[f"{group_string}/{idx}/value"] for idx in indices])
+    elements = np.array([file[f"{group_string}/{idx}/value"] for idx in indices])
     elements = elements.transpose(0, -1, 1, 2)
 
     # for some reason, the elements are stored transposed in vv' in symmetrize_old.py
@@ -53,9 +53,8 @@ def extract_g2_general(group_string: str, indices: list):
     # construct G2dens and G2magn the output file
     bands, spins = zip(*(index2component_general(n_bands, 4, int(i))[1:3] for i in indices))
 
-    # since we are SU(2) symmetric, we only have to pick out the elements, where spin is either
+    # since we are SU(2) symmetric, we only have to pick out the elements where the spin is either
     # [0,0,0,0] or [1,1,1,1] for uu component, [0,0,1,1] or [1,1,0,0] for ud component and [0,1,1,0] or [1,0,0,1] for ud_bar component
-    # that means for each band, we only have to pick two spin combinations
     g2_uuuu, g2_dddd, g2_dduu, g2_uudd, g2_uddu, g2_duud = (
         np.zeros((n_bands, n_bands, n_bands, n_bands, 2 * niw + 1, 2 * niv, 2 * niv), dtype=np.complex128)
         for _ in range(6)
@@ -93,47 +92,51 @@ def extract_g2_general(group_string: str, indices: list):
     return g2_uuuu, g2_dddd, g2_dduu, g2_uudd, g2_uddu, g2_duud
 
 
-def save_to_file(g2_list: list[np.ndarray], spin_comb_list: list[str], niw: int, n_bands: int):
-    assert len(g2_list) == len(spin_comb_list)
+def save_to_file(g2_list: list[np.ndarray], names: list[str], niw: int, n_bands: int):
+    assert len(g2_list) == len(names)
     for wn in range(2 * niw + 1):
         for i, j, k, l in it.product(range(n_bands), repeat=4):
             idx = component2index_band(n_bands, 4, [i, j, k, l])
-            output_file[f"ineq-001/{spin_comb_list[0]}/{wn:05}/{idx:05}/value"] = g2_list[0][i, j, k, l, wn].transpose()
-            output_file[f"ineq-001/{spin_comb_list[1]}/{wn:05}/{idx:05}/value"] = g2_list[1][i, j, k, l, wn].transpose()
+            output_file[f"ineq-001/{names[0]}/{wn:05}/{idx:05}/value"] = g2_list[0][i, j, k, l, wn].transpose()
+            output_file[f"ineq-001/{names[1]}/{wn:05}/{idx:05}/value"] = g2_list[1][i, j, k, l, wn].transpose()
 
 
 if __name__ == "__main__":
-    default_input_filename = "Vertex.hdf5"
-    default_output_filename_ph = "g4iw_sym.hdf5"
+    default_ph_filename = "Vertex.hdf5"
+    default_pp_filename = "Vertex_pp.hdf5"
+    default_output_filename = "g4iw_sym.hdf5"
 
-    input_filename = input(f"Enter the DMFT vertex file name (default = {default_input_filename}): ")
-    output_filename = input(f"Enter the output filename (default = {default_output_filename_ph}): ")
+    input_ph_filename = input(f"Enter the DMFT vertex file name for PH channel (default = {default_ph_filename}): ")
+    input_pp_filename = input(f"Enter the DMFT vertex file name for PP channel (default = {default_pp_filename}): ")
+    output_filename = input(f"Enter the output filename (default = {default_output_filename}): ")
 
-    input_filename = input_filename if input_filename else default_input_filename
-    output_filename = output_filename if output_filename else default_output_filename_ph
+    input_ph_filename = input_ph_filename if input_ph_filename else default_ph_filename
+    input_pp_filename = input_pp_filename if input_pp_filename else default_pp_filename
+    output_filename = output_filename if output_filename else default_output_filename
 
-    vertex_file = h5py.File(input_filename, "r")
+    vertex_file_ph = h5py.File(input_ph_filename, "r")
+    vertex_file_pp = vertex_file_ph if input_pp_filename == input_ph_filename else h5py.File(input_pp_filename, "r")
     output_file = h5py.File(output_filename, "w")
 
-    n_bands = int(vertex_file[".config"].attrs[f"atoms.1.nd"]) + int(vertex_file[".config"].attrs[f"atoms.1.np"])
+    n_bands = int(vertex_file_ph[".config"].attrs[f"atoms.1.nd"]) + int(vertex_file_ph[".config"].attrs[f"atoms.1.np"])
 
     g4iw_ph_groupstring = "worm-last/ineq-001/g4iw-worm"
     g4iw_pp_groupstring = "worm-last/ineq-001/g4iwpp-worm"
 
     try:
-        indices_ph = list(vertex_file[g4iw_ph_groupstring].keys())
+        indices_ph = list(vertex_file_ph[g4iw_ph_groupstring].keys())
     except KeyError:
-        logging.getLogger().warning("No g4iw-worm group found in the input file. Aborting.")
+        logging.getLogger().warning("No g4iw-worm group found in the PH input file. Aborting.")
         exit()
 
     try:
-        indices_pp = list(vertex_file[g4iw_pp_groupstring].keys())
+        indices_pp = list(vertex_file_pp[g4iw_pp_groupstring].keys())
     except KeyError:
         indices_pp = None
-        logging.getLogger().warning("No g4iwpp-worm group found in the input file. No vertex asymptotics will be used.")
+        logging.getLogger().warning("No g4iwpp-worm group found in the PP input file. No vertex asymptotics possible.")
 
     # determination of niw and niv
-    first_element_shape = vertex_file[f"{g4iw_ph_groupstring}/{indices_ph[0]}/value"].shape
+    first_element_shape = vertex_file_ph[f"{g4iw_ph_groupstring}/{indices_ph[0]}/value"].shape
     assert first_element_shape[0] % 2 == 0
     assert first_element_shape[-1] % 2 != 0
     niv = first_element_shape[0] // 2
@@ -145,7 +148,7 @@ if __name__ == "__main__":
 
     print("Extracting G2ph ...")
     g2_uuuu_ph, g2_dddd_ph, g2_dduu_ph, g2_uudd_ph, g2_uddu_ph, g2_duud_ph = extract_g2_general(
-        g4iw_ph_groupstring, indices_ph
+        g4iw_ph_groupstring, indices_ph, vertex_file_ph
     )
     print("G2ph extracted. Calculating G2_dens and G2_magn for ph ...")
     g2_dens_ph = 0.5 * (g2_uuuu_ph + g2_dddd_ph + g2_uudd_ph + g2_dduu_ph)
@@ -162,12 +165,15 @@ if __name__ == "__main__":
 
     if indices_pp is None:
         output_file.close()
-        vertex_file.close()
+        vertex_file_ph.close()
+        vertex_file_pp.close()
         print("Done!")
         exit()
 
     print("Extracting G2pp ...")
-    _, _, g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph = extract_g2_general(g4iw_pp_groupstring, indices_pp)
+    _, _, g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph = extract_g2_general(
+        g4iw_pp_groupstring, indices_pp, vertex_file_pp
+    )
     print("G2pp extracted. Calculating G2_sing and G2_trip for pp ...")
     g2_sing_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp - g2_uddu_pp - g2_duud_ph)
     g2_trip_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp + g2_uddu_pp + g2_duud_ph)
@@ -182,5 +188,6 @@ if __name__ == "__main__":
     print("G2_sing and G2_trip successfully written to file.")
 
     output_file.close()
-    vertex_file.close()
+    vertex_file_ph.close()
+    vertex_file_pp.close()
     print("Done!")

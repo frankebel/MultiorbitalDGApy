@@ -46,8 +46,6 @@ def load_from_w2dyn_file_and_update_config() -> tuple[GreensFunction, SelfEnergy
     config.sys.n_bands = file.get_nd() + file.get_np()
     config.sys.n = file.get_totdens()
 
-    config.sys.occ_dmft = 2 * np.diag(np.diag(np.mean(file.get_occ(), axis=(1, 3))))
-
     if config.sys.n == 0:
         config.sys.n = sum(
             np.sum(np.diag(file.get_occ()[i, :, i, :])) for i in range(config.sys.n_bands)

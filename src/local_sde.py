@@ -14,7 +14,7 @@ def create_gamma_r_v2(gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: Loca
     """
     Returns the irreducible vertex gamma_r with an rpa-approach to the urange.
     """
-    u = u_loc.as_channel(gchi_r.channel, config.sys.beta)
+    u = 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel)
     chi_tilde_shell = ~(~gchi0 + u)
     chi_tilde_core = ~(chi_tilde_shell.cut_niv(config.box.niv))
     return config.sys.beta**2 * (~gchi_r - chi_tilde_core + u)
@@ -83,11 +83,12 @@ def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalIn
     return gamma_hh
 
 
-def create_gamma_0(u_loc: LocalInteraction) -> LocalInteraction:
+def create_gamma_0(u_loc: LocalInteraction, channel: Channel = Channel.DENS) -> LocalInteraction:
     """
-    Returns the zero-th order vertex gamma_0 = (U_{abcd} - U_{adcb}).
+    Returns the zero-th order vertex gamma_0 = (U_{abcd} - U_{adcb}) for a given channel.
     """
-    return u_loc - u_loc.permute_orbitals("abcd->adcb")
+    u = u_loc.as_channel(channel) if u_loc.channel == channel.NONE else u_loc
+    return u - u.permute_orbitals("abcd->adcb")
 
 
 def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFourPoint:
@@ -144,7 +145,7 @@ def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc:
     """
     Returns the auxiliary susceptibility gchi_aux_{r;lmm'l'} = ((gchi_{0;lmm'l'})^(-1) + gamma_{r;lmm'l'}-(u_{lmm'l'} - u_{ll'm'm})/beta^2)^(-1). See Eq. (3.68) in Paul Worm's thesis.
     """
-    gamma_0 = create_gamma_0(u_loc)
+    gamma_0 = create_gamma_0(u_loc, gamma_r.channel)
     return ~(~gchi_0 + (gamma_r - gamma_0) / config.sys.beta**2)
 
 
@@ -181,26 +182,21 @@ def get_self_energy(
     """
     Performs the local self-energy calculation using the Schwinger-Dyson equation, see Paul Worm's thesis, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
-    n_bands = vrg_dens.n_bands
-
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
-    g_1 = MFHelper.wn_slices_gen(g_loc.mat, vrg_dens.niv, vrg_dens.niw)
-    deltas = np.einsum("io,lp->iolp", np.eye(n_bands), np.eye(n_bands))
+    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv, config.box.niw)
+    deltas = np.einsum("io,lp->ilpo", np.eye(config.sys.n_bands), np.eye(config.sys.n_bands))
 
     gchi_dens = gchi_dens.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1, -2))
 
-    gamma_0 = create_gamma_0(u_loc)
+    u_r = u_loc.as_channel(gchi_dens.channel)
+    gamma_0 = create_gamma_0(u_r)
     inner_sum = np.einsum("abcd,ilbawv,dcpow->ilpowv", gamma_0.mat, vrg_dens.mat, gchi_dens.mat)
-    inner = deltas[..., np.newaxis, np.newaxis] - vrg_dens.mat + inner_sum
+    inner = deltas[..., None, None] - vrg_dens.mat + inner_sum
 
-    self_energy_mat = 1.0 / config.sys.beta * np.einsum("kjop,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
+    self_energy_mat = 1.0 / config.sys.beta * np.einsum("kjpo,ilpowv,lkwv->ijv", u_loc.mat, inner, g_1)
+    hartree = np.einsum("abcd,dc->ab", u_loc.as_channel(Channel.DENS).mat, config.sys.occ)[..., None]
 
-    u_loc_hartree = config.sys.beta**2 * u_loc.as_channel(Channel.DENS, config.sys.beta)
-    hartree = np.einsum("abcd,dc->ab", u_loc_hartree.mat, config.sys.occ_dmft)
-
-    self_energy_mat += hartree[..., np.newaxis]
-
-    return SelfEnergy(self_energy_mat)
+    return SelfEnergy(self_energy_mat + hartree)
 
 
 def perform_local_schwinger_dyson(
@@ -250,6 +246,7 @@ def perform_local_schwinger_dyson(
     MemoryHelper.delete(gchi0)
 
     sigma = get_self_energy(vrg_dens, gchi_dens, g_loc, u_loc)
+
     logger.log_info("Self-energy done.")
 
     chi_dens_physical = create_physical_chi(gchi_dens)

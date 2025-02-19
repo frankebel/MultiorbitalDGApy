@@ -9,7 +9,7 @@ from mpi_distributor import MpiDistributor
 from n_point_base import Channel
 
 
-def get_gchi_q_mat(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
+def get_gchi_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
     """
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
@@ -49,10 +49,11 @@ def calculate_self_energy_q(
     comm.barrier()
     my_q_list = config.lattice.q_grid.get_irrq_list()[mpi_distributor.my_slice]
 
+    logger.log_info("Starting with non-local DGA routine.")
     giwk_full = giwk.get_g_full()
 
     # check why paul has an extra 1/beta in the frequency sums here
-    gchi0_q = get_gchi_q_mat(giwk_full, my_q_list)
+    gchi0_q = get_gchi_q(giwk_full, my_q_list)
     logger.log_info("Calculated gchi0_q.")
     logger.log_memory_usage("gchi0_q", gchi0_q, n_exists=1)
     chi0_q = gchi0_q.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1,))

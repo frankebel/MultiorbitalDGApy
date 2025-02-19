@@ -1,6 +1,6 @@
 box_sizes:
   niw: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv: -1 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv: 50 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
   niv_asympt: 0 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
@@ -26,7 +26,7 @@ self_consistency:
 dmft_input:
   type: "w2dyn" # Input format. Available is 'w2dyn'
   input_path: "/home/julpe/Documents/DATA/Multiorb-DATA/kanamori/" # Folder containing the input files. Default: current directory
-  fname_1p: "1p_data.hdf5" # Filename of the one-particle DMFT calculation; default: 1p_data.hdf5
+  fname_1p: "1p-data.hdf5" # Filename of the one-particle DMFT calculation; default: 1p_data.hdf5
   fname_2p: "g4iw_sym.hdf5" # Name of the two-particle DMFT calculation; default: g4iw_sym.hdf5
   do_sym_v_vp: True # If True, the code will symmetrize G2 in the v and vp indices
 

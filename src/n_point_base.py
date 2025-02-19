@@ -85,7 +85,7 @@ class IHaveMat(ABC):
         return self.mat.nbytes * 1e-9
 
     def __mul__(self, other) -> "IHaveMat":
-        if not isinstance(other, int | float | complex):
+        if not isinstance(other, (int, float, complex)):
             raise ValueError("Multiplication only supported with numbers.")
 
         copy = deepcopy(self)
@@ -99,7 +99,7 @@ class IHaveMat(ABC):
         return self.__mul__(-1.0)
 
     def __truediv__(self, other) -> "IHaveMat":
-        if not isinstance(other, int | float | complex):
+        if not isinstance(other, (int, float, complex)):
             raise ValueError("Division only supported with numbers.")
         return self.__mul__(1.0 / other)
 

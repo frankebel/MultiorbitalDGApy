@@ -15,16 +15,19 @@ class LocalInteraction(IHaveMat, IHaveChannel):
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalInteraction":
         return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
-    def as_channel(self, channel: Channel, beta: float) -> "LocalInteraction":
+    def as_channel(self, channel: Channel) -> "LocalInteraction":
+        """
+        Returns the spin combination for a given channel ~WITHOUT~ the factor of 1/beta^2.
+        """
         self._channel = channel
         if channel == Channel.DENS:
-            return 1.0 / beta**2 * (2 * self - self.permute_orbitals("abcd->adcb"))
+            return 2 * self - self.permute_orbitals("abcd->adcb")
         elif channel == Channel.MAGN:
-            return -1.0 / beta**2 * self.permute_orbitals("abcd->adcb")
+            return -self.permute_orbitals("abcd->adcb")
         elif channel == Channel.SING:
-            return 1.0 / beta**2 * (self + self.permute_orbitals("abcd->adcb"))
+            return self + self.permute_orbitals("abcd->adcb")
         elif channel == Channel.TRIP:
-            return 1.0 / beta**2 * (self - self.permute_orbitals("abcd->adcb"))
+            return self - self.permute_orbitals("abcd->adcb")
         else:
             raise ValueError(f"Channel {channel} not supported.")
 
