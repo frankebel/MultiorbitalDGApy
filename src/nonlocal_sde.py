@@ -56,10 +56,10 @@ def calculate_self_energy_q(
     gchi0_q = get_gchi_q(giwk_full, my_q_list)
     logger.log_info("Calculated gchi0_q.")
     logger.log_memory_usage("gchi0_q", gchi0_q, n_exists=1)
-    chi0_q = gchi0_q.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1,))
+    chi0_q = gchi0_q.sum_over_vn(config.sys.beta, axis=(-1,))
     logger.log_info("Calculated chi0_q.")
     gchi0_q_core = gchi0_q.cut_niv(config.box.niv)
-    chi0_q_core = gchi0_q_core.sum_over_fermionic_dimensions(config.sys.beta, axis=(-1,))
+    chi0_q_core = gchi0_q_core.sum_over_vn(config.sys.beta, axis=(-1,))
     logger.log_info("Calculated chi0_q_core.")
 
     # comm.Allreduce(MPI.IN_PLACE, local_gchi0_q, op=MPI.SUM)

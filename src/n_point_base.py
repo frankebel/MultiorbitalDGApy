@@ -69,7 +69,7 @@ class IHaveMat(ABC):
     def original_shape(self) -> tuple:
         """
         Keeps track of the previous shape of the underlying matrix before the reshaping process. E.g., it is needed when
-        reshaping it to compound indices the original shape would have been lost otherwise.
+        reshaping it to compound indices where the original shape would have been lost otherwise.
         """
         return self._original_shape
 
@@ -84,9 +84,16 @@ class IHaveMat(ABC):
         """
         return self.mat.nbytes * 1e-9
 
+    def to_real(self) -> "IHaveMat":
+        """
+        Converts the matrix to real numbers. Returns it as complex type.
+        """
+        self.mat = self.mat.real.astype(np.complex64)
+        return self
+
     def __mul__(self, other) -> "IHaveMat":
-        if not isinstance(other, (int, float, complex)):
-            raise ValueError("Multiplication only supported with numbers.")
+        if not isinstance(other, (int, float, complex, np.ndarray)):
+            raise ValueError("Multiplication only supported with numbers or numpy arrays.")
 
         copy = deepcopy(self)
         copy.mat *= other
@@ -151,7 +158,7 @@ class IAmNonLocal(ABC):
     def num_k_dimensions(self) -> int:
         return self._num_k_dimensions
 
-    def shift_k_by_q(self, index=(0, 0, 0)):
+    def shift_k_by_q(self, index: tuple | list[int] = (0, 0, 0)):
         copy = deepcopy(self)
         copy.mat = np.roll(copy.mat, index, axis=(0, 1, 2))
         return copy

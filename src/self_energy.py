@@ -41,8 +41,8 @@ class SelfEnergy(LocalTwoPoint):
 
         for i, j in it.product(range(self.n_bands), repeat=2):
             k_mean = np.mean(self.mat[:, :, :, i, j, :], axis=(0, 1, 2))
-            ind_real = np.argmax(np.abs(k_mean.real - asympt.real) < err)
-            ind_imag = np.argmax(np.abs(k_mean.imag - asympt.imag) < err)
+            ind_real = np.argmax(np.abs(k_mean.real - asympt.mat.real) < err)
+            ind_imag = np.argmax(np.abs(k_mean.imag - asympt.mat.imag) < err)
 
             max_ind_real = max(max_ind_real, ind_real)
             max_ind_imag = max(max_ind_imag, ind_imag)
@@ -85,3 +85,13 @@ class SelfEnergy(LocalTwoPoint):
         new_mat = np.tile(padding_object.mat, shape)
         new_mat[0, 0, ...] = self.mat[0, 0, ...]
         return SelfEnergy(new_mat, True)
+
+    def __add__(self, other):
+        if not isinstance(other, SelfEnergy):
+            raise ValueError("Can only add two SelfEnergy objects.")
+        if self.original_shape != other.original_shape:
+            raise ValueError("Cannot add two SelfEnergy objects of different shapes.")
+        return SelfEnergy(self.mat + other.mat, full_niv_range=self.full_niv_range)
+
+    def __sub__(self, other):
+        return self.__add__(-other)

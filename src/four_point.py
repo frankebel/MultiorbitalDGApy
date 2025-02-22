@@ -65,7 +65,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         self.original_shape = self.current_shape
 
         if self.num_fermionic_frequency_dimensions == 1:  # [q, o1, o2, o3, o4, w, v]
-            self.extend_last_frequency_axis_to_diagonal()
+            self.extend_vn_dimension()
 
         if self.num_k_dimensions == 1:  # [q, k, o1, o2, o3, o4, w, ...]
             self.extend_to_two_dimensional_k_space()

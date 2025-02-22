@@ -178,7 +178,7 @@ class LocalNPoint(IHaveMat):
             return self
 
         if self.num_fermionic_frequency_dimensions == 1:  # [o1,o2,o3,o4,w,v]
-            self.extend_last_frequency_axis_to_diagonal()
+            self.extend_vn_dimension()
 
         self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
             2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
@@ -231,23 +231,28 @@ class LocalNPoint(IHaveMat):
     def __invert__(self) -> "LocalNPoint":
         return self.invert()
 
-    def extend_last_frequency_axis_to_diagonal(self) -> "LocalNPoint":
+    def extend_vn_dimension(self) -> "LocalNPoint":
         """
-        Extends an object [...,w,v] to [...,w,v,v] by making a diagonal from the last dimension.
+        Extends an object [...,w,v] to [...,w,v,v] by making a diagonal from the last dimension if the number of fermionic
+        frequency dimensions is one.
         """
+        if self.num_fermionic_frequency_dimensions == 0:
+            raise ValueError("No fermionic frequency dimensions available for extension.")
         if self.num_fermionic_frequency_dimensions == 2:
-            raise ValueError("Extending to three or more fermionic frequency dimensions is not supported.")
+            return self
         self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]))
         self._num_fermionic_frequency_dimensions += 1
         self.original_shape = self.current_shape
         return self
 
-    def compress_last_two_frequency_dimensions_to_single_dimension(self) -> "LocalNPoint":
+    def compress_vn_dimensions(self) -> "LocalNPoint":
         """
         Compresses an object [...w,v,v] to [...,w,v] by taking the diagonal of the last two dimensions.
         """
-        if self.num_fermionic_frequency_dimensions < 2:
-            raise ValueError("Cannot compress two fermionic frequency dimensions to one if there are less than two.")
+        if self.num_fermionic_frequency_dimensions == 0:
+            raise ValueError("No fermionic frequency dimensions available for compression.")
+        if self.num_fermionic_frequency_dimensions == 1:
+            return self
         self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         self._num_fermionic_frequency_dimensions -= 1
         self.original_shape = self.current_shape
@@ -265,21 +270,24 @@ class LocalNPoint(IHaveMat):
         if self.niv == other.niv:
             raise ValueError("Cannot concatenate objects with the same number of fermionic frequencies.")
 
-        axis = -1
-        if self.num_fermionic_frequency_dimensions == 2:
-            axis = (-1, -2)
-
         copy = deepcopy(self)
 
-        if other.niv > self.niv:
-            niv = other.niv - self.niv
-            copy.mat = np.concatenate([other.mat[..., :niv], copy.mat, other.mat[..., 2 * copy.niv + niv :]], axis=axis)
-        else:
-            niv = self.niv - other.niv
-            copy.mat = np.concatenate([copy.mat[..., :niv], other.mat, copy.mat[..., 2 * other.niv + niv :]], axis=axis)
+        if copy.niv > other.niv:
+            # if one tries to pad the larger object with the smaller one, we reverse the order
+            copy, other = other, copy
 
-        copy.original_shape = copy.current_shape
-        return copy
+        copy = copy.to_compound_indices()
+        other = other.to_compound_indices()
+
+        niv_diff = other.niv - self.niv
+        start, end = niv_diff * copy.n_bands**2, (niv_diff + 2 * copy.niv) * copy.n_bands**2
+        outer_copy = other.mat.copy()
+        outer_copy[..., start:end, start:end] = copy.mat
+        copy.mat = outer_copy
+        copy.original_shape = other.original_shape
+
+        other = other.to_full_indices()
+        return copy.to_full_indices()
 
     def to_full_niw_range(self):
         """

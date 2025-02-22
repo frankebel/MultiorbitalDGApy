@@ -17,17 +17,20 @@ class LocalInteraction(IHaveMat, IHaveChannel):
 
     def as_channel(self, channel: Channel) -> "LocalInteraction":
         """
-        Returns the spin combination for a given channel ~WITHOUT~ the factor of 1/beta^2.
+        Returns the spin combination for a given channel ~WITHOUT~ a factor of 1/beta^2.
         """
+        if self.channel == channel:
+            return self
         self._channel = channel
+        perm: str = "abcd->adcb"
         if channel == Channel.DENS:
-            return 2 * self - self.permute_orbitals("abcd->adcb")
+            return 2 * self - self.permute_orbitals(perm)
         elif channel == Channel.MAGN:
-            return -self.permute_orbitals("abcd->adcb")
+            return -self.permute_orbitals(perm)
         elif channel == Channel.SING:
-            return self + self.permute_orbitals("abcd->adcb")
+            return self + self.permute_orbitals(perm)
         elif channel == Channel.TRIP:
-            return self - self.permute_orbitals("abcd->adcb")
+            return self - self.permute_orbitals(perm)
         else:
             raise ValueError(f"Channel {channel} not supported.")
 

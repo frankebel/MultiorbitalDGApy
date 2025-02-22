@@ -1,4 +1,3 @@
-import gc
 import itertools as it
 import logging
 
@@ -7,11 +6,10 @@ from mpi4py import MPI
 import config
 import dga_io
 import local_sde
+import nonlocal_sde
 import plotting
 from config_parser import ConfigParser
 from greens_function import GreensFunction
-from memory_helper import MemoryHelper
-import nonlocal_sde
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
@@ -62,46 +60,35 @@ def execute_dga_routine():
 
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
-    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dc_kernel_dens, f_dc_kernel_magn, sigma = (
-        local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
-    )
+    (
+        gchi_dens_loc,
+        gchi_magn_loc,
+        gchi0_full_loc,
+        one_plus_gamma_dens_loc,
+        one_plus_gamma_magn_loc,
+        f_dens_loc,
+        f_magn_loc,
+        sigma_loc,
+    ) = local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
     if config.output.save_quantities and is_root():
-        gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
-        gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
-        sigma.save(name="siw_sde_full", output_dir=config.output.output_path)
-        chi_dens.save(name="chi_dens", output_dir=config.output.output_path)
-        chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
-        vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
-        vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
-        f_dc_kernel_dens.save(name="f_dc_kernel_dens", output_dir=config.output.output_path)
-        f_dc_kernel_magn.save(name="f_dc_kernel_magn", output_dir=config.output.output_path)
+        gchi_dens_loc.save(name="gchi_dens_loc", output_dir=config.output.output_path)
+        gchi_magn_loc.save(name="gchi_magn_loc", output_dir=config.output.output_path)
+        gchi0_full_loc.save(name="gchi_0", output_dir=config.output.output_path)
+        sigma_loc.save(name="siw_sde_full", output_dir=config.output.output_path)
         logger.log_info("Saved quantities as numpy files.")
 
     if config.output.do_plotting and is_root():
-        gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
-        gamma_dens_plot.plot(omega=0, name="Gamma_dens", output_dir=config.output.output_path)
-        gamma_dens_plot.plot(omega=10, name="Gamma_dens", output_dir=config.output.output_path)
-        gamma_dens_plot.plot(omega=-10, name="Gamma_dens", output_dir=config.output.output_path)
-        MemoryHelper.delete(gamma_dens_plot)
-
-        gamma_magn_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
-        gamma_magn_plot.plot(omega=0, name="Gamma_magn", output_dir=config.output.output_path)
-        gamma_magn_plot.plot(omega=10, name="Gamma_magn", output_dir=config.output.output_path)
-        gamma_magn_plot.plot(omega=-10, name="Gamma_magn", output_dir=config.output.output_path)
-        MemoryHelper.delete(gamma_magn_plot)
-        gc.collect()
-
-        plotting.chi_checks(
-            [chi_dens.mat], [chi_magn.mat], ["Loc-tilde"], g_loc, name="loc", output_dir=config.output.output_path
-        )
+        gchi_dens_loc.plot(omega=0, name=f"Gchi_dens", output_dir=config.output.output_path)
+        gchi_magn_loc.plot(omega=0, name=f"Gchi_magn", output_dir=config.output.output_path)
+        logger.log_info("Generalized susceptibilities plotted.")
 
         sigma_list = []
         sigma_names = []
         for i, j in it.product(range(config.sys.n_bands), repeat=2):
             try:
-                sigma_list.append(sigma[i, j])
+                sigma_list.append(sigma_loc[i, j])
                 sigma_list.append(sigma_dmft[i, j])
                 sigma_names.append(f"SDE{i}{j}")
                 sigma_names.append(f"Input{i}{j}")
@@ -115,16 +102,17 @@ def execute_dga_routine():
             show=False,
             save=True,
             xmax=config.box.niv,
-            name="1",
+            name="DMFT",
             output_dir=config.output.output_path,
         )
+        logger.log_info("Plotted local self-energies for comparison.")
 
         logger.log_info("Finished plotting.")
 
     logger.log_info("Local DGA routine finished.")
     logger.log_info("Starting nonlocal ladder-DGA routine.")
     exit()
-    sigma = nonlocal_sde.calculate_self_energy_q(comm, g_loc, gamma_magn, gamma_dens)
+    sigma_loc = nonlocal_sde.calculate_self_energy_q(comm, g_loc, gamma_magn, gamma_dens)
 
 
 if __name__ == "__main__":
