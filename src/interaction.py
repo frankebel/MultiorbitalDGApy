@@ -52,7 +52,7 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         channel: Channel = Channel.NONE,
     ):
         LocalInteraction.__init__(self, mat, channel)
-        IAmNonLocal.__init__(self, config.lattice.nq, config.lattice.nk, 1, 2)
+        IAmNonLocal.__init__(self, mat, config.lattice.nq)
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "NonLocalInteraction":
         split = permutation.split("->")
@@ -62,24 +62,24 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         permutation = f"...{split[0]}->...{split[1]}"
         return NonLocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
-    def __add__(self, other: "NonLocalInteraction") -> "NonLocalInteraction":
+    def _execute_add_sub(self, other, is_addition: bool) -> "NonLocalInteraction":
         if not isinstance(other, (LocalInteraction, NonLocalInteraction)):
-            raise ValueError(f"Addition {type(self)} + {type(other)} not supported.")
+            raise ValueError(
+                f"Addition {type(self)} + {type(other)} not supported."
+                if is_addition
+                else f"Subtraction {type(self)} - {type(other)} not supported."
+            )
 
         if isinstance(other, LocalInteraction):
-            other.mat = other.mat[None, None, None, ...]
+            other = other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...]
 
         return NonLocalInteraction(
-            self.mat + other.mat, self.channel if self.channel != Channel.NONE else other.channel
+            self.mat + other.mat if is_addition else self.mat - other.mat,
+            self.channel if self.channel != Channel.NONE else other.channel,
         )
 
-    def __sub__(self, other: "NonLocalInteraction") -> "NonLocalInteraction":
-        if not isinstance(other, (LocalInteraction, NonLocalInteraction)):
-            raise ValueError(f"Subtraction {type(self)} - {type(other)} not supported.")
+    def __add__(self, other) -> "NonLocalInteraction":
+        return self._execute_add_sub(other, True)
 
-        if isinstance(other, LocalInteraction):
-            other.mat = other.mat[None, None, None, ...]
-
-        return NonLocalInteraction(
-            self.mat - other.mat, self.channel if self.channel != Channel.NONE else other.channel
-        )
+    def __sub__(self, other) -> "NonLocalInteraction":
+        return self._execute_add_sub(other, False)

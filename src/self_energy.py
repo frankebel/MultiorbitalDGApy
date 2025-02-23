@@ -71,16 +71,12 @@ class SelfEnergy(LocalTwoPoint):
         """
         if (
             self.num_orbital_dimensions != padding_object.num_orbital_dimensions
-            or self.num_bosonic_frequency_dimensions != padding_object.num_bosonic_frequency_dimensions
-            or self.num_fermionic_frequency_dimensions != padding_object.num_fermionic_frequency_dimensions
+            or self.num_wn_dimensions != padding_object.num_wn_dimensions
+            or self.num_vn_dimensions != padding_object.num_vn_dimensions
         ):
             raise ValueError("Number of orbital, bosonic or fermionic frequency dimensions do not match.")
 
-        shape = (
-            (n_bands,) * self.num_orbital_dimensions
-            + (1,) * self.num_bosonic_frequency_dimensions
-            + (1,) * self.num_fermionic_frequency_dimensions
-        )
+        shape = (n_bands,) * self.num_orbital_dimensions + (1,) * self.num_wn_dimensions + (1,) * self.num_vn_dimensions
 
         new_mat = np.tile(padding_object.mat, shape)
         new_mat[0, 0, ...] = self.mat[0, 0, ...]

@@ -1,3 +1,4 @@
+import logging
 import os
 
 import brillouin_zone as bz
@@ -25,7 +26,9 @@ def _uniquify_path(path: str = None):
     return path
 
 
-def load_from_w2dyn_file_and_update_config() -> tuple[GreensFunction, SelfEnergy, LocalFourPoint, LocalFourPoint]:
+def load_from_w2dyn_file_and_update_config() -> (
+    tuple[GreensFunction, SelfEnergy, LocalFourPoint, LocalFourPoint, LocalFourPoint, LocalFourPoint]
+):
     file = w2dyn_aux.W2dynFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_1p)))
 
     config.sys.beta = file.get_beta()
@@ -65,6 +68,22 @@ def load_from_w2dyn_file_and_update_config() -> tuple[GreensFunction, SelfEnergy
     g2_magn = LocalFourPoint(
         file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.MAGN), channel=Channel.MAGN
     )
+    try:
+        # this might be needed for asymptotics
+        g2_sing = LocalFourPoint(
+            file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.SING), channel=Channel.SING
+        )
+        g2_trip = LocalFourPoint(
+            file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.TRIP), channel=Channel.TRIP
+        )
+    except KeyError:
+        config.logger.log("No singlet or triplet channel found in G2 file. Setting them to zero.", logging.WARN)
+        g2_sing = LocalFourPoint.as_constant(
+            config.sys.n_bands, g2_dens.niw, g2_dens.niv, 1, 2, Channel.SING, FrequencyNotation.PP, 0
+        )
+        g2_trip = LocalFourPoint.as_constant(
+            config.sys.n_bands, g2_dens.niw, g2_dens.niv, 1, 2, Channel.TRIP, FrequencyNotation.PP, 0
+        )
     file.close()
 
     config.lattice.hamiltonian = set_hamiltonian(
@@ -85,9 +104,12 @@ def load_from_w2dyn_file_and_update_config() -> tuple[GreensFunction, SelfEnergy
     if not os.path.exists(config.output.output_path):
         os.makedirs(config.output.output_path)
 
-    g2_dens, g2_magn = _update_g2_from_dmft(g2_dens, g2_magn)
+    g2_dens = _update_g2_from_dmft(g2_dens)
+    g2_magn = _update_g2_from_dmft(g2_magn)
+    g2_sing = _update_g2_from_dmft(g2_sing)
+    g2_trip = _update_g2_from_dmft(g2_trip)
 
-    return giw, siw, g2_dens, g2_magn
+    return giw, siw, g2_dens, g2_magn, g2_sing, g2_trip
 
 
 def _update_frequency_boxes(niw: int, niv: int) -> None:
@@ -115,14 +137,12 @@ def _update_frequency_boxes(niw: int, niv: int) -> None:
     config.box.niv_full = config.box.niv + config.box.niv_asympt
 
 
-def _update_g2_from_dmft(g2_dens: LocalFourPoint, g2_magn: LocalFourPoint) -> (LocalFourPoint, LocalFourPoint):
-    g2_dens = g2_dens.cut_niw_and_niv(config.box.niw, config.box.niv)
-    g2_magn = g2_magn.cut_niw_and_niv(config.box.niw, config.box.niv)
+def _update_g2_from_dmft(g2: LocalFourPoint) -> LocalFourPoint:
+    g2 = g2.cut_niw_and_niv(config.box.niw, config.box.niv)
     if config.dmft.do_sym_v_vp:
-        config.logger.log_info("Symmetrizing G2_dens and G2_magn with respect to v and v'.")
-        g2_dens = g2_dens.symmetrize_v_vp()
-        g2_magn = g2_magn.symmetrize_v_vp()
-    return g2_dens, g2_magn
+        config.logger.log_info(f"Symmetrizing G2_{g2.channel.value} with respect to v and v'.")
+        g2 = g2.symmetrize_v_vp()
+    return g2
 
 
 def set_hamiltonian(er_type: str, er_input: str | list, int_type: str, int_input: str | list) -> Hamiltonian:
@@ -146,16 +166,17 @@ def set_hamiltonian(er_type: str, er_input: str | list, int_type: str, int_input
             raise ValueError("Invalid input for wannier_hr.dat.")
         ham = ham.read_er_w2k(er_input)
     elif er_type == "from_wannierHK":
-        # ATTENTION: currently this is only implemented for 2D square systems
         if not isinstance(er_input, str):
             raise ValueError("Invalid input for wannier.hk.")
-        ham, k_grid = ham.read_hk_w2k(er_input)
-        if k_grid is not None:
+        ham, k_points = ham.read_hk_w2k(er_input)
+        if config.lattice.nk is None:
+            # ATTENTION: This is currently only available for 2D square lattices.
             config.logger.log_info("Using q- and k-grid from wannier.hk file.")
-            config.lattice.nk = ham.get_ek().shape[:3]
+            config.lattice.nk = (int(np.sqrt(k_points[:, 0].size)), int(np.sqrt(k_points[:, 0].size)), 1)
             config.lattice.nq = config.lattice.nk
             config.lattice.k_grid = bz.KGrid(config.lattice.nk, config.lattice.symmetries)
             config.lattice.q_grid = bz.KGrid(config.lattice.nq, config.lattice.symmetries)
+        ham = ham.set_ek(ham.get_ek().reshape(*config.lattice.nk, config.sys.n_bands, config.sys.n_bands))
     else:
         raise NotImplementedError(f"Hamiltonian type {er_type} not supported.")
 

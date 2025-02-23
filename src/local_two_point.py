@@ -7,19 +7,17 @@ class LocalTwoPoint(LocalNPoint):
     def __init__(
         self,
         mat: np.ndarray,
-        num_bosonic_frequency_dimensions: int = 0,
-        num_fermionic_frequency_dimensions: int = 1,
+        num_wn_dimensions: int = 0,
+        num_vn_dimensions: int = 1,
         full_niv_range: bool = True,
     ):
-        super().__init__(
-            mat, 2, num_bosonic_frequency_dimensions, num_fermionic_frequency_dimensions, True, full_niv_range
-        )
+        super().__init__(mat, 2, num_wn_dimensions, num_vn_dimensions, True, full_niv_range)
 
     def invert(self) -> "LocalTwoPoint":
         copy = LocalTwoPoint(
             self.mat,
-            self._num_bosonic_frequency_dimensions,
-            self._num_fermionic_frequency_dimensions,
+            self._num_wn_dimensions,
+            self._num_vn_dimensions,
             self._full_niv_range,
         )
         copy.mat = np.linalg.inv(copy.mat.transpose(2, 0, 1)).transpose(1, 2, 0)
@@ -29,10 +27,7 @@ class LocalTwoPoint(LocalNPoint):
         if len(self.current_shape) == 1:
             return self
         elif (
-            len(self.current_shape)
-            == self._num_orbital_dimensions
-            + self._num_bosonic_frequency_dimensions
-            + self._num_fermionic_frequency_dimensions
+            len(self.current_shape) == self._num_orbital_dimensions + self._num_wn_dimensions + self._num_vn_dimensions
         ):
             self.mat = self.mat.reshape(np.prod(self.original_shape))
             return self

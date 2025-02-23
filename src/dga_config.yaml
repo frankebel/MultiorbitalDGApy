@@ -13,7 +13,7 @@ lattice:
   # (U' is also sometimes called V). If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
   # (similar to how a wannier_hr.dat file is structured, but with 4 orbital indices).
   interaction_input: [ 2, 2, 0.5 ] # full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
-  nk: [ 16, 16, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
+  nk: [ 40, 40, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
 self_consistency:

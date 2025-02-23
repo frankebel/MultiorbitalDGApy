@@ -1,7 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+class Matrix:
+    def __init__(self):
+        self.mat = np.random.rand(20, 20)
+
+
+def manipulate_matrix(mat: Matrix) -> Matrix:
+    mat.mat = mat.mat + 2
+    return mat
+
+
 if __name__ == "__main__":
+    matrix1 = Matrix()
+    matrix2 = manipulate_matrix(matrix1)
+
     g_1 = np.load("/home/julpe/Desktop/g_1.npy")
     mat_grid = np.load("/home/julpe/Desktop/mat_grid.npy")
 

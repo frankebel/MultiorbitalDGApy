@@ -1,9 +1,10 @@
+import gc
+
 import config
 from greens_function import GreensFunction
 from interaction import LocalInteraction
 from local_four_point import LocalFourPoint
 from matsubara_frequencies import MFHelper, FrequencyShift
-from memory_helper import MemoryHelper
 from n_point_base import *
 from self_energy import SelfEnergy
 
@@ -59,9 +60,13 @@ def create_generalized_chi0(
 
 
 def get_loc_self_energy_gamma(gamma_dens: LocalFourPoint, u_loc: LocalInteraction, g_loc: GreensFunction) -> SelfEnergy:
+    r"""
+    Returns the local self-energy
+    .. math:: \Sigma_{12}^{v} = -1/\beta \sum_w [ U_{a1bc} * \gamma_{cb2f}^{wv} * G_{af}^{w-v} ]
+    """
     g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv, config.box.niw)
     hartree = np.einsum("abcd,dc->ab", u_loc.as_channel(Channel.DENS).mat, config.sys.occ)[..., None]
-    sigma = -1.0 / config.sys.beta * np.einsum("kjop,ilpowv,lkwv->ijv", u_loc.mat, gamma_dens.mat, g_1)
+    sigma = -1.0 / config.sys.beta * np.einsum("kjop,ilpowv,lkwv->ijv", u_loc.mat, gamma_dens.mat, g_1, optimize=True)
     return SelfEnergy(sigma + hartree)
 
 
@@ -81,10 +86,12 @@ def perform_local_schwinger_dyson(
     logger = config.logger
 
     gchi_dens_loc = create_generalized_chi(g2_dens, g_loc)
-    MemoryHelper.delete(g2_dens)
+    del g2_dens
+    gc.collect()
     logger.log_info("Generalized susceptibilitiy (dens) done.")
     gchi_magn_loc = create_generalized_chi(g2_magn, g_loc)
-    MemoryHelper.delete(g2_magn)
+    del g2_magn
+    gc.collect()
     logger.log_info("Generalized susceptibilitiy (magn) done.")
 
     gchi0_loc_full = create_generalized_chi0(g_loc)
@@ -97,11 +104,13 @@ def perform_local_schwinger_dyson(
     one_mat_loc = np.einsum("ac,bd->abcd", np.eye(config.sys.n_bands), np.eye(config.sys.n_bands))[..., None, None]
 
     f_dens_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_dens_loc @ gchi0_inv_core)
-    logger.log_info("Full vertex F (dens) done.")
+    logger.log_info("Local full vertex F^w (dens) done.")
     f_magn_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_magn_loc @ gchi0_inv_core)
-    logger.log_info("Full vertex F (magn) done.")
-    MemoryHelper.delete(gchi0_inv_core)
+    logger.log_info("Local full vertex F^w (magn) done.")
+    del gchi0_inv_core
+    gc.collect()
 
+    """
     irr_gamma_urange_dens = get_asympt_irr_gamma(u_loc, Channel.DENS)
     irr_gamma_urange_magn = get_asympt_irr_gamma(u_loc, Channel.MAGN)
 
@@ -117,28 +126,30 @@ def perform_local_schwinger_dyson(
         )
         @ irr_gamma_urange_dens
     )
-    """
+    
     f_magn_loc_asympt_mat = (
         config.sys.beta**2
         * (~(1.0 / config.sys.beta * (irr_gamma_urange_magn @ gchi0_loc_full) + one_mat_loc))
         @ irr_gamma_urange_magn
-    )"""
-
-    f_dens_loc = f_dens_loc.padding_along_fermionic(f_dens_loc_asympt_mat)
+    )
+    f_dens_loc = f_dens_loc.padding_along_vn(f_dens_loc_asympt_mat)
+    """
 
     # in most equations we need 1 + gamma_r so we add it here
     gamma_dens_loc = 1.0 / config.sys.beta * (gchi0_core @ f_dens_loc).sum_over_vn(config.sys.beta, axis=(-2,))
     one_plus_gamma_dens_loc = gamma_dens_loc + one_mat_loc
-    logger.log_info("Local three-leg vertex gamma (dens) done.")
+    logger.log_info("Local three-leg vertex gamma^w (dens) done.")
 
     gamma_magn_loc = 1.0 / config.sys.beta * (gchi0_core @ f_magn_loc).sum_over_vn(config.sys.beta, axis=(-2,))
     one_plus_gamma_magn_loc = gamma_magn_loc + one_mat_loc
-    logger.log_info("Local three-leg vertex gamma (magn) done.")
-    MemoryHelper.delete(gchi0_core, gamma_magn_loc)
+    logger.log_info("Local three-leg vertex gamma^w (magn) done.")
+    del gchi0_core, gamma_magn_loc
+    gc.collect()
 
     sigma_loc = get_loc_self_energy_gamma(gamma_dens_loc, u_loc, g_loc)
     logger.log_info("Local self-energy done.")
-    MemoryHelper.delete(gamma_dens_loc)
+    del gamma_dens_loc
+    gc.collect()
 
     return (
         gchi_dens_loc,

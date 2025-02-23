@@ -27,9 +27,9 @@ def execute_dga_routine():
     logger.log_info(f"Running on {str(comm.size)} {"process" if comm.size == 1 else "processes"}.")
 
     if is_root():
-        g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
+        g_dmft, sigma_dmft, g2_dens, g2_magn, g2_sing, g2_trip = dga_io.load_from_w2dyn_file_and_update_config()
     else:
-        g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
+        g_dmft, sigma_dmft, g2_dens, g2_magn, g2_sing, g2_trip = None, None, None, None, None, None
 
     logger.log_info("Config init and folder setup done.")
     logger.log_info("Loaded data from w2dyn file.")
@@ -37,21 +37,22 @@ def execute_dga_routine():
     config.lattice, config.box, config.output, config.sys = comm.bcast(
         (config.lattice, config.box, config.output, config.sys), root=0
     )
-    g_dmft, sigma_dmft, g2_dens, g2_magn = comm.bcast((g_dmft, sigma_dmft, g2_dens, g2_magn), root=0)
+    g_dmft, sigma_dmft, g2_dens, g2_magn, g2_sing, g2_trip = comm.bcast(
+        (g_dmft, sigma_dmft, g2_dens, g2_magn, g2_sing, g2_trip), root=0
+    )
 
     logger.log_memory_usage("giwk & siwk", g_dmft, 2)
-    logger.log_memory_usage("g2_dens & g2_magn", g2_dens, 2)
+    logger.log_memory_usage("g2_dens, g2_magn, g2_sing, g2_trip", g2_dens, 4)
 
     if config.output.save_quantities and is_root():
         sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
         logger.log_info("Saved sigma_dmft as numpy file.")
 
     if config.output.do_plotting and is_root():
-        g2_dens.plot(omega=0, name=f"G2_dens", output_dir=config.output.output_path)
-        g2_magn.plot(omega=0, name=f"G2_magn", output_dir=config.output.output_path)
-        g2_magn.plot(omega=-10, name=f"G2_magn", output_dir=config.output.output_path)
-        g2_magn.plot(omega=10, name=f"G2_magn", output_dir=config.output.output_path)
-        logger.log_info("Plotted G2 magn & dens.")
+        for g2, name in [(g2_dens, "G2_dens"), (g2_magn, "G2_magn"), (g2_sing, "G2_sing"), (g2_trip, "G2_trip")]:
+            for omega in [0, -10, 10]:
+                g2.plot(omega=omega, name=name, output_dir=config.output.output_path)
+        logger.log_info("Plotted G2 magn, dens, sing and trip.")
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = GreensFunction.create_g_loc(sigma_dmft, ek)
@@ -75,6 +76,10 @@ def execute_dga_routine():
     if config.output.save_quantities and is_root():
         gchi_dens_loc.save(name="gchi_dens_loc", output_dir=config.output.output_path)
         gchi_magn_loc.save(name="gchi_magn_loc", output_dir=config.output.output_path)
+        f_dens_loc.save(name="f_dens_loc", output_dir=config.output.output_path)
+        f_magn_loc.save(name="f_magn_loc", output_dir=config.output.output_path)
+        one_plus_gamma_dens_loc.save(name="one_plus_gamma_dens_loc", output_dir=config.output.output_path)
+        one_plus_gamma_magn_loc.save(name="one_plus_gamma_magn_loc", output_dir=config.output.output_path)
         gchi0_full_loc.save(name="gchi_0", output_dir=config.output.output_path)
         sigma_loc.save(name="siw_sde_full", output_dir=config.output.output_path)
         logger.log_info("Saved quantities as numpy files.")
@@ -111,8 +116,16 @@ def execute_dga_routine():
 
     logger.log_info("Local DGA routine finished.")
     logger.log_info("Starting nonlocal ladder-DGA routine.")
-    exit()
-    sigma_loc = nonlocal_sde.calculate_self_energy_q(comm, g_loc, gamma_magn, gamma_dens)
+    sigma_loc = nonlocal_sde.calculate_self_energy_q(
+        comm,
+        g_loc,
+        gchi_dens_loc,
+        gchi_magn_loc,
+        one_plus_gamma_dens_loc,
+        one_plus_gamma_magn_loc,
+        f_dens_loc,
+        f_magn_loc,
+    )
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ class GreensFunction(LocalTwoPoint, IAmNonLocal):
         calc_filling: bool = True,
     ):
         LocalTwoPoint.__init__(self, mat, full_niv_range=full_niv_range)
-        IAmNonLocal.__init__(self, config.lattice.nq, config.lattice.nk, 0, 1)
+        IAmNonLocal.__init__(self, mat, config.lattice.nk)
         self._sigma = sigma
         self._ek = ek
 

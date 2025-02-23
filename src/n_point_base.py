@@ -1,3 +1,4 @@
+import os
 from abc import ABC
 from copy import deepcopy
 from enum import Enum
@@ -30,10 +31,18 @@ class IHaveChannel(ABC):
 
     @property
     def channel(self) -> Channel:
+        """
+        Returns the channel reducibility (not the frequency notation) of the object.
+        For a set of available channels, see class Channel.
+        """
         return self._channel
 
     @property
     def frequency_notation(self) -> FrequencyNotation:
+        """
+        Returns the frequency notation (not the channel reducibility) of the object.
+        For a set of available notations, see class FrequencyNotation.
+        """
         return self._frequency_notation
 
 
@@ -48,6 +57,9 @@ class IHaveMat(ABC):
 
     @property
     def mat(self) -> np.ndarray:
+        """
+        Returns the underlying matrix.
+        """
         return self._mat
 
     @mat.setter
@@ -75,6 +87,11 @@ class IHaveMat(ABC):
 
     @original_shape.setter
     def original_shape(self, value) -> None:
+        """
+        Sets the original shape of the matrix. Keeps track of the previous shape of the underlying matrix
+        before the reshaping process. E.g., it is needed when reshaping it to compound indices where the
+        original shape would have been lost otherwise.
+        """
         self._original_shape = value
 
     @property
@@ -92,6 +109,9 @@ class IHaveMat(ABC):
         return self
 
     def __mul__(self, other) -> "IHaveMat":
+        """
+        Multiplication with a scalar or another matrix.
+        """
         if not isinstance(other, (int, float, complex, np.ndarray)):
             raise ValueError("Multiplication only supported with numbers or numpy arrays.")
 
@@ -100,65 +120,114 @@ class IHaveMat(ABC):
         return copy
 
     def __rmul__(self, other) -> "IHaveMat":
+        """
+        Right multiplication with a scalar or another matrix.
+        """
         return self.__mul__(other)
 
     def __neg__(self) -> "IHaveMat":
+        """
+        Negation of the matrix.
+        """
         return self.__mul__(-1.0)
 
     def __truediv__(self, other) -> "IHaveMat":
+        """
+        Division with a scalar.
+        """
         if not isinstance(other, (int, float, complex)):
             raise ValueError("Division only supported with numbers.")
         return self.__mul__(1.0 / other)
 
     def __getitem__(self, item):
+        """
+        Returns the item of the matrix.
+        """
         return self.mat[item]
 
     def __setitem__(self, key, value):
+        """
+        Sets the item of the matrix.
+        """
         self.mat[key] = value
 
+    def __del__(self):
+        """
+        Deletes the matrix.
+        """
+        del self.mat
 
-class IAmNonLocal(ABC):
+    def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
+        """
+        Saves the content of the matrix to a file.
+        """
+        np.save(os.path.join(output_dir, f"{name}.npy"), self.mat, allow_pickle=True)
+
+
+class IAmNonLocal(IHaveMat, ABC):
     """
-    Abstract interface for objects that are momentum dependent.
+    Abstract interface for objects that are momentum dependent. Since we focus on ladder objects, we do not
+    need more than one momentum variable for one- and two-particle quantities.
     """
 
-    def __init__(
-        self, nq: tuple[int, int, int], nk: tuple[int, int, int], num_q_dimensions: int, num_k_dimensions: int
-    ):
+    def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_momentum_dimension: bool = False):
+        super().__init__(mat)
         self._nq = nq
-        self._nk = nk
-
-        assert num_q_dimensions in (0, 1), "Only 0 or 1 q momentum dimensions are supported."
-        self._num_q_dimensions = num_q_dimensions
-
-        assert num_k_dimensions in (0, 1, 2), "0 - 2 k momentum dimensions are supported."
-        self._num_k_dimensions = num_k_dimensions
+        self._has_compressed_momentum_dimension = has_compressed_momentum_dimension
 
     @property
     def nq(self) -> tuple[int, int, int]:
+        """
+        Returns the number of momenta in each direction.
+        """
         return self._nq
 
     @property
     def nq_tot(self) -> int:
+        """
+        Returns the total number of momenta.
+        """
         return np.prod(self.nq).astype(int)
 
     @property
-    def nk(self) -> tuple[int, int, int]:
-        return self._nk
-
-    @property
-    def nk_tot(self) -> int:
-        return np.prod(self.nk).astype(int)
-
-    @property
-    def num_q_dimensions(self) -> int:
-        return self._num_q_dimensions
-
-    @property
-    def num_k_dimensions(self) -> int:
-        return self._num_k_dimensions
+    def has_compressed_q_dimension(self) -> bool:
+        """
+        Returns whether the underlying matrix has a compressed momentum dimension (q,...) or not (qx,qy,qz,...).
+        """
+        return self._has_compressed_momentum_dimension
 
     def shift_k_by_q(self, index: tuple | list[int] = (0, 0, 0)):
+        """
+        Shifts the momentum by the given value if the object does not have compressed momentum dimensions, i.e.,
+        we require (qx,qy,qz,...).
+        """
+        if self.has_compressed_q_dimension:
+            raise ValueError("Cannot shift momenta if the object has a compressed momentum dimension.")
+
         copy = deepcopy(self)
         copy.mat = np.roll(copy.mat, index, axis=(0, 1, 2))
         return copy
+
+    def compress_q_dimension(self):
+        """
+        Converts the object from (qx,qy,qz,...) to (q,...), where len(q) = qx*qy*qz
+        """
+        if self.has_compressed_q_dimension:
+            return self
+
+        self.mat = self.mat.reshape((self.nq_tot, *self.current_shape[3:]))
+        self._has_compressed_momentum_dimension = True
+        self.original_shape = self.current_shape
+        return self
+
+    def extend_q_dimension(self):
+        """
+        Converts the object from (q,...) to (qx,qy,qz,...), where len(q) = qx*qy*qz
+        """
+        if not self.has_compressed_q_dimension:
+            return self
+
+        self.mat = self.mat.reshape((*self.nq, *self.current_shape[1:]))
+        self._has_compressed_momentum_dimension = False
+        self.original_shape = self.current_shape
+        return self

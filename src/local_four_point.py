@@ -16,8 +16,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self,
         mat: np.ndarray,
         channel: Channel = Channel.NONE,
-        num_bosonic_frequency_dimensions: int = 1,
-        num_fermionic_frequency_dimensions: int = 2,
+        num_wn_dimensions: int = 1,
+        num_vn_dimensions: int = 2,
         full_niw_range: bool = True,
         full_niv_range: bool = True,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
@@ -26,29 +26,47 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self,
             mat,
             4,
-            num_bosonic_frequency_dimensions,
-            num_fermionic_frequency_dimensions,
+            num_wn_dimensions,
+            num_vn_dimensions,
             full_niw_range,
             full_niv_range,
         )
         IHaveChannel.__init__(self, channel, frequency_notation)
 
     def __matmul__(self, other: "LocalFourPoint") -> "LocalFourPoint":
+        """
+        Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
+        """
         return self._execute_matmul(other, left_hand_side=True)
 
     def __rmatmul__(self, other: "LocalFourPoint") -> "LocalFourPoint":
+        """
+        Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
+        """
         return self._execute_matmul(other, left_hand_side=False)
 
     def __add__(self, other) -> "LocalFourPoint":
+        """
+        Addition for LocalFourPoint objects. Allows for A + B = C.
+        """
         return self._execute_add_sub(other, is_addition=True)
 
     def __radd__(self, other) -> "LocalFourPoint":
+        """
+        Addition for LocalFourPoint objects. Allows for A + B = C.
+        """
         return self.__add__(other)
 
     def __sub__(self, other) -> "LocalFourPoint":
+        """
+        Subtraction for LocalFourPoint objects. Allows for A - B = C.
+        """
         return self._execute_add_sub(other, is_addition=False)
 
     def __rsub__(self, other) -> "LocalFourPoint":
+        """
+        Subtraction for LocalFourPoint objects. Allows for A - B = C.
+        """
         return self.__sub__(other)
 
     def _execute_matmul(self, other: "LocalFourPoint", left_hand_side: bool = True) -> "LocalFourPoint":
@@ -62,27 +80,25 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
         if (
-            self.num_bosonic_frequency_dimensions == 1
-            and other.num_bosonic_frequency_dimensions == 1
-            and (self.num_fermionic_frequency_dimensions == 0 or other.num_fermionic_frequency_dimensions == 0)
+            self.num_wn_dimensions == 1
+            and other.num_wn_dimensions == 1
+            and (self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0)
         ):
-            # special case if a FourPoint object does not have 2 fermionic frequency dimensions
-            # this is saving memory as we do not have to add fermionic frequency dimensions
-            # we do not include the case in to_compound_index, because we do not want to make the object considerably bigger
-            # and inversion in compound index space would be a factor niv^3 more expensive
+            # special case if one of two FourPoint object has no fermionic frequency dimensions
+            # straightforward contraction is saving memory as we do not have to add unneccessary fermionic frequency dimensions
             einsum_str = {
                 (0, 2): "abcdw,dcefwvp->abefwvp",
                 (0, 1): "abcdw,dcefwv->abefwv",
                 (0, 0): "abcdw,dcefw->abefw",
                 (2, 0): "abcdwvp,dcefw->abefwvp",
                 (1, 0): "abcdwv,dcefw->abefwv",
-            }.get((self.num_fermionic_frequency_dimensions, other.num_fermionic_frequency_dimensions))
+            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
 
             return LocalFourPoint(
-                np.einsum(einsum_str, self.mat, other.mat),
+                np.einsum(einsum_str, self.mat, other.mat, optimize=True),
                 channel,
                 1,
-                max(self.num_fermionic_frequency_dimensions, other.num_fermionic_frequency_dimensions),
+                max(self.num_vn_dimensions, other.num_vn_dimensions),
                 full_niw_range=self.full_niw_range,
                 full_niv_range=self.full_niv_range,
             )
@@ -97,56 +113,49 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         return LocalFourPoint(
             new_mat, channel, 1, 2, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
-        ).to_full_indices(self.original_shape if self.num_fermionic_frequency_dimensions == 2 else other.original_shape)
+        ).to_full_indices(self.original_shape if self.num_vn_dimensions == 2 else other.original_shape)
 
     def _execute_add_sub(self, other, is_addition: bool = True) -> "LocalFourPoint":
         """
         Helper method that allows for in-place addition and subtraction for LocalFourPoint objects. Depending on the
         number of frequency dimensions, the objects have to be added differently.
         """
-        if not isinstance(other, (LocalInteraction, LocalFourPoint, np.ndarray, float, int, complex)):
+        if not isinstance(other, (LocalFourPoint, np.ndarray, float, int, complex)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
 
         if isinstance(other, LocalFourPoint):
             if self.niw != other.niw or self.niv != other.niv or self.n_bands != other.n_bands:
                 raise ValueError(f"Shapes {self.current_shape} and {other.current_shape} do not match!")
-            if self.num_bosonic_frequency_dimensions != other.num_bosonic_frequency_dimensions:
+            if self.num_wn_dimensions != other.num_wn_dimensions:
                 raise ValueError("Number of bosonic frequency dimensions do not match.")
 
         if isinstance(other, (np.ndarray, float, int, complex)):
             return LocalFourPoint(
                 self.mat + other if is_addition else self.mat - other,
                 self.channel,
-                self.num_bosonic_frequency_dimensions,
-                self.num_fermionic_frequency_dimensions,
+                self.num_wn_dimensions,
+                self.num_vn_dimensions,
                 self.full_niw_range,
                 self.full_niv_range,
+                self.frequency_notation,
             )
 
-        self_mat, other_mat = self.mat, other.mat
         channel = self.channel if self.channel != Channel.NONE else other.channel
 
-        if isinstance(other, LocalInteraction):
-            if self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 0:
-                other_mat = other_mat.reshape(other_mat.shape + (1,))
-            elif self.num_bosonic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 2:
-                other_mat = (
-                    other_mat.reshape(other_mat.shape + (1,) * 3)
-                    * np.eye(2 * self.niv)[None, None, None, None, None, :, :]
-                )
+        if other.num_vn_dimensions == 1 and self.num_vn_dimensions == 2:
+            other = other.extend_vn_dimension()
+        elif other.num_vn_dimensions == 2 and self.num_vn_dimensions == 1:
+            self.extend_vn_dimension()
 
-            np.add(self_mat, other_mat, out=self_mat) if is_addition else np.subtract(self_mat, other_mat, out=self_mat)
-            return LocalFourPoint(self_mat, channel, 1, 2, self.full_niw_range, self.full_niv_range)
-
-        if other.num_fermionic_frequency_dimensions == 1 and self.num_fermionic_frequency_dimensions == 2:
-            other_mat = np.einsum("...i,ij->...ij", other_mat, np.eye(other_mat.shape[-1]))
-        elif other.num_fermionic_frequency_dimensions == 2 and self.num_fermionic_frequency_dimensions == 1:
-            self_mat = np.einsum("...i,ij->...ij", self_mat, np.eye(other_mat.shape[-1]))
-
-        np.add(self_mat, other_mat, out=self_mat) if is_addition else np.subtract(self_mat, other_mat, out=self_mat)
-        if self.num_fermionic_frequency_dimensions == 0 and other.num_fermionic_frequency_dimensions == 0:
-            return LocalFourPoint(self_mat, channel, 1, 0, self.full_niw_range, self.full_niv_range)
-        return LocalFourPoint(self_mat, channel, 1, 2, self.full_niw_range, self.full_niv_range)
+        return LocalFourPoint(
+            self.mat + other.mat if is_addition else self.mat - other.mat,
+            channel,
+            self.num_wn_dimensions,
+            self.num_vn_dimensions,
+            self.full_niw_range,
+            self.full_niv_range,
+            self.frequency_notation,
+        )
 
     def symmetrize_v_vp(self) -> "LocalFourPoint":
         """
@@ -173,15 +182,15 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         This method is used to sum over specific fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
         """
-        if len(axis) > self.num_fermionic_frequency_dimensions:
+        if len(axis) > self.num_vn_dimensions:
             raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
-        remaining_fermionic_dimensions = self.num_fermionic_frequency_dimensions - len(axis)
+        remaining_fermionic_dimensions = self.num_vn_dimensions - len(axis)
         copy_mat = 1 / beta ** len(axis) * np.sum(self.mat, axis=axis)
         self.original_shape = self.current_shape
         return LocalFourPoint(
             copy_mat,
             self.channel,
-            self.num_bosonic_frequency_dimensions,
+            self.num_wn_dimensions,
             remaining_fermionic_dimensions,
             self.full_niw_range,
             self.full_niv_range,
@@ -191,8 +200,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         Sums over all fermionic frequency dimensions if the object has 2 fermionic frequency dimensions.
         """
-        if self.num_fermionic_frequency_dimensions != 2:
-            raise ValueError("This method is only implemented for 2 fermionic frequency dimensions.")
+        if self.num_vn_dimensions != 2:
+            raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
         return self.sum_over_vn(beta, axis=(-1, -2)).sum_over_orbitals("abcd->ad")
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalFourPoint":
@@ -212,8 +221,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         return LocalFourPoint(
             np.einsum(permutation, self.mat),
             self.channel,
-            self.num_bosonic_frequency_dimensions,
-            self.num_fermionic_frequency_dimensions,
+            self.num_wn_dimensions,
+            self.num_vn_dimensions,
             self.full_niw_range,
             self.full_niv_range,
         )
@@ -222,7 +231,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         Changes the frequency notation of the object from ph to pp and returns the object.
         """
-        if self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions != 3:
+        if self.num_wn_dimensions + self.num_vn_dimensions != 3:
             raise ValueError("Only objects with three frequency dimensions are supported.")
 
         if self.channel != Channel.DENS and self.channel != Channel.MAGN:
@@ -248,8 +257,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Requires a density and a magnetic object.
         """
         if (
-            self.num_bosonic_frequency_dimensions + self.num_fermionic_frequency_dimensions != 3
-            or other.num_fermionic_frequency_dimensions + other.num_bosonic_frequency_dimensions != 3
+            self.num_wn_dimensions + self.num_vn_dimensions != 3
+            or other.num_vn_dimensions + other.num_wn_dimensions != 3
         ):
             raise ValueError("Only objects with three frequency dimensions are supported.")
 
@@ -299,13 +308,34 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             u_loc.mat[..., None, None, None], (self.n_bands,) * 4 + (2 * self.niw + 1,) + (2 * niv_full,) * 2
         ).copy()
         mat_padded[..., pad_size : pad_size + 2 * self.niv, pad_size : pad_size + 2 * self.niv] = self.mat
+        return LocalFourPoint(mat_padded, self.channel, self.num_wn_dimensions, self.num_vn_dimensions)
+
+    @staticmethod
+    def as_constant(
+        n_bands: int,
+        niw: int,
+        niv: int,
+        num_wn_dimensions: int = 1,
+        num_vn_dimensions: int = 2,
+        channel: Channel = Channel.NONE,
+        frequency_notation: FrequencyNotation = FrequencyNotation.PH,
+        value: float = 0.0,
+    ) -> "LocalFourPoint":
+        """
+        Initializes the object with a constant value.
+        """
+        shape = (n_bands,) * 4 + (2 * niw + 1,) * num_wn_dimensions + (2 * niv,) * num_vn_dimensions
         return LocalFourPoint(
-            mat_padded, self.channel, self.num_bosonic_frequency_dimensions, self.num_fermionic_frequency_dimensions
+            np.full(shape, value, dtype=np.complex64),
+            channel,
+            num_wn_dimensions,
+            num_vn_dimensions,
+            frequency_notation=frequency_notation,
         )
 
     def plot(
         self,
-        orbs: np.ndarray | list = [0, 0, 0, 0],
+        orbs: np.ndarray | list | tuple = (0, 0, 0, 0),
         omega: int = 0,
         do_save: bool = True,
         output_dir: str = "./",
@@ -326,7 +356,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         wn_list = MFHelper.wn(self.niw)
         wn_index = np.argmax(wn_list == omega)
         mat = self.mat[orbs[0], orbs[1], orbs[2], orbs[3], wn_index, ...]
-        vn = MFHelper.vn(self.niv)  # pylint: disable=unexpected-keyword-arg
+        vn = MFHelper.vn(self.niv)
         im1 = axes[0].pcolormesh(vn, vn, mat.real, cmap=colormap)
         im2 = axes[1].pcolormesh(vn, vn, mat.imag, cmap=colormap)
         axes[0].set_title(r"$\Re$")

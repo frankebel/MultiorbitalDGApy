@@ -114,7 +114,7 @@ class Hamiltonian:
             bands = [a + 1, b + 1, c + 1, d + 1]
             if a == b == c == d:  # U_{llll}
                 interaction_elements.append(InteractionElement(r_loc, bands, udd))
-            elif a == d and b == c or (a == c and b == d):  # U_{lmml} or U_{lmlm}
+            elif (a == d and b == c) or (a == c and b == d):  # U_{lmml} or U_{lmlm}
                 interaction_elements.append(InteractionElement(r_loc, bands, jdd))
             elif a == b and c == d:  # U_{llmm}
                 interaction_elements.append(InteractionElement(r_loc, bands, vdd))
@@ -247,8 +247,7 @@ class Hamiltonian:
 
         hk = np.squeeze(hk)
         ham = Hamiltonian()
-        k_grid = (int(np.sqrt(kpoints[:, 0].size)), int(np.sqrt(kpoints[:, 0].size)), 1)
-        ham._ek = hk.reshape(*k_grid, nbands, nbands)
+        ham._ek = hk
 
         return ham, kpoints.T
 
@@ -317,6 +316,13 @@ class Hamiltonian:
         n_bands = self._ek.shape[-1]
         self._ek = self._ek.reshape(*k_grid.nk, n_bands, n_bands)
         return self._ek
+
+    def set_ek(self, ek: np.ndarray) -> "Hamiltonian":
+        """
+        Sets the band dispersion for the Hamiltonian and returns the Hamiltonian.
+        """
+        self._ek = ek
+        return self
 
     def get_local_uq(self) -> LocalInteraction:
         """

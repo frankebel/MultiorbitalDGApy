@@ -41,7 +41,12 @@ def get_gchi_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
 
 
 def calculate_self_energy_q(
-    comm: MPI.Comm, giwk: GreensFunction, gamma_dens: LocalFourPoint, gamma_magn: LocalFourPoint
+    comm: MPI.Comm,
+    giwk: GreensFunction,
+    one_plus_gamma_dens_loc: LocalFourPoint,
+    one_plus_gamma_magn_loc: LocalFourPoint,
+    f_dens_loc: LocalFourPoint,
+    f_magn_loc: LocalFourPoint,
 ):
     logger = config.logger
     logger.log_info("Initializing MPI distributor.")
