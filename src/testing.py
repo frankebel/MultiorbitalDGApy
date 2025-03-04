@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -13,6 +15,14 @@ def manipulate_matrix(mat: Matrix) -> Matrix:
 
 
 if __name__ == "__main__":
+
+    test = np.random.rand(90, 90) + 1j * np.random.rand(90, 90)
+    start = time.time()
+    test1, test2 = np.linalg.eig(test)
+    end = time.time()
+    print(end - start)
+    exit()
+
     matrix1 = Matrix()
     matrix2 = manipulate_matrix(matrix1)
 

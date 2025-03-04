@@ -12,7 +12,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
     def __init__(
         self,
         mat: np.ndarray,
-        channel: Channel = Channel.NONE,
+        channel: SpinChannel = SpinChannel.NONE,
         nq: tuple[int, int, int] = (1, 1, 1),
         num_wn_dimensions: int = 1,
         num_vn_dimensions: int = 2,
@@ -197,13 +197,10 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.frequency_notation,
             )
 
-        channel = self.channel if self.channel != Channel.NONE else other.channel
+        channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
         if isinstance(other, LocalFourPoint):
-            if self.num_vn_dimensions == 1 and other.num_vn_dimensions == 2:
-                self.extend_vn_dimension()
-            if self.num_vn_dimensions == 2 and other.num_vn_dimensions == 1:
-                other = other.extend_vn_dimension()
+            other = self._align_frequency_dimensions_for_operation(other)
 
             return FourPoint(
                 (
@@ -223,15 +220,8 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.frequency_notation,
             )
 
-        if not self.has_compressed_q_dimension and other.has_compressed_q_dimension:
-            self.compress_q_dimension()
-        if not other.has_compressed_q_dimension and self.has_compressed_q_dimension:
-            other = other.compress_q_dimension()
-
-        if self.num_vn_dimensions == 1 and other.num_vn_dimensions == 2:
-            self.extend_vn_dimension()
-        if self.num_vn_dimensions == 2 and other.num_vn_dimensions == 1:
-            other = other.extend_vn_dimension()
+        other = self._align_q_dimensions_for_operations(other)
+        other = self._align_frequency_dimensions_for_operation(other)
 
         return FourPoint(
             self.mat + other.mat if is_addition else self.mat - other.mat,
@@ -250,12 +240,31 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
         if isinstance(other, NonLocalInteraction):
-            self.compress_q_dimension()
+            other = self._align_q_dimensions_for_operations(other)
             return FourPoint(
                 (
                     np.einsum("qabijwvp,qjief->qabefwvp", self.mat, other.mat, optimize=True)
                     if left_hand_side
                     else np.einsum("qabij,qjiefwvp->qabefwvp", self.mat, other.mat, optimize=True)
+                ),
+                self.channel,
+                self.nq,
+                self.num_wn_dimensions,
+                self.num_vn_dimensions,
+                self.full_niw_range,
+                self.full_niv_range,
+                self.has_compressed_q_dimension,
+                self.frequency_notation,
+            )
+
+        if isinstance(other, LocalInteraction):
+            self.compress_q_dimension()
+            self.extend_vn_dimension()
+            return FourPoint(
+                (
+                    np.einsum("qabijwvp,jief->qabefwvp", self.mat, other.mat, optimize=True)
+                    if left_hand_side
+                    else np.einsum("abij,qjiefwvp->qabefwvp", self.mat, other.mat, optimize=True)
                 ),
                 self.channel,
                 self.nq,

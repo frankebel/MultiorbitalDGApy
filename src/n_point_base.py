@@ -6,11 +6,13 @@ from enum import Enum
 import numpy as np
 
 
-class Channel(Enum):
+class SpinChannel(Enum):
     DENS: str = "dens"
     MAGN: str = "magn"
     SING: str = "sing"
     TRIP: str = "trip"
+    UU: str = "uu"
+    UD: str = "ud"
     NONE: str = "none"
 
 
@@ -25,12 +27,14 @@ class IHaveChannel(ABC):
     Abstract interface for classes that have a channel attribute.
     """
 
-    def __init__(self, channel: Channel = Channel.NONE, frequency_notation: FrequencyNotation = FrequencyNotation.PH):
+    def __init__(
+        self, channel: SpinChannel = SpinChannel.NONE, frequency_notation: FrequencyNotation = FrequencyNotation.PH
+    ):
         self._channel = channel
         self._frequency_notation = frequency_notation
 
     @property
-    def channel(self) -> Channel:
+    def channel(self) -> SpinChannel:
         """
         Returns the channel reducibility (not the frequency notation) of the object.
         For a set of available channels, see class Channel.
@@ -157,6 +161,16 @@ class IHaveMat(ABC):
         """
         del self.mat
 
+    def times(self, contraction: str, *args):
+        """
+        Multiplies the matrices of multiple objects with the contraction specified and returns the result.
+        """
+        if not all(isinstance(obj, (IHaveMat, np.ndarray)) for obj in args):
+            raise ValueError("Args has the wrong type.")
+        return np.einsum(
+            contraction, self.mat, *[obj.mat if isinstance(obj, IHaveMat) else obj for obj in args], optimize=True
+        )
+
     def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """
         Saves the content of the matrix to a file.
@@ -231,3 +245,13 @@ class IAmNonLocal(IHaveMat, ABC):
         self._has_compressed_momentum_dimension = False
         self.original_shape = self.current_shape
         return self
+
+    def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):
+        """
+        Adapts the frequency dimensions of two non-local objects to fit each other for addition or multiplication..
+        """
+        if not self.has_compressed_q_dimension and other.has_compressed_q_dimension:
+            self.compress_q_dimension()
+        if not other.has_compressed_q_dimension and self.has_compressed_q_dimension:
+            other = other.compress_q_dimension()
+        return other

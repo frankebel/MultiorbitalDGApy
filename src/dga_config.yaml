@@ -1,6 +1,6 @@
 box_sizes:
   niw: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv: 50 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv: -1 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
   niv_asympt: 0 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:

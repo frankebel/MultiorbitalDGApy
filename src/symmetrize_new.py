@@ -97,8 +97,15 @@ def save_to_file(g2_list: list[np.ndarray], names: list[str], niw: int, n_bands:
     for wn in range(2 * niw + 1):
         for i, j, k, l in it.product(range(n_bands), repeat=4):
             idx = component2index_band(n_bands, 4, [i, j, k, l])
-            output_file[f"ineq-001/{names[0]}/{wn:05}/{idx:05}/value"] = g2_list[0][i, j, k, l, wn].transpose()
-            output_file[f"ineq-001/{names[1]}/{wn:05}/{idx:05}/value"] = g2_list[1][i, j, k, l, wn].transpose()
+            for g2, name in zip(g2_list, names):
+                output_file[f"ineq-001/{name}/{wn:05}/{idx:05}/value"] = g2[i, j, k, l, wn].transpose()
+
+
+def get_niw_niv(vertex_file, g4iw_groupstring, indices):
+    first_element_shape = vertex_file[f"{g4iw_groupstring}/{indices[0]}/value"].shape
+    assert first_element_shape[0] % 2 == 0
+    assert first_element_shape[-1] % 2 != 0
+    return first_element_shape[-1] // 2, first_element_shape[0] // 2
 
 
 if __name__ == "__main__":
@@ -135,12 +142,8 @@ if __name__ == "__main__":
         indices_pp = None
         logging.getLogger().warning("No g4iwpp-worm group found in the PP input file. No vertex asymptotics possible.")
 
-    # determination of niw and niv
-    first_element_shape = vertex_file_ph[f"{g4iw_ph_groupstring}/{indices_ph[0]}/value"].shape
-    assert first_element_shape[0] % 2 == 0
-    assert first_element_shape[-1] % 2 != 0
-    niv = first_element_shape[0] // 2
-    niw = first_element_shape[-1] // 2
+    # determination of niw and niv for ph channel
+    niw, niv = get_niw_niv(vertex_file_ph, g4iw_ph_groupstring, indices_ph)
 
     print("Number of bands:", n_bands)
     print("Number of fermionic Matsubara frequencies:", niv)
@@ -170,22 +173,25 @@ if __name__ == "__main__":
         print("Done!")
         exit()
 
+    niw, niv = get_niw_niv(vertex_file_pp, g4iw_pp_groupstring, indices_pp)
+
     print("Extracting G2pp ...")
     _, _, g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph = extract_g2_general(
         g4iw_pp_groupstring, indices_pp, vertex_file_pp
     )
-    print("G2pp extracted. Calculating G2_sing and G2_trip for pp ...")
+    print("G2pp extracted. Calculating G2_sing, G2_trip and G2^pp_ud for pp ...")
     g2_sing_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp - g2_uddu_pp - g2_duud_ph)
     g2_trip_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp + g2_uddu_pp + g2_duud_ph)
+    g2_ud_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp)
 
     del g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph
     gc.collect()
-    print("G2_sing and G2_trip calculated. Writing to file ...")
+    print("G2_sing, G2_trip and G2^pp_ud calculated. Writing to file ...")
 
-    save_to_file([g2_sing_pp, g2_trip_pp], ["sing", "trip"], niw, n_bands)
-    del g2_sing_pp, g2_trip_pp
+    save_to_file([g2_sing_pp, g2_trip_pp, g2_ud_pp], ["sing", "trip", "ud_pp"], niw, n_bands)
+    del g2_sing_pp, g2_trip_pp, g2_ud_pp
     gc.collect()
-    print("G2_sing and G2_trip successfully written to file.")
+    print("G2_sing, G2_trip and G2^pp_ud successfully written to file.")
 
     output_file.close()
     vertex_file_ph.close()

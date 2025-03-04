@@ -165,7 +165,7 @@ class LocalNPoint(IHaveMat):
         r"""
         Converts the indices of the LocalNPoint object
 
-        .. math:: F^{wvv'}_{lmm'l'}
+        .. math:: F^{wv(v')}_{lmm'l'}
 
         to compound indices
 
@@ -179,13 +179,12 @@ class LocalNPoint(IHaveMat):
             return self
 
         if self.num_wn_dimensions != 1:
-            raise ValueError(f"Converting to compound indices with shape {self.current_shape} not supported.")
-
-        self.original_shape = self.current_shape
+            raise ValueError(f"Converting to compound indices if there are no bosonic frequencies.")
 
         if self.num_vn_dimensions == 0:  # [o1,o2,o3,o4,w]
-            self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(2 * self.niw + 1, self.n_bands**2, self.n_bands**2)
-            return self
+            raise ValueError("Cannot convert to compound indices if there are no fermionic frequencies.")
+
+        self.original_shape = self.current_shape
 
         if self.num_vn_dimensions == 1:  # [o1,o2,o3,o4,w,v]
             self.extend_vn_dimension()
@@ -234,6 +233,9 @@ class LocalNPoint(IHaveMat):
         return copy.to_full_indices()
 
     def __invert__(self) -> "LocalNPoint":
+        """
+        Inverts the LocalNPoint object by transforming it to compound indices.
+        """
         return self.invert()
 
     def extend_vn_dimension(self) -> "LocalNPoint":
@@ -329,9 +331,12 @@ class LocalNPoint(IHaveMat):
         self._full_niv_range = True
         return self
 
-    def times(self, other: "LocalNPoint", contraction: str = "abijwvr,jicdwrp->abcdwvp") -> np.ndarray:
+    def _align_frequency_dimensions_for_operation(self, other: "LocalNPoint"):
         """
-        Contracts the matrices of two LocalNPoint objects with the contraction specified and returns the result.
-        However, currently it does not find any use because einsum is not as fast as the matrix multiplication in compound indices.
+        Adapts the frequency dimensions of two LocalNPoint objects to fit each other for addition or multiplication.
         """
-        return np.einsum(contraction, self.mat, other.mat, optimize=True)
+        if self.num_vn_dimensions == 1 and other.num_vn_dimensions == 2:
+            self.extend_vn_dimension()
+        if self.num_vn_dimensions == 2 and other.num_vn_dimensions == 1:
+            other = other.extend_vn_dimension()
+        return other

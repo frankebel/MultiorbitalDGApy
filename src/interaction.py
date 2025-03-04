@@ -4,7 +4,7 @@ import config
 
 
 class LocalInteraction(IHaveMat, IHaveChannel):
-    def __init__(self, mat: np.ndarray, channel: Channel = Channel.NONE):
+    def __init__(self, mat: np.ndarray, channel: SpinChannel = SpinChannel.NONE):
         IHaveMat.__init__(self, mat)
         IHaveChannel.__init__(self, channel)
 
@@ -15,7 +15,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalInteraction":
         return LocalInteraction(np.einsum(permutation, self.mat), self.channel)
 
-    def as_channel(self, channel: Channel) -> "LocalInteraction":
+    def as_channel(self, channel: SpinChannel) -> "LocalInteraction":
         """
         Returns the spin combination for a given channel ~WITHOUT~ a factor of 1/beta^2.
         """
@@ -23,13 +23,13 @@ class LocalInteraction(IHaveMat, IHaveChannel):
             return self
         self._channel = channel
         perm: str = "abcd->adcb"
-        if channel == Channel.DENS:
+        if channel == SpinChannel.DENS:
             return 2 * self - self.permute_orbitals(perm)
-        elif channel == Channel.MAGN:
+        elif channel == SpinChannel.MAGN:
             return -self.permute_orbitals(perm)
-        elif channel == Channel.SING:
+        elif channel == SpinChannel.SING:
             return self + self.permute_orbitals(perm)
-        elif channel == Channel.TRIP:
+        elif channel == SpinChannel.TRIP:
             return self - self.permute_orbitals(perm)
         else:
             raise ValueError(f"Channel {channel} not supported.")
@@ -49,7 +49,7 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
     def __init__(
         self,
         mat: np.ndarray,
-        channel: Channel = Channel.NONE,
+        channel: SpinChannel = SpinChannel.NONE,
     ):
         LocalInteraction.__init__(self, mat, channel)
         IAmNonLocal.__init__(self, mat, config.lattice.nq)
@@ -75,7 +75,7 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
 
         return NonLocalInteraction(
             self.mat + other.mat if is_addition else self.mat - other.mat,
-            self.channel if self.channel != Channel.NONE else other.channel,
+            self.channel if self.channel != SpinChannel.NONE else other.channel,
         )
 
     def __add__(self, other) -> "NonLocalInteraction":

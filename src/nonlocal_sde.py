@@ -6,7 +6,7 @@ from greens_function import GreensFunction
 from local_four_point import LocalFourPoint
 from matsubara_frequencies import *
 from mpi_distributor import MpiDistributor
-from n_point_base import Channel
+from n_point_base import SpinChannel
 
 
 def get_gchi_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
@@ -37,7 +37,7 @@ def get_gchi_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
         )
         gchi0_q[idx] = -config.sys.beta * np.mean(g_left_mat * g_right_mat, axis=(0, 1, 2))
 
-    return FourPoint(gchi0_q, Channel.NONE, config.lattice.nq, config.lattice.nk, 1, 0, 1, 1, False)
+    return FourPoint(gchi0_q, SpinChannel.NONE, config.lattice.nq, config.lattice.nk, 1, 0, 1, 1, False)
 
 
 def calculate_self_energy_q(

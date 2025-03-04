@@ -27,7 +27,7 @@ def _uniquify_path(path: str = None):
 
 
 def load_from_w2dyn_file_and_update_config() -> (
-    tuple[GreensFunction, SelfEnergy, LocalFourPoint, LocalFourPoint, LocalFourPoint, LocalFourPoint]
+    tuple[GreensFunction, SelfEnergy, LocalFourPoint, LocalFourPoint, LocalFourPoint]
 ):
     file = w2dyn_aux.W2dynFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_1p)))
 
@@ -62,27 +62,17 @@ def load_from_w2dyn_file_and_update_config() -> (
     file.close()
 
     file = w2dyn_aux.W2dynG4iwFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_2p)))
-    g2_dens = LocalFourPoint(
-        file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.DENS), channel=Channel.DENS
-    )
-    g2_magn = LocalFourPoint(
-        file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.MAGN), channel=Channel.MAGN
-    )
+    g2_dens = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="dens"), channel=SpinChannel.DENS)
+    g2_magn = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="dens"), channel=SpinChannel.MAGN)
     try:
         # this might be needed for asymptotics
-        g2_sing = LocalFourPoint(
-            file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.SING), channel=Channel.SING
-        )
-        g2_trip = LocalFourPoint(
-            file.read_g2_full_multiband(config.sys.n_bands, channel=Channel.TRIP), channel=Channel.TRIP
+        g2_ud_pp = LocalFourPoint(
+            file.read_g2_full_multiband(config.sys.n_bands, name="ud_pp"), channel=SpinChannel.SING
         )
     except KeyError:
-        config.logger.log("No singlet or triplet channel found in G2 file. Setting them to zero.", logging.WARN)
-        g2_sing = LocalFourPoint.as_constant(
-            config.sys.n_bands, g2_dens.niw, g2_dens.niv, 1, 2, Channel.SING, FrequencyNotation.PP, 0
-        )
-        g2_trip = LocalFourPoint.as_constant(
-            config.sys.n_bands, g2_dens.niw, g2_dens.niv, 1, 2, Channel.TRIP, FrequencyNotation.PP, 0
+        config.logger.log("No UD spin combination for pp found in G2 file. Setting them to zero.", logging.WARN)
+        g2_ud_pp = LocalFourPoint.from_constant(
+            config.sys.n_bands, g2_dens.niw, g2_dens.niv, 1, 2, SpinChannel.UD, FrequencyNotation.PP, 0
         )
     file.close()
 
@@ -106,10 +96,9 @@ def load_from_w2dyn_file_and_update_config() -> (
 
     g2_dens = _update_g2_from_dmft(g2_dens)
     g2_magn = _update_g2_from_dmft(g2_magn)
-    g2_sing = _update_g2_from_dmft(g2_sing)
-    g2_trip = _update_g2_from_dmft(g2_trip)
+    g2_ud_pp = _update_g2_from_dmft(g2_ud_pp)
 
-    return giw, siw, g2_dens, g2_magn, g2_sing, g2_trip
+    return giw, siw, g2_dens, g2_magn, g2_ud_pp
 
 
 def _update_frequency_boxes(niw: int, niv: int) -> None:

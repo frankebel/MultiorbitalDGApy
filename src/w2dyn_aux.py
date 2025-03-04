@@ -105,9 +105,9 @@ class W2dynG4iwFile:
     def open(self):
         self._file = h5py.File(self._fname, "r")
 
-    def read_g2_full_multiband(self, n_bands: int, ineq: int = 1, channel: Channel = Channel.DENS) -> np.ndarray:
+    def read_g2_full_multiband(self, n_bands: int, ineq: int = 1, name: str = "dens") -> np.ndarray:
         # the next lines determine the size of g2, i.e. niw and niv
-        channel_group_string = f"/ineq-{ineq:03}/{channel.value}"
+        channel_group_string = f"/ineq-{ineq:03}/{name}"
         niw_full = len(self._file[channel_group_string].keys())
         # 00000 is the first element. If it does not exist, there are no bosonic frequenices in the G2 and that would be weird
         first_index = int(next(iter(self._file[f"{channel_group_string}/00000"])))
