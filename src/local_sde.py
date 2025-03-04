@@ -1,7 +1,3 @@
-import gc
-
-import numpy as np
-
 import config
 from greens_function import GreensFunction
 from interaction import LocalInteraction
@@ -158,11 +154,9 @@ def perform_local_schwinger_dyson(
 
     gchi_dens = create_generalized_chi(g2_dens, g_loc)
     del g2_dens
-    gc.collect()
     logger.log_info("Local generalized susceptibility chi^wvv' (dens) done.")
     gchi_magn = create_generalized_chi(g2_magn, g_loc)
     del g2_magn
-    gc.collect()
     logger.log_info("Local generalized susceptibility chi^wvv' (magn) done.")
 
     if config.output.do_plotting and config.current_rank == 0:
@@ -179,7 +173,6 @@ def perform_local_schwinger_dyson(
     vrg_dens = create_vrg(gchi_aux_dens, gchi0)
     logger.log_info("Local three-leg vertex gamma^wv (dens) done.")
     del gchi_aux_dens
-    gc.collect()
 
     gamma_magn = create_gamma_r(gchi_magn, gchi0)
     logger.log_info("Local irreducible vertex Gamma^wvv' (magn) done.")
@@ -188,7 +181,6 @@ def perform_local_schwinger_dyson(
     vrg_magn = create_vrg(gchi_aux_magn, gchi0)
     logger.log_info("Local three-leg vertex gamma^wv (magn) done.")
     del gchi_aux_magn, gchi0
-    gc.collect()
 
     sigma = get_loc_self_energy_vrg(vrg_dens, gchi_dens, g_loc, u_loc)
     logger.log_info("Self-energy Sigma^v done.")
@@ -196,12 +188,10 @@ def perform_local_schwinger_dyson(
     chi_dens_physical = create_physical_chi(gchi_dens)
     logger.log_info("Local physical susceptibility chi^w (dens) done.")
     del gchi_dens
-    gc.collect()
 
     chi_magn_physical = create_physical_chi(gchi_magn)
     logger.log_info("Local physical susceptibility chi^w (magn) done.")
     del gchi_magn
-    gc.collect()
 
     return gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma
 
@@ -217,11 +207,9 @@ def perform_local_schwinger_dyson_abinitio_dga(
 
     gchi_dens_loc = create_generalized_chi(g2_dens, g_loc)
     del g2_dens
-    gc.collect()
     logger.log_info("Generalized susceptibilitiy (dens) done.")
     gchi_magn_loc = create_generalized_chi(g2_magn, g_loc)
     del g2_magn
-    gc.collect()
     logger.log_info("Generalized susceptibilitiy (magn) done.")
 
     gchi0_loc_full = create_generalized_chi0(g_loc)
@@ -238,7 +226,6 @@ def perform_local_schwinger_dyson_abinitio_dga(
     f_magn_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_magn_loc @ gchi0_inv_core)
     logger.log_info("Local full vertex F^w (magn) done.")
     del gchi0_inv_core
-    gc.collect()
 
     one = LocalFourPoint.identity(config.sys.n_bands, config.box.niw, config.box.niv_full)
     # in most equations we need 1 + gamma_r so we add it here
@@ -250,12 +237,10 @@ def perform_local_schwinger_dyson_abinitio_dga(
     one_plus_gamma_magn_loc = one + gamma_magn_loc
     logger.log_info("Local three-leg vertex gamma^w (magn) done.")
     del gchi0_core, gamma_magn_loc
-    gc.collect()
 
     sigma_loc = get_loc_self_energy_gamma_abinitio_dga(gamma_dens_loc, u_loc, g_loc)
     logger.log_info("Local self-energy done.")
     del gamma_dens_loc
-    gc.collect()
 
     return (
         gchi_dens_loc,

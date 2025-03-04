@@ -1,3 +1,4 @@
+import gc
 import os
 from abc import ABC
 from copy import deepcopy
@@ -70,10 +71,6 @@ class IHaveMat(ABC):
     def mat(self, value: np.ndarray) -> None:
         self._mat = value
 
-    @mat.deleter
-    def mat(self) -> None:
-        del self._mat
-
     @property
     def current_shape(self) -> tuple:
         """
@@ -145,21 +142,22 @@ class IHaveMat(ABC):
 
     def __getitem__(self, item):
         """
-        Returns the item of the matrix.
+        Returns the value at position [item].
         """
         return self.mat[item]
 
     def __setitem__(self, key, value):
         """
-        Sets the item of the matrix.
+        Sets the value at position [key].
         """
         self.mat[key] = value
 
     def __del__(self):
         """
-        Deletes the matrix.
+        Deletes the underlying matrix.
         """
-        del self.mat
+        del self._mat
+        gc.collect()
 
     def times(self, contraction: str, *args):
         """

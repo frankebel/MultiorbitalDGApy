@@ -1,4 +1,3 @@
-import gc
 import itertools as it
 import logging
 
@@ -83,15 +82,12 @@ def execute_dga_routine():
         gamma_dens_plot.plot(omega=10, name="Gamma_dens", output_dir=config.output.output_path)
         gamma_dens_plot.plot(omega=-10, name="Gamma_dens", output_dir=config.output.output_path)
         del gamma_dens_plot
-        gc.collect()
 
         gamma_magn_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
         gamma_magn_plot.plot(omega=0, name="Gamma_magn", output_dir=config.output.output_path)
         gamma_magn_plot.plot(omega=10, name="Gamma_magn", output_dir=config.output.output_path)
         gamma_magn_plot.plot(omega=-10, name="Gamma_magn", output_dir=config.output.output_path)
         del gamma_magn_plot
-
-        gc.collect()
 
         plotting.chi_checks(
             [chi_dens_physical.mat],
