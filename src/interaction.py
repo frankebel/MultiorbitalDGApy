@@ -39,15 +39,16 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         else:
             raise ValueError(f"Channel {channel} not supported.")
 
-    def __add__(self, other) -> "LocalInteraction":
+    def add(self, other) -> "LocalInteraction":
         if not isinstance(other, LocalInteraction):
-            raise ValueError(f"Addition {type(self)} + {type(other)} not supported.")
+            raise ValueError(f"Operation {type(self)} +/- {type(other)} not supported.")
         return LocalInteraction(self.mat + other.mat, self.channel)
 
+    def __add__(self, other) -> "LocalInteraction":
+        return self.add(other)
+
     def __sub__(self, other) -> "LocalInteraction":
-        if not isinstance(other, LocalInteraction):
-            raise ValueError(f"Subtraction {type(self)} - {type(other)} not supported.")
-        return LocalInteraction(self.mat - other.mat, self.channel)
+        return self.add(-other)
 
 
 class NonLocalInteraction(LocalInteraction, IAmNonLocal):
