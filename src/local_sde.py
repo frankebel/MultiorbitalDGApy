@@ -8,22 +8,24 @@ from self_energy import SelfEnergy
 
 
 def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFourPoint:
-    """
-    Returns the generalized susceptibility gchi_{r;lmm'l'}^{wvv'}:1/eV^3 = beta:1/eV * (G2_{r;lmm'l'}^{wvv'}:1/eV^2 - 2 * G_{ll'}^{v} G_{m'm}^{v}:1/eV^2 delta_dens delta_w0)
+    r"""
+    Returns the generalized susceptibility
+    .. math:: \chi_{r;lmm'l'}^{wvv'} = \beta (G_{r;lmm'l'}^{(2);wvv'} - 2 \delta_{rd} \delta_{w0} G_{ll'}^{v} G_{m'm}^{v'})
     """
     chi = config.sys.beta * g2
 
-    if g2.channel == SpinChannel.DENS:
-        wn = MFHelper.wn(g2.niw)
-        ggv_mat = _get_ggv_mat(g_loc, niv_slice=g2.niv)[:, :, :, :, None, ...]
+    if g2.channel == SpinChannel.DENS and g2.frequency_notation == FrequencyNotation.PH:
+        wn = MFHelper.wn(config.box.niw_core)
+        ggv_mat = _get_ggv_mat(g_loc, niv_slice=config.box.niv_core)[:, :, :, :, None, ...]
         chi[:, :, :, :, wn == 0, ...] -= 2.0 * config.sys.beta * ggv_mat
 
     return chi
 
 
 def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
-    """
-    Returns beta:1/eV * G_{ll'}^{v}:1/eV * G_{m'm}^{v}:1/eV
+    r"""
+    Returns the product of two Green's functions
+    .. math:: B_{0;lmm'l'}^{v} = G_{ll'}^{v} G_{m'm}^{v}.
     """
     if niv_slice == -1:
         niv_slice = g_loc.niv
@@ -39,10 +41,11 @@ def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
 def create_generalized_chi0(
     g_loc: GreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
 ) -> LocalFourPoint:
+    r"""
+    Returns the generalized bare susceptibility
+    .. math:: \chi_{0;lmm'l'}^{wv} = -\beta G_{ll'}^{v} G_{m'm}^{v-w}.
     """
-    Returns the generalized bare susceptibility gchi0_{lmm'l'}^{wvv}:1/eV^3 = -beta:1/eV * G_{ll'}^{v}:1/eV * G_{m'm}^{v-w}:1/eV
-    """
-    wn = MFHelper.wn(config.box.niw)
+    wn = MFHelper.wn(config.box.niw_core)
     iws, iws2 = np.array([MFHelper.get_frequency_shift(wn_i, frequency_shift) for wn_i in wn], dtype=int).T
 
     niv_range = np.arange(-config.box.niv_full, config.box.niv_full)
@@ -70,7 +73,20 @@ def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPo
     Returns the irreducible vertex
     .. math:: \Gamma_{r;lmm'l'}^{wvv'} = \beta^2 * [(\chi_{r;lmm'l'}^{wvv'})^{-1} - (\chi_{0;lmm'l'}^{wv})^{-1}]
     """
-    return config.sys.beta**2 * (~gchi_r - ~(gchi0.cut_niv(config.box.niv)))
+    return config.sys.beta**2 * (~gchi_r - ~(gchi0.cut_niv(config.box.niv_core)))
+
+
+def create_gamma_r_with_shell_correction(
+    gchi_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction
+) -> LocalFourPoint:
+    """
+    Calculates the irreducible vertex with the shell correction as described
+    by Motoharu Kitatani et al 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
+    More specifically equations A.4 to A.8
+    """
+    chi_tilde_shell = ~(~gchi0 + 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel))
+    chi_tilde_core_inv = ~(chi_tilde_shell.cut_niv(config.box.niv_core))
+    return config.sys.beta**2 * (~gchi_r - chi_tilde_core_inv) + u_loc.as_channel(gchi_r.channel)
 
 
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
@@ -79,13 +95,13 @@ def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc:
     .. math:: \chi^{*;wvv'}_{r;lmm'l'} = (\chi_{0;lmm'l'}^{-1} + (\Gamma_{r;lmm'l'}-\Gamma_{0;lmm'l'})/\beta^2)^{-1}.
     See Eq. (3.68) in Paul Worm's thesis.
     """
-    return ~(~gchi_0 + (gamma_r - create_gamma_0(u_loc)) / config.sys.beta**2)
+    return ~(~gchi_0.cut_niv(config.box.niv_core) + (gamma_r - u_loc.as_channel(gamma_r.channel)) / config.sys.beta**2)
 
 
 def create_physical_chi(gchi_r: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the physical susceptibility
-    .. math:: \chi_{r;ll'}^{phys;w} = 1/\beta^2 [\sum_{vv'} \sum_{mm'} \chi_{r;lmm'l'}^{wvv'}].
+    .. math:: \chi_{r;ll'}^{phys;w} = \sum_{vv'} \sum_{mm'} \chi_{r;lmm'l'}^{wvv'}.
     See Eq. (3.51) in Paul Worm's thesis.
     """
     return gchi_r.contract_legs(config.sys.beta)
@@ -94,32 +110,34 @@ def create_physical_chi(gchi_r: LocalFourPoint) -> LocalFourPoint:
 def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the three-leg vertex
-    .. math:: \gamma_{r;lmm'l'} = \beta * (\chi_{0;lmm'l'})^{-1} * (\sum_{v'} \chi^{*;wvv'}_{r;lmm'l'}).
+    .. math:: \gamma_{r;lmm'l'} = \beta * (\chi^{wvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;wvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_sum = gchi_aux.sum_over_vn(config.sys.beta, axis=(-1,))
-    return config.sys.beta * (~gchi0 @ gchi_aux_sum).compress_vn_dimensions()
-
-
-def create_local_double_counting_kernel(gamma_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
-    eye = np.eye(2 * config.box.niv_full, dtype=np.complex128)[None, None, None, None, None, :, :]
-    return -gamma_r @ ~((gamma_r @ gchi0) - eye)
+    return config.sys.beta * (~gchi0.cut_niv(config.box.niv_core) @ gchi_aux_sum).compress_vn_dimensions()
 
 
 def get_loc_self_energy_vrg(
-    vrg_dens: LocalFourPoint, gchi_dens: LocalFourPoint, g_loc: GreensFunction, u_loc: LocalInteraction
+    vrg_dens: LocalFourPoint,
+    vrg_magn: LocalFourPoint,
+    gchi_dens: LocalFourPoint,
+    gchi_magn: LocalFourPoint,
+    g_loc: GreensFunction,
+    u_loc: LocalInteraction,
 ) -> SelfEnergy:
     """
     Performs the local self-energy calculation using the Schwinger-Dyson equation,
     see Paul Worm's thesis, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
-    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv, config.box.niw)
-    deltas = np.einsum("io,lp->ilpo", np.eye(config.sys.n_bands), np.eye(config.sys.n_bands))
-    gchi_dens = gchi_dens.sum_over_vn(config.sys.beta, axis=(-1, -2))
-    inner = (vrg_dens @ create_gamma_0(u_loc) @ gchi_dens) - vrg_dens + deltas[..., None, None]
-    self_energy_mat = 1.0 / config.sys.beta * u_loc.times("kjpo,ilpowv,lkwv->ijv", inner, g_1)
+    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
+    inner_dens = vrg_dens - (vrg_dens @ u_loc.as_channel(SpinChannel.DENS) @ gchi_dens)
+    inner_magn = vrg_magn - (vrg_magn @ u_loc.as_channel(SpinChannel.MAGN) @ gchi_magn)
+    self_energy_mat = (
+        -1.0 / config.sys.beta * u_loc.times("kjop,ilpowv,lkwv->ijv", 0.5 * (inner_dens - inner_magn), g_1)
+    )
     hartree = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
+
     return SelfEnergy(self_energy_mat + hartree)
 
 
@@ -128,18 +146,21 @@ def get_loc_self_energy_gamma_abinitio_dga(
 ) -> SelfEnergy:
     r"""
     Returns the local self-energy with the three-leg gamma from AbinitioDGA
-    .. math:: \Sigma_{12}^{v} = -1/\beta \sum_w [ U_{a1bc} * \gamma_{cb2f}^{wv} * G_{af}^{w-v} ]
+    .. math:: \Sigma_{ij}^{v} = -1/\beta \sum_w [ U_{iabc} * \gamma_{cbdj}^{wv} * G_{ad}^{w-v} ]
     """
-    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv, config.box.niw)
-    hartree = np.einsum("abcd,dc->ab", u_loc.as_channel(SpinChannel.DENS).mat, config.sys.occ)[..., None]
-    sigma = -1.0 / config.sys.beta * np.einsum("kjop,ilpowv,lkwv->ijv", u_loc.mat, gamma_dens.mat, g_1, optimize=True)
+    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
+    sigma = -1.0 / config.sys.beta * u_loc.times("iabc,cbdjwv,adwv->ijv", gamma_dens, g_1)
+    hartree = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
     return SelfEnergy(sigma + hartree)
 
 
-def get_asympt_irr_gamma(u_loc: LocalInteraction, channel: SpinChannel = SpinChannel.DENS) -> LocalFourPoint:
-    gamma_mat = 1.0 / config.sys.beta**2 * u_loc.as_channel(channel).mat
-    gamma_mat = np.tile(gamma_mat[..., None], (1, 1, 1, 1, 2 * config.box.niw + 1))
-    return LocalFourPoint(gamma_mat, channel, 1, 0)
+def create_generalized_chi_with_asympt_correction(
+    gchi_aux_sum: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction
+) -> LocalFourPoint:
+    gchi0_full_sum = gchi0.sum_over_all_vn(config.sys.beta)
+    gchi0_core_sum = gchi0.cut_niv(config.box.niv_core).sum_over_all_vn(config.sys.beta)
+    test = gchi_aux_sum + gchi0_full_sum - gchi0_core_sum
+    return ~(~(gchi_aux_sum + gchi0_full_sum - gchi0_core_sum) + u_loc / config.sys.beta**2)
 
 
 def perform_local_schwinger_dyson(
@@ -166,38 +187,73 @@ def perform_local_schwinger_dyson(
 
     gchi0 = create_generalized_chi0(g_loc)
 
-    gamma_dens = create_gamma_r(gchi_dens, gchi0)
-    logger.log_info("Local irreducible vertex Gamma^wvv' (dens) done.")
-    gchi_aux_dens = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
-    logger.log_info("Local auxiliary susceptibility chi^*wvv' (dens) done.")
-    vrg_dens = create_vrg(gchi_aux_dens, gchi0)
-    logger.log_info("Local three-leg vertex gamma^wv (dens) done.")
-    del gchi_aux_dens
+    # Density objects
 
-    gamma_magn = create_gamma_r(gchi_magn, gchi0)
-    logger.log_info("Local irreducible vertex Gamma^wvv' (magn) done.")
-    gchi_aux_magn = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
-    logger.log_info("Local auxiliary susceptibility chi^*wvv' (magn) done.")
-    vrg_magn = create_vrg(gchi_aux_magn, gchi0)
-    logger.log_info("Local three-leg vertex gamma^wv (magn) done.")
-    del gchi_aux_magn, gchi0
+    gamma_dens = create_gamma_r_with_shell_correction(gchi_dens, gchi0, u_loc)
+    logger.log_info("Local irreducible vertex Gamma^wvv' (dens) with asymptotic correction done.")
 
-    sigma = get_loc_self_energy_vrg(vrg_dens, gchi_dens, g_loc, u_loc)
-    logger.log_info("Self-energy Sigma^v done.")
-
-    chi_dens_physical = create_physical_chi(gchi_dens)
+    chi_dens_physical = gchi_dens.contract_legs(config.sys.beta)
     logger.log_info("Local physical susceptibility chi^w (dens) done.")
-    del gchi_dens
+    # del gchi_dens
 
-    chi_magn_physical = create_physical_chi(gchi_magn)
+    gchi_dens_aux = create_auxiliary_chi(gamma_dens, gchi0, u_loc)
+    logger.log_info("Local auxiliary susceptibility chi^*wvv' (dens) done.")
+
+    vrg_dens = create_vrg(gchi_dens_aux, gchi0)
+    logger.log_info("Local three-leg vertex gamma^wv (dens) done.")
+
+    gchi_dens_aux_sum = gchi_dens_aux.sum_over_all_vn(config.sys.beta)
+    # gchi_dens_sum = gchi_dens.sum_over_all_vn(config.sys.beta)
+    gchi_dens_sum = create_generalized_chi_with_asympt_correction(gchi_dens_aux_sum, gchi0, u_loc)
+    logger.log_info("Updated local generalized susceptibility chi^wvv' (dens) with asymptotic correction.")
+    del gchi_dens_aux
+
+    # Magnetic objects
+
+    gamma_magn = create_gamma_r_with_shell_correction(gchi_magn, gchi0, u_loc)
+    logger.log_info("Local irreducible vertex Gamma^wvv' (magn) with asymptotic correction done.")
+    chi_magn_physical = gchi_magn.contract_legs(config.sys.beta)
     logger.log_info("Local physical susceptibility chi^w (magn) done.")
-    del gchi_magn
+    # del gchi_magn
+
+    gchi_magn_aux = create_auxiliary_chi(gamma_magn, gchi0, u_loc)
+    logger.log_info("Local auxiliary susceptibility chi^*wvv' (magn) done.")
+
+    vrg_magn = create_vrg(gchi_magn_aux, gchi0)
+    logger.log_info("Local three-leg vertex gamma^wv (magn) done.")
+
+    gchi_magn_aux_sum = gchi_magn_aux.sum_over_all_vn(config.sys.beta)
+    # gchi_magn_sum = gchi_magn.sum_over_all_vn(config.sys.beta)
+    gchi_magn_sum = create_generalized_chi_with_asympt_correction(gchi_magn_aux_sum, gchi0, u_loc)
+    logger.log_info("Updated local generalized susceptibility chi^wvv' (dens) with asymptotic correction.")
+    del gchi_magn_aux, gchi0
+
+    # Sigma
+
+    sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
+    logger.log_info("Self-energy Sigma^v done.")
 
     return gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma
 
 
+def create_asympt_f(
+    gchi_dens: LocalFourPoint, gchi_magn: LocalFourPoint, gchi_ud_pp_sum: LocalFourPoint, u_loc: LocalInteraction
+) -> LocalFourPoint:
+    gchi_ud_pp_sum_from_ph = (
+        (0.5 * (gchi_dens - gchi_magn)).change_frequency_notation_ph_to_pp().sum_over_all_vn(config.sys.beta)
+    )
+    test = gchi_dens.compress_vn_dimensions().sum_over_all_vn(config.sys.beta)
+    gchi_ud_pp_sum = gchi_ud_pp_sum.cut_niw(gchi_ud_pp_sum_from_ph.niw)
+
+    return 0
+
+
 def perform_local_schwinger_dyson_abinitio_dga(
-    g_loc: GreensFunction, g2_dens: LocalFourPoint, g2_magn: LocalFourPoint, u_loc: LocalInteraction
+    g_loc: GreensFunction,
+    g2_dens: LocalFourPoint,
+    g2_magn: LocalFourPoint,
+    g2_ud_pp: LocalFourPoint,
+    u_loc: LocalInteraction,
 ):
     """
     ATTENTION: THIS IS THE ABINITODGA ROUTINE!
@@ -206,36 +262,40 @@ def perform_local_schwinger_dyson_abinitio_dga(
     logger = config.logger
 
     gchi_dens_loc = create_generalized_chi(g2_dens, g_loc)
+    logger.log_info("Generalized susceptibility chi^wvv' (dens) done.")
     del g2_dens
-    logger.log_info("Generalized susceptibilitiy (dens) done.")
     gchi_magn_loc = create_generalized_chi(g2_magn, g_loc)
+    logger.log_info("Generalized susceptibility chi^wvv' (magn) done.")
     del g2_magn
-    logger.log_info("Generalized susceptibilitiy (magn) done.")
+    gchi_ud_pp_loc_sum = create_generalized_chi(g2_ud_pp, g_loc).sum_over_vn(config.sys.beta, axis=(-1, -2))
+    logger.log_info("Generalized susceptibility chi^wvv' (ud_pp) done.")
+    del g2_ud_pp
 
     gchi0_loc_full = create_generalized_chi0(g_loc)
-    logger.log_info("Generalized bare susceptibilitiy done.")
-    gchi0_core = gchi0_loc_full.cut_niv(config.box.niv)
+    logger.log_info("Generalized bare susceptibility chi_0^wv done.")
+    gchi0_core = gchi0_loc_full.cut_niv(config.box.niv_core)
 
     # 1 + chi0 * F_r = gchi_r * (chi0)^(-1) = 1 + gamma_r or
     # F_r = -beta^2 * [chi0^(-1) - chi0^(-1) chi_r chi0^(-1)]
     # gamma_r is NOT the irreducible vertex in channel r but rather the three-point vertex from AbinitioDGA
     gchi0_inv_core = ~gchi0_core
-
-    f_dens_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_dens_loc @ gchi0_inv_core)
-    logger.log_info("Local full vertex F^w (dens) done.")
+    f_dens_loc = -(gchi0_inv_core - config.sys.beta**2 * gchi0_inv_core @ gchi_dens_loc @ gchi0_inv_core)
+    logger.log_info("Local full vertex F^wvv' (dens) done.")
     f_magn_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_magn_loc @ gchi0_inv_core)
-    logger.log_info("Local full vertex F^w (magn) done.")
+    logger.log_info("Local full vertex F^wvv' (magn) done.")
     del gchi0_inv_core
 
-    one = LocalFourPoint.identity(config.sys.n_bands, config.box.niw, config.box.niv_full)
+    # f_dens_loc_with_asympt = create_asympt_f(gchi_dens_loc, gchi_magn_loc, gchi_ud_pp_loc_sum, u_loc)
+
     # in most equations we need 1 + gamma_r so we add it here
+    one = LocalFourPoint.identity(config.sys.n_bands, config.box.niw_core, config.box.niv_full, 1)
     gamma_dens_loc = 1.0 / config.sys.beta * (gchi0_core @ f_dens_loc).sum_over_vn(config.sys.beta, axis=(-2,))
     one_plus_gamma_dens_loc = one + gamma_dens_loc
-    logger.log_info("Local three-leg vertex gamma^w (dens) done.")
+    logger.log_info("Local three-leg vertex gamma^wv (dens) done.")
 
     gamma_magn_loc = 1.0 / config.sys.beta * (gchi0_core @ f_magn_loc).sum_over_vn(config.sys.beta, axis=(-2,))
     one_plus_gamma_magn_loc = one + gamma_magn_loc
-    logger.log_info("Local three-leg vertex gamma^w (magn) done.")
+    logger.log_info("Local three-leg vertex gamma^wv (magn) done.")
     del gchi0_core, gamma_magn_loc
 
     sigma_loc = get_loc_self_energy_gamma_abinitio_dga(gamma_dens_loc, u_loc, g_loc)

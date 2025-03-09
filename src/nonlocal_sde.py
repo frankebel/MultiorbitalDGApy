@@ -13,7 +13,7 @@ def get_gchi_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
     """
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
-    wn = MFHelper.wn(config.box.niw, return_only_positive=True)
+    wn = MFHelper.wn(config.box.niw_core, return_only_positive=True)
     iws, iws2 = np.array([MFHelper.get_frequency_shift(wn_i, FrequencyShift.MINUS) for wn_i in wn], dtype=int).T
 
     niv_asympt_range = np.arange(-config.box.niv_full, config.box.niv_full)
@@ -60,10 +60,10 @@ def calculate_self_energy_q(
     # check why paul has an extra 1/beta in the frequency sums here
     gchi0_q = get_gchi_q(giwk_full, my_q_list)
     logger.log_info("Calculated gchi0_q.")
-    logger.log_memory_usage("gchi0_q", gchi0_q, n_exists=1)
+    logger.log_memory_usage("gchi0_q", gchi0_q.memory_usage_in_gb, n_exists=1)
     chi0_q = gchi0_q.sum_over_vn(config.sys.beta, axis=(-1,))
     logger.log_info("Calculated chi0_q.")
-    gchi0_q_core = gchi0_q.cut_niv(config.box.niv)
+    gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
     chi0_q_core = gchi0_q_core.sum_over_vn(config.sys.beta, axis=(-1,))
     logger.log_info("Calculated chi0_q_core.")
 

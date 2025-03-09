@@ -159,12 +159,13 @@ class IHaveMat(ABC):
         del self._mat
         gc.collect()
 
-    def times(self, contraction: str, *args):
+    def times(self, contraction: str, *args) -> np.ndarray:
         """
-        Multiplies the matrices of multiple objects with the contraction specified and returns the result.
+        Multiplies the matrices of multiple objects with the contraction
+        specified and returns the result as a numpy array.
         """
         if not all(isinstance(obj, (IHaveMat, np.ndarray)) for obj in args):
-            raise ValueError("Args has the wrong type.")
+            raise ValueError("Args has atleast one object with the wrong type. Allowed are [IHaveMat] or [np.ndarray].")
         return np.einsum(
             contraction, self.mat, *[obj.mat if isinstance(obj, IHaveMat) else obj for obj in args], optimize=True
         )
@@ -185,7 +186,7 @@ class IAmNonLocal(IHaveMat, ABC):
     def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_momentum_dimension: bool = False):
         super().__init__(mat)
         self._nq = nq
-        self._has_compressed_momentum_dimension = has_compressed_momentum_dimension
+        self._has_compressed_q_dimension = has_compressed_momentum_dimension
 
     @property
     def nq(self) -> tuple[int, int, int]:
@@ -206,7 +207,7 @@ class IAmNonLocal(IHaveMat, ABC):
         """
         Returns whether the underlying matrix has a compressed momentum dimension (q,...) or not (qx,qy,qz,...).
         """
-        return self._has_compressed_momentum_dimension
+        return self._has_compressed_q_dimension
 
     def shift_k_by_q(self, index: tuple | list[int] = (0, 0, 0)):
         """
@@ -228,7 +229,7 @@ class IAmNonLocal(IHaveMat, ABC):
             return self
 
         self.mat = self.mat.reshape((self.nq_tot, *self.current_shape[3:]))
-        self._has_compressed_momentum_dimension = True
+        self._has_compressed_q_dimension = True
         self.original_shape = self.current_shape
         return self
 
@@ -240,13 +241,13 @@ class IAmNonLocal(IHaveMat, ABC):
             return self
 
         self.mat = self.mat.reshape((*self.nq, *self.current_shape[1:]))
-        self._has_compressed_momentum_dimension = False
+        self._has_compressed_q_dimension = False
         self.original_shape = self.current_shape
         return self
 
     def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):
         """
-        Adapts the frequency dimensions of two non-local objects to fit each other for addition or multiplication..
+        Adapts the frequency dimensions of two non-local objects to fit each other for addition or multiplication.
         """
         if not self.has_compressed_q_dimension and other.has_compressed_q_dimension:
             self.compress_q_dimension()

@@ -26,9 +26,7 @@ def _uniquify_path(path: str = None):
     return path
 
 
-def load_from_w2dyn_file_and_update_config() -> (
-    tuple[GreensFunction, SelfEnergy, LocalFourPoint, LocalFourPoint, LocalFourPoint]
-):
+def load_from_w2dyn_file_and_update_config():
     file = w2dyn_aux.W2dynFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_1p)))
 
     config.sys.beta = file.get_beta()
@@ -45,30 +43,26 @@ def load_from_w2dyn_file_and_update_config() -> (
     config.lattice.interaction.vpp = file.get_vpp()
 
     config.sys.mu = file.get_mu()
-
     config.sys.n_bands = file.get_nd() + file.get_np()
     config.sys.n = file.get_totdens()
+    config.sys.occ_dmft = 2 * np.mean(file.get_rho1(), axis=(1, 3))
 
     if config.sys.n == 0:
-        config.sys.n = sum(
-            np.sum(np.diag(file.get_occ()[i, :, i, :])) for i in range(config.sys.n_bands)
-        )  # band spin band spin
+        config.sys.n = 2 * np.sum(config.sys.occ_dmft)
 
     giw_spin_mean = np.mean(file.get_giw(), axis=1)
-    giw = GreensFunction(np.einsum("i...,ij->ij...", giw_spin_mean, np.eye(config.sys.n_bands)))
+    g_dmft = GreensFunction(np.einsum("i...,ij->ij...", giw_spin_mean, np.eye(config.sys.n_bands)))
     siw_spin_mean = np.mean(file.get_siw(), axis=1)
-    siw = SelfEnergy(np.einsum("i...,ij->ij...", siw_spin_mean, np.eye(config.sys.n_bands)))
+    sigma_dmft = SelfEnergy(np.einsum("i...,ij->ij...", siw_spin_mean, np.eye(config.sys.n_bands)))
 
     file.close()
 
     file = w2dyn_aux.W2dynG4iwFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_2p)))
     g2_dens = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="dens"), channel=SpinChannel.DENS)
-    g2_magn = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="dens"), channel=SpinChannel.MAGN)
+    g2_magn = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="magn"), channel=SpinChannel.MAGN)
     try:
-        # this might be needed for asymptotics
-        g2_ud_pp = LocalFourPoint(
-            file.read_g2_full_multiband(config.sys.n_bands, name="ud_pp"), channel=SpinChannel.SING
-        )
+        # this is needed for asymptotics as proposed by Kunes, Wentzell, Tagliavini et al.
+        g2_ud_pp = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="ud_pp"), channel=SpinChannel.UD)
     except KeyError:
         config.logger.log("No UD spin combination for pp found in G2 file. Setting them to zero.", logging.WARN)
         g2_ud_pp = LocalFourPoint.from_constant(
@@ -85,9 +79,9 @@ def load_from_w2dyn_file_and_update_config() -> (
     output_format = "LDGA_Nk{}_Nq{}_wc{}_vc{}_vs{}".format(
         config.lattice.k_grid.nk_tot,
         config.lattice.q_grid.nk_tot,
-        config.box.niw,
-        config.box.niv,
-        config.box.niv_asympt,
+        config.box.niw_core,
+        config.box.niv_core,
+        config.box.niv_shell,
     )
     config.output.output_path = _uniquify_path(os.path.join(config.output.output_path, output_format))
 
@@ -96,38 +90,38 @@ def load_from_w2dyn_file_and_update_config() -> (
 
     g2_dens = _update_g2_from_dmft(g2_dens)
     g2_magn = _update_g2_from_dmft(g2_magn)
-    g2_ud_pp = _update_g2_from_dmft(g2_ud_pp)
+    g2_ud_pp = g2_ud_pp.symmetrize_v_vp()
 
-    return giw, siw, g2_dens, g2_magn, g2_ud_pp
+    return g_dmft, sigma_dmft, g2_dens, g2_magn, g2_ud_pp
 
 
 def _update_frequency_boxes(niw: int, niv: int) -> None:
     logger = config.logger
-    if config.box.niv == -1:
-        config.box.niv = niv
+    if config.box.niv_core == -1:
+        config.box.niv_core = niv
         logger.log_info(f"Number of fermionic Matsubara frequency is set to '-1'. Using niv = {niv}.")
-    elif config.box.niv > niv:
-        config.box.niv = niv
+    elif config.box.niv_core > niv:
+        config.box.niv_core = niv
         logger.log_info(
             f"Number of fermionic Matsubara frequencies cannot exceed available "
             f"frequencies in the DMFT four-point object. Using niv = {niv}."
         )
 
-    if config.box.niw == -1:
-        config.box.niw = niw
+    if config.box.niw_core == -1:
+        config.box.niw_core = niw
         logger.log_info(f"Number of bosonic Matsubara frequency is set to '-1'. Using niw = {niw}.")
-    elif config.box.niw > niw:
-        config.box.niw = niw
+    elif config.box.niw_core > niw:
+        config.box.niw_core = niw
         logger.log_info(
             f"Number of bosonic Matsubara frequencies cannot exceed available "
             f"frequencies in the DMFT four-point object. Using niw = {niw}."
         )
 
-    config.box.niv_full = config.box.niv + config.box.niv_asympt
+    config.box.niv_full = config.box.niv_core + config.box.niv_shell
 
 
 def _update_g2_from_dmft(g2: LocalFourPoint) -> LocalFourPoint:
-    g2 = g2.cut_niw_and_niv(config.box.niw, config.box.niv)
+    g2 = g2.cut_niw_and_niv(config.box.niw_core, config.box.niv_core)
     if config.dmft.do_sym_v_vp:
         config.logger.log_info(f"Symmetrizing G2_{g2.channel.value} with respect to v and v'.")
         g2 = g2.symmetrize_v_vp()

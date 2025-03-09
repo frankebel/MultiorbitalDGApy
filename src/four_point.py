@@ -1,3 +1,5 @@
+import numpy as np
+
 from local_four_point import LocalFourPoint
 from n_point_base import *
 from interaction import NonLocalInteraction, LocalInteraction
@@ -39,39 +41,39 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
     def __add__(self, other):
         """
-        Addition for LocalFourPoint objects. Allows for A + B = C.
+        Addition for FourPoint objects. Allows for A + B = C.
         """
-        return self._execute_add_sub(other, is_addition=True)
+        return self.add(other)
 
     def __radd__(self, other):
         """
-        Addition for LocalFourPoint objects. Allows for A + B = C.
+        Addition for FourPoint objects. Allows for A + B = C.
         """
-        return self._execute_add_sub(other, is_addition=True)
+        return self.__add__(other)
 
     def __sub__(self, other):
         """
-        Subtraction for LocalFourPoint objects. Allows for A + B = C.
+        Subtraction for FourPoint objects. Allows for A + B = C.
         """
-        return self._execute_add_sub(other, is_addition=False)
+        return self.__add__(-other)
 
     def __rsub__(self, other):
         """
-        Subtraction for LocalFourPoint objects. Allows for A + B = C.
+        Subtraction for FourPoint objects. Allows for A + B = C.
         """
-        return self._execute_add_sub(other, is_addition=False)
+        return self.__add__(-other)
 
     def __matmul__(self, other):
         """
         Matrix multiplication for FourPoint objects. Allows for A @ B = C using compound indices.
         """
-        return self._execute_matmul(other, True)
+        return self.matmul(other, True)
 
     def __rmatmul__(self, other):
         """
         Matrix multiplication for FourPoint objects. Allows for A @ B = C using compound indices.
         """
-        return self._execute_matmul(other, False)
+        return self.matmul(other, False)
 
     def to_compound_indices(self) -> "FourPoint":
         r"""
@@ -173,12 +175,12 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         )
 
         copy = deepcopy(self)
-        copy.mat = np.einsum(permutation, self.mat)
+        copy.mat = np.einsum(permutation, self.mat, optimize=True)
         return copy
 
-    def _execute_add_sub(self, other, is_addition: bool = True) -> "FourPoint":
+    def add(self, other) -> "FourPoint":
         """
-        Helper method that allows for in-place addition and subtraction for (non-)local FourPoint objects.
+        Helper method that allows for in-place addition and subtraction of (non-)local FourPoint objects.
         Depending on the number of frequency dimensions, the objects have to be added differently.
         """
         if not isinstance(other, (FourPoint, LocalFourPoint, np.ndarray, float, int, complex)):
@@ -186,7 +188,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         if isinstance(other, (np.ndarray, float, int, complex)):
             return FourPoint(
-                self.mat + other if is_addition else self.mat - other,
+                self.mat + other,
                 self.channel,
                 self.nq,
                 self.num_wn_dimensions,
@@ -200,31 +202,30 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
         if isinstance(other, LocalFourPoint):
-            other = self._align_frequency_dimensions_for_operation(other)
-
-            return FourPoint(
+            other, self_extended, other_extended = self._align_frequency_dimensions_for_operation(other)
+            result = FourPoint(
                 (
                     self.mat
                     + (other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...])
-                    if is_addition
-                    else self.mat
-                    - (other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...])
                 ),
                 channel,
                 self.nq,
                 self.num_wn_dimensions,
-                self.num_vn_dimensions,
+                max(self.num_vn_dimensions, other.num_vn_dimensions),
                 self.full_niw_range,
                 self.full_niv_range,
                 self.has_compressed_q_dimension,
                 self.frequency_notation,
             )
 
-        other = self._align_q_dimensions_for_operations(other)
-        other = self._align_frequency_dimensions_for_operation(other)
+            other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
+            return result
 
-        return FourPoint(
-            self.mat + other.mat if is_addition else self.mat - other.mat,
+        other = self._align_q_dimensions_for_operations(other)
+        other, self_extended, other_extended = self._align_frequency_dimensions_for_operation(other)
+
+        result = FourPoint(
+            self.mat + other.mat,
             channel,
             self.nq,
             self.num_wn_dimensions,
@@ -235,18 +236,30 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.frequency_notation,
         )
 
-    def _execute_matmul(self, other, left_hand_side: bool = True) -> "FourPoint":
+        other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
+        return result
+
+    def matmul(self, other, left_hand_side: bool = True) -> "FourPoint":
         if not isinstance(other, (FourPoint, LocalFourPoint, NonLocalInteraction, LocalInteraction)):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
-        if isinstance(other, NonLocalInteraction):
-            other = self._align_q_dimensions_for_operations(other)
+        if isinstance(other, (LocalInteraction, NonLocalInteraction)):
+            is_local = isinstance(other, LocalInteraction)
+            q_prefix = "" if is_local else "q"
+
+            self.compress_q_dimension()
+            if not is_local:
+                other = other.compress_q_dimension()
+
+            einsum_str_map = {
+                0: f"qabijw,{q_prefix}jief->qabefw" if left_hand_side else f"{q_prefix}abij,qjiefw->qabefw",
+                1: f"qabijwv,{q_prefix}jief->qabefwv" if left_hand_side else f"{q_prefix}abij,qjiefwv->qabefwv",
+                2: f"qabijwvp,{q_prefix}jief->qabefwvp" if left_hand_side else f"{q_prefix}abij,qjiefwvp->qabefwvp",
+            }
+            einsum_str = einsum_str_map.get(self.num_vn_dimensions)
+
             return FourPoint(
-                (
-                    np.einsum("qabijwvp,qjief->qabefwvp", self.mat, other.mat, optimize=True)
-                    if left_hand_side
-                    else np.einsum("qabij,qjiefwvp->qabefwvp", self.mat, other.mat, optimize=True)
-                ),
+                np.einsum(einsum_str, self.mat, other.mat, optimize=True),
                 self.channel,
                 self.nq,
                 self.num_wn_dimensions,
@@ -257,21 +270,77 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.frequency_notation,
             )
 
-        if isinstance(other, LocalInteraction):
+        is_local = isinstance(other, LocalFourPoint)
+        if (
+            self.num_wn_dimensions == 1
+            and other.num_wn_dimensions == 1
+            and (self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0)
+        ):
+            q_prefix = "" if is_local else "q"
+
             self.compress_q_dimension()
-            self.extend_vn_dimension()
+            if not is_local:
+                other = other.compress_q_dimension()
+
+            # special case if one of two (Local)FourPoint object has no fermionic frequency dimensions
+            # straightforward contraction is saving memory as we do not have to add fermionic frequency dimensions
+            einsum_str = {
+                (0, 2): f"qabcdw,{q_prefix}dcefwvp->qabefwvp",
+                (0, 1): f"qabcdw,{q_prefix}dcefwv->qabefwv",
+                (0, 0): f"qabcdw,{q_prefix}dcefw->qabefw",
+                (1, 0): f"qabcdwv,{q_prefix}dcefw->qabefwv",
+                (2, 0): f"qabcdwvp,{q_prefix}dcefw->qabefwvp",
+            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
+
             return FourPoint(
-                (
-                    np.einsum("qabijwvp,jief->qabefwvp", self.mat, other.mat, optimize=True)
-                    if left_hand_side
-                    else np.einsum("abij,qjiefwvp->qabefwvp", self.mat, other.mat, optimize=True)
-                ),
+                np.einsum(einsum_str, self.mat, other.mat, optimize=True),
                 self.channel,
                 self.nq,
                 self.num_wn_dimensions,
-                self.num_vn_dimensions,
+                max(self.num_vn_dimensions, other.num_vn_dimensions),
                 self.full_niw_range,
                 self.full_niv_range,
                 self.has_compressed_q_dimension,
                 self.frequency_notation,
             )
+
+        self.to_compound_indices()
+        other = other.to_compound_indices()
+        # for __matmul__ self needs to be the LHS object, for __rmatmul__ self needs to be the RHS object
+        new_mat = (
+            np.matmul(self.mat, other.mat[None, ...] if is_local else other.mat)
+            if left_hand_side
+            else np.matmul(other.mat[None, ...] if is_local else other.mat, self.mat)
+        )
+        self.to_full_indices()
+        other = other.to_full_indices()
+
+        other_shape = (self.nq_tot, *other.original_shape) if is_local else other.original_shape
+
+        return FourPoint(
+            new_mat,
+            self.channel,
+            self.nq,
+            self.num_wn_dimensions,
+            max(self.num_vn_dimensions, other.num_vn_dimensions),
+            self.full_niw_range,
+            self.full_niv_range,
+            self.has_compressed_q_dimension,
+            self.frequency_notation,
+        ).to_full_indices(self.original_shape if self.num_vn_dimensions == 2 else other_shape)
+
+    @staticmethod
+    def identity(
+        n_bands: int, niw: int, niv: int, nq: tuple[int, int, int] = (1, 1, 1), num_vn_dimensions: int = 2
+    ) -> "FourPoint":
+        if num_vn_dimensions not in (1, 2):
+            raise ValueError("Invalid number of fermionic frequency dimensions.")
+        nq_tot = np.prod(nq)
+        full_shape = (nq_tot,) + (n_bands,) * 4 + (2 * niw + 1,) + (2 * niv,) * num_vn_dimensions
+        compound_index_size = 2 * niv * n_bands**2
+        mat = np.tile(np.eye(compound_index_size)[None, None, ...], (nq_tot, 2 * niw + 1, 1, 1))
+
+        result = FourPoint(mat, nq=nq, num_vn_dimensions=num_vn_dimensions).to_full_indices(full_shape)
+        if num_vn_dimensions == 1:
+            return result.compress_vn_dimensions()
+        return result

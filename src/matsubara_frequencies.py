@@ -74,11 +74,11 @@ class MFHelper:
         .. math:: (w', v_1', v_2')
         indices for the conversion of a ph to a pp channel.\n
         .. math::  F_{ph_bar}[...] = F_ph[w',v_1',v_2'] \n
-        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)
+        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (w - v_1 - v_2, v_1, v_2)
         """
         niw, niv = niw // 3, min(niw // 3, niv // 3)
         iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
-        return niw + iv + ivp - iw, niv + iv, niv + ivp
+        return niw + iw - iv - ivp, niv + iv, niv + ivp
 
     @staticmethod
     def get_frequencies_for_ph_to_ph_bar_channel_conversion(

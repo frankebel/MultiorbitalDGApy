@@ -34,25 +34,34 @@ def execute_dga_routine():
     logger.log_info("Config init and folder setup done.")
     logger.log_info("Loaded data from w2dyn file.")
 
-    config.lattice, config.box, config.output, config.sys = comm.bcast(
-        (config.lattice, config.box, config.output, config.sys), root=0
-    )
-    g_dmft, sigma_dmft, g2_dens, g2_magn, g2_ud_pp = comm.bcast(
-        (g_dmft, sigma_dmft, g2_dens, g2_magn, g2_ud_pp), root=0
+    config.lattice, config.box, config.output, config.sys, config.self_consistency = comm.bcast(
+        (config.lattice, config.box, config.output, config.sys, config.self_consistency), root=0
     )
 
-    logger.log_memory_usage("giwk & siwk", g_dmft, 2)
-    logger.log_memory_usage("g2_dens, g2_magn, g2_ud_pp", g2_dens, 3)
+    g_dmft = comm.bcast(g_dmft, root=0)
+    sigma_dmft = comm.bcast(sigma_dmft, root=0)
+    g2_dens = comm.bcast(g2_dens, root=0)
+    g2_magn = comm.bcast(g2_magn, root=0)
+    g2_ud_pp = comm.bcast(g2_ud_pp, root=0)
+
+    """
+    g_dmft, sigma_dmft, g2_dens, g2_magn, g2_ud_pp = comm.bcast(
+        (g_dmft, sigma_dmft, g2_dens, g2_magn, g2_ud_pp), root=0
+    )"""
+
+    logger.log_memory_usage("giwk & siwk", g_dmft.memory_usage_in_gb, 2)
+    logger.log_memory_usage("g2_dens & g2_magn", g2_dens.memory_usage_in_gb, 2)
+    logger.log_memory_usage("g2_ud_pp", g2_ud_pp.memory_usage_in_gb, 1)
 
     if config.output.save_quantities and is_root():
         sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
         logger.log_info("Saved sigma_dmft as numpy file.")
 
     if config.output.do_plotting and is_root():
-        for g2, name in [(g2_dens, "G2_dens"), (g2_magn, "G2_magn"), (g2_ud_pp, "G2_ud_pp")]:
+        for g2, name in [(g2_dens, "G2_dens"), (g2_magn, "G2_magn"), (g2_ud_pp, "g2_ud_pp")]:
             for omega in [0, -10, 10]:
                 g2.plot(omega=omega, name=name, output_dir=config.output.output_path)
-        logger.log_info("Plotted g2_dens, g2_magn and g2_ud_pp.")
+        logger.log_info("Plotted g2 (dens), g2 (magn) and g2 (sing).")
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = GreensFunction.create_g_loc(sigma_dmft, ek)
@@ -61,9 +70,15 @@ def execute_dga_routine():
 
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
+
     gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma_local = (
         local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
     )
+    """
+    _, _, _, _, _, _, _, sigma_local = local_sde.perform_local_schwinger_dyson_abinitio_dga(
+        g_loc, g2_dens, g2_magn, g2_ud_pp, u_loc
+    )
+    """
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
     if config.output.save_quantities and is_root():
@@ -74,19 +89,21 @@ def execute_dga_routine():
         chi_magn_physical.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
-        logger.log_info("Saved quantities as numpy files.")
+        logger.log_info("Saved all relevant quantities as numpy files.")
 
     if config.output.do_plotting and is_root():
-        gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
+        gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
         gamma_dens_plot.plot(omega=0, name="Gamma_dens", output_dir=config.output.output_path)
         gamma_dens_plot.plot(omega=10, name="Gamma_dens", output_dir=config.output.output_path)
         gamma_dens_plot.plot(omega=-10, name="Gamma_dens", output_dir=config.output.output_path)
+        logger.log_info("Plotted gamma (dens).")
         del gamma_dens_plot
 
-        gamma_magn_plot = gamma_dens.cut_niv(min(config.box.niv, 2 * int(config.sys.beta)))
+        gamma_magn_plot = gamma_dens.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
         gamma_magn_plot.plot(omega=0, name="Gamma_magn", output_dir=config.output.output_path)
         gamma_magn_plot.plot(omega=10, name="Gamma_magn", output_dir=config.output.output_path)
         gamma_magn_plot.plot(omega=-10, name="Gamma_magn", output_dir=config.output.output_path)
+        logger.log_info("Plotted gamma (magn).")
         del gamma_magn_plot
 
         plotting.chi_checks(
@@ -97,6 +114,7 @@ def execute_dga_routine():
             name="loc",
             output_dir=config.output.output_path,
         )
+        logger.log_info("Plotted checks of the susceptibility.")
 
         sigma_list = []
         sigma_names = []
@@ -115,7 +133,7 @@ def execute_dga_routine():
             config.sys.beta,
             show=False,
             save=True,
-            xmax=config.box.niv,
+            xmax=config.box.niv_core,
             name="DMFT",
             output_dir=config.output.output_path,
         )

@@ -51,13 +51,13 @@ class ConfigParser:
         conf = BoxConfig()
         box_section = config_file["box_sizes"]
 
-        conf.niw = int(box_section["niw"])
-        conf.niv = int(box_section["niv"])
-        conf.niv_asympt = int(box_section["niv_asympt"])
-        if conf.niv_asympt <= 0:
-            config.logger.log_info(f"'niv_asympt' is set to {conf.niv_asympt}. No asymptotics will be used.")
-            conf.niv_asympt = 0
-        conf.niv_full = conf.niv + conf.niv_asympt
+        conf.niw_core = int(box_section["niw_core"])
+        conf.niv_core = int(box_section["niv_core"])
+        conf.niv_shell = int(box_section["niv_shell"])
+        if conf.niv_shell <= 0:
+            config.logger.log_info(f"'niv_shell' is set to {conf.niv_shell}. No asymptotics will be used.")
+            conf.niv_shell = 0
+        conf.niv_full = conf.niv_core + conf.niv_shell
 
         return conf
 

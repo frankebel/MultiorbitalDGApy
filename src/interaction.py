@@ -19,18 +19,23 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         """
         Returns the spin combination for a given channel ~WITHOUT~ a factor of 1/beta^2.
         """
-        if self.channel == channel:
-            return self
-        self._channel = channel
+        copy = deepcopy(self)
+
+        if copy.channel == channel:
+            return copy
+        elif copy.channel != channel.NONE:
+            raise ValueError(f"Cannot transform interaction from channel {copy.channel} to {channel}.")
+
+        copy._channel = channel
         perm: str = "abcd->adcb"
         if channel == SpinChannel.DENS:
-            return 2 * self - self.permute_orbitals(perm)
+            return 2 * copy - copy.permute_orbitals(perm)
         elif channel == SpinChannel.MAGN:
-            return -self.permute_orbitals(perm)
+            return -copy.permute_orbitals(perm)
         elif channel == SpinChannel.SING:
-            return self + self.permute_orbitals(perm)
+            return copy + copy.permute_orbitals(perm)
         elif channel == SpinChannel.TRIP:
-            return self - self.permute_orbitals(perm)
+            return copy - copy.permute_orbitals(perm)
         else:
             raise ValueError(f"Channel {channel} not supported.")
 
@@ -60,26 +65,28 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
             raise ValueError("Invalid permutation.")
 
         permutation = f"...{split[0]}->...{split[1]}"
-        return NonLocalInteraction(np.einsum(permutation, self.mat), self.channel)
+        return NonLocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
 
-    def _execute_add_sub(self, other, is_addition: bool) -> "NonLocalInteraction":
+    def add(self, other) -> "NonLocalInteraction":
         if not isinstance(other, (LocalInteraction, NonLocalInteraction)):
-            raise ValueError(
-                f"Addition {type(self)} + {type(other)} not supported."
-                if is_addition
-                else f"Subtraction {type(self)} - {type(other)} not supported."
-            )
+            raise ValueError(f"Operation {type(self)} +/- {type(other)} not supported.")
 
         if isinstance(other, LocalInteraction):
             other = other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...]
 
         return NonLocalInteraction(
-            self.mat + other.mat if is_addition else self.mat - other.mat,
+            self.mat + other.mat,
             self.channel if self.channel != SpinChannel.NONE else other.channel,
         )
 
     def __add__(self, other) -> "NonLocalInteraction":
-        return self._execute_add_sub(other, True)
+        return self.add(other)
+
+    def __radd__(self, other) -> "NonLocalInteraction":
+        return self.add(other)
 
     def __sub__(self, other) -> "NonLocalInteraction":
-        return self._execute_add_sub(other, False)
+        return self.add(-other)
+
+    def __rsub__(self, other) -> "NonLocalInteraction":
+        return self.add(-other)

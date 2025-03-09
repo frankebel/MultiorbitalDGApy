@@ -21,9 +21,9 @@ class InteractionConfig:
 
 class BoxConfig:
     def __init__(self):
-        self.niw: int = -1
-        self.niv: int = -1
-        self.niv_asympt: int = 0
+        self.niw_core: int = -1
+        self.niv_core: int = -1
+        self.niv_shell: int = 0
         self.niv_full: int = 0
 
 
@@ -67,6 +67,7 @@ class SystemConfig:
         self.n: float = 0.0
         self.n_bands: int = 1
         self.occ: np.ndarray = np.ndarray(0)
+        self.occ_dmft: int = 0
 
 
 class OutputConfig:
@@ -83,3 +84,4 @@ lattice: LatticeConfig = LatticeConfig()
 dmft: DmftConfig = DmftConfig()
 sys: SystemConfig = SystemConfig()
 output: OutputConfig = OutputConfig()
+self_consistency: SelfConsistencyConfig = SelfConsistencyConfig()

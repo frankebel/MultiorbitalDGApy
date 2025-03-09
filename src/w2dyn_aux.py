@@ -86,6 +86,14 @@ class W2dynFile:
         """Extracts the occupation matrix as [band1, spin1, band2, spin2]."""
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/occ/value"][()]
 
+    def get_rho1(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
+        """Extracts the 1-particle density matrix as [band1, spin1, band2, spin2]."""
+        return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/rho1/value"][()]
+
+    def get_rho2(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
+        """Extracts the 2-particle density matrix as [band1, spin1, band2, spin2, band3, spin3, band4, spin4]."""
+        return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/rho2/value"][()]
+
     def _from_atom_config(self, key: str, atom: int = 1):
         return self._file[".config"].attrs[f"atoms.{atom:1}.{key}"]
 
