@@ -1,13 +1,13 @@
 import numpy as np
 
 import config
-from self_energy import SelfEnergy
-from local_two_point import LocalTwoPoint
+from local_n_point import LocalNPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import IAmNonLocal
+from self_energy import SelfEnergy
 
 
-class GreensFunction(LocalTwoPoint, IAmNonLocal):
+class GreensFunction(LocalNPoint, IAmNonLocal):
     """
     Represents a Green's function.
     """
@@ -20,7 +20,7 @@ class GreensFunction(LocalTwoPoint, IAmNonLocal):
         full_niv_range: bool = True,
         calc_filling: bool = True,
     ):
-        LocalTwoPoint.__init__(self, mat, full_niv_range=full_niv_range)
+        LocalNPoint.__init__(self, mat, 2, 0, 1, full_niv_range=full_niv_range)
         IAmNonLocal.__init__(self, mat, config.lattice.nk)
         self._sigma = sigma
         self._ek = ek
@@ -28,6 +28,19 @@ class GreensFunction(LocalTwoPoint, IAmNonLocal):
         if sigma is not None and ek is not None and calc_filling:
             self.mat = self._get_gloc_mat()
             config.sys.n, config.sys.occ = self._get_fill()
+
+    @property
+    def e_kin(self):
+        """
+        Returns the kinetic energy of the system, see Eq (22) in G. Rohringer & A. Toschi PHYSICAL REVIEW B 94, 125144 (2016).
+        """
+        ekin = 2 / config.sys.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
+        assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
+        return ekin.real
+
+    @property
+    def n_bands(self) -> int:
+        return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
     def get_g_full(self) -> "GreensFunction":
         return GreensFunction(self._get_gfull_mat(), self._sigma, self._ek, True, False)
@@ -38,15 +51,6 @@ class GreensFunction(LocalTwoPoint, IAmNonLocal):
         Returns a local Green's function object from a given self-energy and band dispersion.
         """
         return GreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
-
-    @property
-    def e_kin(self):
-        """
-        Returns the kinetic energy of the system, see Eq (22) in G. Rohringer & A. Toschi PHYSICAL REVIEW B 94, 125144 (2016).
-        """
-        ekin = 2 / config.sys.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
-        assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
-        return ekin.real
 
     def _get_fill(self) -> (float, np.ndarray):
         """

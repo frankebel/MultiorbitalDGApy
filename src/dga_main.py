@@ -64,29 +64,24 @@ def execute_dga_routine():
         logger.log_info("Plotted g2 (dens), g2 (magn) and g2 (sing).")
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
-    g_loc = GreensFunction.create_g_loc(sigma_dmft, ek)
+    g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt(), ek)
     u_loc = config.lattice.hamiltonian.get_local_uq()
     v_nonloc = config.lattice.hamiltonian.get_uq(config.lattice.q_grid)
 
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
 
-    gamma_dens, gamma_magn, chi_dens_physical, chi_magn_physical, vrg_dens, vrg_magn, sigma_local = (
+    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, sigma_local = (
         local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
     )
-    """
-    _, _, _, _, _, _, _, sigma_local = local_sde.perform_local_schwinger_dyson_abinitio_dga(
-        g_loc, g2_dens, g2_magn, g2_ud_pp, u_loc
-    )
-    """
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
     if config.output.save_quantities and is_root():
         gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
         sigma_local.save(name="siw_sde_full", output_dir=config.output.output_path)
-        chi_dens_physical.save(name="chi_dens", output_dir=config.output.output_path)
-        chi_magn_physical.save(name="chi_magn", output_dir=config.output.output_path)
+        chi_dens.save(name="chi_dens", output_dir=config.output.output_path)
+        chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
         logger.log_info("Saved all relevant quantities as numpy files.")
@@ -107,8 +102,8 @@ def execute_dga_routine():
         del gamma_magn_plot
 
         plotting.chi_checks(
-            [chi_dens_physical.mat],
-            [chi_magn_physical.mat],
+            [chi_dens.mat],
+            [chi_magn.mat],
             ["Loc-tilde"],
             g_loc,
             name="loc",
@@ -120,8 +115,8 @@ def execute_dga_routine():
         sigma_names = []
         for i, j in it.product(range(config.sys.n_bands), repeat=2):
             try:
-                sigma_list.append(sigma_local[i, j])
-                sigma_list.append(sigma_dmft[i, j])
+                sigma_list.append(sigma_local[0, 0, 0, i, j])
+                sigma_list.append(sigma_dmft[0, 0, 0, i, j])
                 sigma_names.append(f"SDE{i}{j}")
                 sigma_names.append(f"Input{i}{j}")
             except IndexError:

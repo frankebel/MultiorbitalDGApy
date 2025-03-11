@@ -188,34 +188,6 @@ class LocalNPoint(IHaveMat):
         self.original_shape = self.current_shape
         return self
 
-    def padding_along_vn(self, other: "LocalNPoint") -> "LocalNPoint":
-        """
-        Symmetrically pads the larger of two LocalNPoint objects to the smaller one along the fermionic frequency dimensions. \n
-        Example: self/other is 'nn', other/self is 'oooo'. The resulting object will be 'onno'.
-        """
-        if self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0:
-            raise ValueError("Cannot concatenate objects with zero fermionic frequency dimensions.")
-        if self.niv == other.niv:
-            raise ValueError("Cannot concatenate objects with the same number of fermionic frequencies.")
-
-        copy = deepcopy(self)
-
-        if copy.niv > other.niv:
-            # if one tries to pad the larger object with the smaller one, we reverse the order
-            copy, other = other, copy
-
-        copy = copy.to_compound_indices()
-        other = other.to_compound_indices()
-
-        niv_diff = other.niv - self.niv
-        start, end = niv_diff * copy.n_bands**2, (niv_diff + 2 * copy.niv) * copy.n_bands**2
-        other = other.mat.copy()
-        other[..., start:end, start:end] = copy.mat
-        copy.mat = other
-        copy.original_shape = other.shape
-
-        return copy.to_full_indices()
-
     def to_full_niw_range(self):
         """
         Converts the object to the full bosonic frequency range.

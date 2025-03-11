@@ -159,6 +159,28 @@ def apply_symmetries(mat: np.ndarray, symmetries: list[KnownSymmetries]) -> None
         apply_symmetry(mat, sym)
 
 
+def get_lattice_symmetries_from_string(symmetry_string: str) -> list[KnownSymmetries]:
+    if symmetry_string == "two_dimensional_square":
+        return two_dimensional_square_symmetries()
+    elif symmetry_string == "quasi_one_dimensional_square":
+        return quasi_one_dimensional_square_symmetries()
+    elif symmetry_string == "simultaneous_x_y_inversion":
+        return simultaneous_x_y_inversion()
+    elif symmetry_string == "quasi_two_dimensional_square_symmetries":
+        return quasi_two_dimensional_square_symmetries()
+    elif not symmetry_string or symmetry_string == "none":
+        return []
+    elif isinstance(symmetry_string, (tuple, list)):
+        symmetries = []
+        for sym in symmetry_string:
+            if sym not in [s.value for s in KnownSymmetries]:
+                raise NotImplementedError(f"Symmetry {sym} not supported.")
+            symmetries.append(KnownSymmetries(sym))
+        return symmetries
+    else:
+        raise NotImplementedError(f"Symmetry {symmetry_string} not supported.")
+
+
 class KGrid:
     """Class to build the k-grid for the Brillouin zone."""
 

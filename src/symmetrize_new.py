@@ -6,6 +6,7 @@ import h5py
 import numpy as np
 
 
+# computes component arrays from a compound index.
 def index2component_general(num_bands: int, n: int, ind: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     bandspin = np.zeros(n, dtype=np.int_)
     spin = np.zeros(n, dtype=np.int_)

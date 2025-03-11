@@ -75,6 +75,13 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         """
         return self.matmul(other, False)
 
+    def __pow__(self, power, modulo=None):
+        """
+        Exponentiation for FourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
+        exponentiate the inverse of A |n| times, i.e., A ** (-3) = A^(-1) ** 3.
+        """
+        return self.power(power, FourPoint.identity_like(self))
+
     def to_compound_indices(self) -> "FourPoint":
         r"""
         Converts the indices of the FourPoint object
@@ -344,3 +351,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         if num_vn_dimensions == 1:
             return result.compress_vn_dimensions()
         return result
+
+    @staticmethod
+    def identity_like(other: "FourPoint") -> "FourPoint":
+        return FourPoint.identity(other.n_bands, other.niw, other.niv, other.nq, other.num_vn_dimensions)

@@ -53,7 +53,9 @@ def load_from_w2dyn_file_and_update_config():
     giw_spin_mean = np.mean(file.get_giw(), axis=1)
     g_dmft = GreensFunction(np.einsum("i...,ij->ij...", giw_spin_mean, np.eye(config.sys.n_bands)))
     siw_spin_mean = np.mean(file.get_siw(), axis=1)
-    sigma_dmft = SelfEnergy(np.einsum("i...,ij->ij...", siw_spin_mean, np.eye(config.sys.n_bands)))
+    siw_spin_mean = np.einsum("i...,ij->ij...", siw_spin_mean, np.eye(config.sys.n_bands))[None, None, None, ...]
+    sigma_dmft = SelfEnergy(siw_spin_mean, estimate_niv_core=True)
+    del giw_spin_mean, siw_spin_mean
 
     file.close()
 

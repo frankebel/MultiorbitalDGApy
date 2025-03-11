@@ -28,26 +28,17 @@ def sigma_loc_checks(
     for i, siw in enumerate(siw_arr):
         vn = MFHelper.vn(np.size(siw) // 2)
         axes[0].plot(vn, siw.real, label=labels[i])
-    axes[0].set_ylabel(r"$\Re \Sigma(i\nu_n)$")
-    axes[0].set_xlabel(r"$\nu_n$")
-
-    for i, siw in enumerate(siw_arr):
-        vn = MFHelper.vn(np.size(siw) // 2)
         axes[1].plot(vn, siw.imag, label=labels[i])
-    axes[1].set_ylabel(r"$\Im \Sigma(i\nu_n)$")
-    axes[1].set_xlabel(r"$\nu_n$")
-
-    for i, siw in enumerate(siw_arr):
-        vn = MFHelper.vn(np.size(siw) // 2)
         axes[2].loglog(vn, siw.real, label=labels[i])
-    axes[2].set_ylabel(r"$\Re \Sigma(i\nu_n)$")
-    axes[2].set_xlabel(r"$\nu_n$")
-
-    for i, siw in enumerate(siw_arr):
-        vn = MFHelper.vn(np.size(siw) // 2)
         axes[3].loglog(vn, np.abs(siw.imag), label=labels[i])
+
+    for i in range(4):
+        axes[i].set_xlabel(r"$\nu_n$")
+
+    axes[0].set_ylabel(r"$\Re \Sigma(i\nu_n)$")
+    axes[1].set_ylabel(r"$\Im \Sigma(i\nu_n)$")
+    axes[2].set_ylabel(r"$\Re \Sigma(i\nu_n)$")
     axes[3].set_ylabel(r"$|\Im \Sigma(i\nu_n)|$")
-    axes[3].set_xlabel(r"$\nu_n$")
 
     axes[0].set_xlim(0, xmax)
     axes[1].set_xlim(0, xmax)
@@ -65,12 +56,12 @@ def sigma_loc_checks(
 
 
 def chi_checks(
-    chi_dens: list[np.ndarray],
-    chi_magn: list[np.ndarray],
+    chi_dens_list: list[np.ndarray],
+    chi_magn_list: list[np.ndarray],
     labels: list[str],
     g_loc: GreensFunction,
     output_dir: str = "./",
-    orbs=[0, 0],
+    orbs=[0, 0, 0, 0],
     show: bool = False,
     save: bool = True,
     name: str = "",
@@ -80,19 +71,19 @@ def chi_checks(
     """
     fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(8, 5), dpi=500)
     axes = axes.flatten()
-    niw_chi_input = np.size(chi_dens[0][*orbs, :])
+    niw_chi_input = np.size(chi_dens_list[0][*orbs, :])
 
-    for i, cd in enumerate(chi_dens):
+    for i, cd in enumerate(chi_dens_list):
         axes[0].plot(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i])
     axes[0].set_ylabel(r"$\Re \chi(i\omega_n)_{dens}$")
     axes[0].legend()
 
-    for i, cd in enumerate(chi_magn):
+    for i, cd in enumerate(chi_magn_list):
         axes[1].plot(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i])
     axes[1].set_ylabel(r"$\Re \chi(i\omega_n)_{magn}$")
     axes[1].legend()
 
-    for i, cd in enumerate(chi_dens):
+    for i, cd in enumerate(chi_dens_list):
         axes[2].loglog(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
     axes[2].loglog(
         MFHelper.wn(niw_chi_input),
@@ -104,7 +95,7 @@ def chi_checks(
     axes[2].set_ylabel(r"$\Re \chi(i\omega_n)_{dens}$")
     axes[2].legend()
 
-    for i, cd in enumerate(chi_magn):
+    for i, cd in enumerate(chi_magn_list):
         axes[3].loglog(MFHelper.wn(len(cd[*orbs, :]) // 2), cd[*orbs, :].real, label=labels[i], ms=0)
     axes[3].loglog(
         MFHelper.wn(niw_chi_input),

@@ -9,7 +9,7 @@ from n_point_base import *
 class LocalFourPoint(LocalNPoint, IHaveChannel):
     """
     This class is used to represent a local four-point object in a given channel with a given number of bosonic and
-    fermionic frequency dimensions which have to be specified to keep track of (re-)shaping.
+    fermionic frequency dimensions. These were added to make matrix operations with other objects easier.
     """
 
     def __init__(
@@ -32,18 +32,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             full_niv_range,
         )
         IHaveChannel.__init__(self, channel, frequency_notation)
-
-    def __matmul__(self, other) -> "LocalFourPoint":
-        """
-        Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
-        """
-        return self.matmul(other, left_hand_side=True)
-
-    def __rmatmul__(self, other) -> "LocalFourPoint":
-        """
-        Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
-        """
-        return self.matmul(other, left_hand_side=False)
 
     def __add__(self, other) -> "LocalFourPoint":
         """
@@ -69,11 +57,57 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         return self.__add__(-other)
 
+    def __matmul__(self, other) -> "LocalFourPoint":
+        """
+        Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
+        """
+        return self.matmul(other, left_hand_side=True)
+
+    def __rmatmul__(self, other) -> "LocalFourPoint":
+        """
+        Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
+        """
+        return self.matmul(other, left_hand_side=False)
+
     def __invert__(self) -> "LocalFourPoint":
         """
         Inverts the LocalFourPoint object by transforming it to compound indices.
         """
         return self.invert()
+
+    def __pow__(self, power, modulo=None):
+        """
+        Exponentiation for LocalFourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
+        exponentiate the inverse of A |n| times, i.e., A ** (-n) = A^(-1) ** n.
+        """
+        return self.power(power, LocalFourPoint.identity_like(self))
+
+    def power(self, power: int, identity):
+        """
+        Exponentiation for LocalFourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
+        exponentiate the inverse of A |n| times, i.e., A ** (-n) = A^(-1) ** n. Requires the input of the identity.
+        """
+        if not isinstance(power, int):
+            raise ValueError("Only integer powers are supported.")
+
+        if power == 0:
+            return identity
+        if power == 1:
+            return self
+        if power < 0:
+            return (~self) ** abs(power)
+
+        result = identity
+        base = deepcopy(self)
+
+        # Exponentiation by squaring
+        while power > 0:
+            if power % 2 == 1:
+                result @= base
+            base @= base
+            power //= 2
+
+        return result
 
     def symmetrize_v_vp(self) -> "LocalFourPoint":
         """
@@ -98,7 +132,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def sum_over_vn(self, beta: float, axis: tuple = (-1,)) -> "LocalFourPoint":
         """
-        This method is used to sum over specific fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
+        Sums over specific fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
         """
         if len(axis) > self.num_vn_dimensions:
             raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
@@ -129,7 +163,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def contract_legs(self, beta: float) -> "LocalFourPoint":
         """
-        Sums over all fermionic frequency dimensions if the object has 2 fermionic frequency dimensions.
+        Sums over all fermionic frequency dimensions if the object has 2 fermionic frequency dimensions and sums over
+        the inner two orbitals.
         """
         if self.num_vn_dimensions != 2:
             raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
@@ -217,9 +252,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         if isinstance(other, LocalInteraction):
             einsum_str = {
-                0: "abijw,jief->abefw",
-                1: "abijwv,jief->abefwv",
-                2: "abijwvp,jief->abefwvp",
+                0: "abijw,jief->abefw" if left_hand_side else "abij,jiefw->abefw",
+                1: "abijwv,jief->abefwv" if left_hand_side else "abij,jiefwv->abefwv",
+                2: "abijwvp,jief->abefwvp" if left_hand_side else "abij,jiefwvp->abefwvp",
             }.get(self.num_vn_dimensions)
             return LocalFourPoint(
                 np.einsum(einsum_str, self.mat, other.mat, optimize=True),
@@ -467,6 +502,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if num_vn_dimensions == 1:
             return result.compress_vn_dimensions()
         return result
+
+    @staticmethod
+    def identity_like(other: "LocalFourPoint") -> "LocalFourPoint":
+        return LocalFourPoint.identity(other.n_bands, other.niw, other.niv, other.num_vn_dimensions)
 
     def plot(
         self,
