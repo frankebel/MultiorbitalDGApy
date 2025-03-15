@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 
 from interaction import *
+import brillouin_zone as bz
 
 
 class HoppingElement:
@@ -324,14 +325,14 @@ class Hamiltonian:
         self._ek = ek
         return self
 
-    def get_local_uq(self) -> LocalInteraction:
+    def get_local_u(self) -> LocalInteraction:
         """
         Returns the local interaction term in momentum space. Note that due to the momentum-independence of the local interaction,
         the momentum space representation is the same as the real space representation.
         """
         return LocalInteraction(self._ur_local)
 
-    def get_uq(self, q_grid: bz.KGrid) -> "NonLocalInteraction":
+    def get_vq(self, q_grid: bz.KGrid) -> "NonLocalInteraction":
         uq = self._convham_4_orbs(q_grid.kmesh.reshape(3, -1))
         n_bands = uq.shape[-1]
         return NonLocalInteraction(uq.reshape(*q_grid.nk + (n_bands,) * 4))

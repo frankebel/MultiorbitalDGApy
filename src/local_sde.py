@@ -60,12 +60,12 @@ def create_generalized_chi0(
     return LocalFourPoint(-config.sys.beta * g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1)
 
 
-def create_gamma_r(gchi_r: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
+def create_gamma_r(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the irreducible vertex
     .. math:: \Gamma_{r;lmm'l'}^{wvv'} = \beta^2 * [(\chi_{r;lmm'l'}^{wvv'})^{-1} - (\chi_{0;lmm'l'}^{wv})^{-1}]
     """
-    return config.sys.beta**2 * (~gchi_r - ~(gchi0.cut_niv(config.box.niv_core)))
+    return config.sys.beta**2 * (gchi_r.invert() - gchi0_inv)
 
 
 def create_gamma_r_with_shell_correction(
@@ -74,42 +74,59 @@ def create_gamma_r_with_shell_correction(
     """
     Calculates the irreducible vertex with the shell correction as described
     by Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
-    More specifically equations A.4 to A.8
+    More specifically equations A.4 to A.8. Has an additional factor of beta^2 compared to Paul Worm's code.
     """
-    chi_tilde_shell = ~(~gchi0 + 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel))
-    chi_tilde_core_inv = ~(chi_tilde_shell.cut_niv(config.box.niv_core))
-    return config.sys.beta**2 * (~gchi_r - chi_tilde_core_inv) + u_loc.as_channel(gchi_r.channel)
+    chi_tilde_shell = (gchi0.invert() + 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel)).invert()
+    chi_tilde_core_inv = chi_tilde_shell.cut_niv(config.box.niv_core).invert()
+    return config.sys.beta**2 * (gchi_r.invert() - chi_tilde_core_inv) + u_loc.as_channel(gchi_r.channel)
 
 
-def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi_0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
+def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi0_inv: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
     r"""
     Returns the auxiliary susceptibility
-    .. math:: \chi^{*;wvv'}_{r;lmm'l'} = (\chi_{0;lmm'l'}^{-1} + (\Gamma_{r;lmm'l'}-\Gamma_{0;lmm'l'})/\beta^2)^{-1}.
+    .. math:: \chi^{*;wvv'}_{r;lmm'l'} = (\chi_{0;lmm'l'}^{-1} + (\Gamma_{r;lmm'l'}-U_{r;lmm'l'})/\beta^2)^{-1}.
     See Eq. (3.68) in Paul Worm's thesis.
     """
-    return ~(~gchi_0.cut_niv(config.box.niv_core) + (gamma_r - u_loc.as_channel(gamma_r.channel)) / config.sys.beta**2)
+    return (gchi0_inv + (gamma_r - u_loc.as_channel(gamma_r.channel)) / config.sys.beta**2).invert()
 
 
 def create_generalized_chi_with_shell_correction(
     gchi_aux_sum: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction
 ) -> LocalFourPoint:
+    """
+    Calculates the generalized susceptibility with the shell correction as described by
+    Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d. Eq. A.15
+    """
     gchi0_full_sum = 1.0 / config.sys.beta * gchi0.sum_over_all_vn(config.sys.beta)
     gchi0_core_sum = 1.0 / config.sys.beta * gchi0.cut_niv(config.box.niv_core).sum_over_all_vn(config.sys.beta)
-    return ~(~(gchi_aux_sum + gchi0_full_sum - gchi0_core_sum) + u_loc.as_channel(gchi_aux_sum.channel))
+    return ((gchi_aux_sum + gchi0_full_sum - gchi0_core_sum).invert() + u_loc.as_channel(gchi_aux_sum.channel)).invert()
 
 
-def create_vrg(gchi_aux: LocalFourPoint, gchi0: LocalFourPoint) -> LocalFourPoint:
+def create_full_vertex(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
+    r"""
+    Returns the full vertex
+    .. math:: F_{r;abcd}^{wvv'} = -\beta^2 * (\chi_{0;abcd}^{-1} - \chi_{0;abef}^{-1} \chi_{r;fehg} \chi_{0;ghcd}^{-1})
+    See Eq. (3.64) in Paul Worm's thesis.
+    """
+    return config.sys.beta**2 * (gchi0_inv - gchi0_inv @ gchi_r @ gchi0_inv)
+
+
+def create_vrg(gchi_aux: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the three-leg vertex
     .. math:: \gamma_{r;lmm'l'} = \beta * (\chi^{wvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;wvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_sum = gchi_aux.sum_over_vn(config.sys.beta, axis=(-1,))
-    return config.sys.beta * (~gchi0.cut_niv(config.box.niv_core) @ gchi_aux_sum).compress_vn_dimensions()
+    return config.sys.beta * (gchi0_inv @ gchi_aux_sum).take_vn_diagonal()
 
 
 def create_vertex_functions(
-    g2_r: LocalFourPoint, gchi0: LocalFourPoint, g_loc: GreensFunction, u_loc: LocalInteraction
+    g2_r: LocalFourPoint,
+    gchi0: LocalFourPoint,
+    gchi0_inv_core: LocalFourPoint,
+    g_loc: GreensFunction,
+    u_loc: LocalInteraction,
 ) -> (LocalFourPoint, LocalFourPoint, LocalFourPoint):
     """
     Calculates the three-leg vertex, the auxiliary susceptibility and the irreducible vertex. Employs explicit
@@ -123,17 +140,20 @@ def create_vertex_functions(
     logger.log_info(f"Local generalized susceptibility chi^wvv' ({gchi_r.channel.value}) done.")
 
     if config.output.do_plotting and config.current_rank == 0:
-        gchi_r.plot(omega=0, name=f"Gchi_{gchi_r.channel}", output_dir=config.output.output_path)
+        gchi_r.plot(omega=0, name=f"Gchi_{gchi_r.channel.value}", output_dir=config.output.output_path)
         logger.log_info(f"Local generalized susceptibility ({gchi_r.channel.value}) plotted.")
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")
+
+    f_r = create_full_vertex(gchi_r, gchi0_inv_core)
+    logger.log_info(f"Local full vertex F^wvv' ({f_r.channel.value}) done.")
     del gchi_r
 
-    gchi_r_aux = create_auxiliary_chi(gamma_r, gchi0, u_loc)
+    gchi_r_aux = create_auxiliary_chi(gamma_r, gchi0_inv_core, u_loc)
     logger.log_info(f"Local auxiliary susceptibility chi^*wvv' ({gchi_r_aux.channel.value}) done.")
 
-    vrg_r = create_vrg(gchi_r_aux, gchi0)
+    vrg_r = create_vrg(gchi_r_aux, gchi0_inv_core)
     logger.log_info(f"Local three-leg vertex gamma^wv ({vrg_r.channel.value}) done.")
 
     gchi_r_aux_sum = gchi_r_aux.sum_over_all_vn(config.sys.beta)
@@ -142,7 +162,7 @@ def create_vertex_functions(
     gchi_r_aux_sum = create_generalized_chi_with_shell_correction(gchi_r_aux_sum, gchi0, u_loc)
     logger.log_info(f"Updated local susceptibility chi^w ({gchi_r_aux_sum.channel.value}) with asymptotic correction.")
 
-    return gamma_r, gchi_r_aux_sum, vrg_r
+    return gamma_r, gchi_r_aux_sum, vrg_r, f_r
 
 
 def get_loc_self_energy_vrg(
@@ -172,20 +192,21 @@ def perform_local_schwinger_dyson(
 ):
     """
     Performs the local Schwinger-Dyson equation calculation for the local (DMFT) self-energy for sanity checks.
-    Includes the calculation of the three-leg vertices, (auxiliary/bare/physical) susceptibilities and the irreducible
-    vertices. Employs explicit asymptotics as proposed by
+    Includes the calculation of the three-leg and full vertices, (auxiliary/bare/physical) susceptibilities
+    and the irreducible vertices. Employs explicit asymptotics as proposed by
     Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
     """
     gchi0 = create_generalized_chi0(g_loc)
+    gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert()
 
-    gamma_dens, gchi_dens_sum, vrg_dens = create_vertex_functions(g2_dens, gchi0, g_loc, u_loc)
-    gamma_magn, gchi_magn_sum, vrg_magn = create_vertex_functions(g2_magn, gchi0, g_loc, u_loc)
+    gamma_dens, gchi_dens_sum, vrg_dens, f_dens = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
+    gamma_magn, gchi_magn_sum, vrg_magn, f_magn = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)
     del gchi0
 
     sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
     config.logger.log_info("Self-energy Sigma^v done.")
 
-    return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, sigma
+    return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
 
 
 # ----------------------------------------------- AbinitioDGA algorithms -----------------------------------------------
@@ -224,13 +245,13 @@ def perform_local_schwinger_dyson_abinitio_dga(
     del g2_magn
 
     gchi0_loc_full = create_generalized_chi0(g_loc)
-    logger.log_info("Generalized bare susceptibility chi_0^wv done.")
+    logger.log_info("Local bare susceptibility chi_0^wv done.")
     gchi0_core = gchi0_loc_full.cut_niv(config.box.niv_core)
 
     # 1 + chi0 * F_r = gchi_r * (chi0)^(-1) = 1 + gamma_r or
     # F_r = -beta^2 * [chi0^(-1) - chi0^(-1) chi_r chi0^(-1)]
     # gamma_r is NOT the irreducible vertex in channel r but rather the three-point vertex from AbinitioDGA
-    gchi0_inv_core = ~gchi0_core
+    gchi0_inv_core = gchi0_core.invert()
     f_dens_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_dens_loc @ gchi0_inv_core)
     logger.log_info("Local full vertex F^wvv' (dens) done.")
     f_magn_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_magn_loc @ gchi0_inv_core)

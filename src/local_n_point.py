@@ -27,6 +27,7 @@ class LocalNPoint(IHaveMat):
         assert num_wn_dimensions in (0, 1), "0 or 1 bosonic frequency dimensions are supported."
         self._num_wn_dimensions = num_wn_dimensions
 
+        # TODO: debate whether this makes sense here or should it be handled on a higher level
         self._full_niv_range = full_niv_range
         if not self._full_niv_range:
             self.to_full_niv_range()
@@ -161,7 +162,7 @@ class LocalNPoint(IHaveMat):
         """
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
-    def extend_vn_dimension(self) -> "LocalNPoint":
+    def extend_vn_to_diagonal(self) -> "LocalNPoint":
         """
         Extends an object [...,w,v] to [...,w,v,v] by making a diagonal from the last dimension if the number of fermionic
         frequency dimensions is one.
@@ -172,10 +173,10 @@ class LocalNPoint(IHaveMat):
             return self
         self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]), optimize=True)
         self._num_vn_dimensions += 1
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         return self
 
-    def compress_vn_dimensions(self) -> "LocalNPoint":
+    def take_vn_diagonal(self) -> "LocalNPoint":
         """
         Compresses an object [...w,v,v] to [...,w,v] by taking the diagonal of the last two dimensions.
         """
@@ -185,7 +186,7 @@ class LocalNPoint(IHaveMat):
             return self
         self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         self._num_vn_dimensions -= 1
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         return self
 
     def to_full_niw_range(self):
@@ -207,7 +208,7 @@ class LocalNPoint(IHaveMat):
         self.mat = np.concatenate(
             (np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)), self.mat), axis=niw_axis
         )
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         self._full_niw_range = True
         return self
 
@@ -222,7 +223,7 @@ class LocalNPoint(IHaveMat):
 
         axis = (-2, -1) if self.num_vn_dimensions == 2 else -1
         self.mat = np.concatenate((np.conj(np.flip(self.mat, axis)), self.mat), axis=axis)
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         self._full_niv_range = True
         return self
 
@@ -233,9 +234,9 @@ class LocalNPoint(IHaveMat):
         self_extended = False
         other_extended = False
         if self.num_vn_dimensions == 1 and other.num_vn_dimensions == 2:
-            self.extend_vn_dimension()
+            self.extend_vn_to_diagonal()
             self_extended = True
         if self.num_vn_dimensions == 2 and other.num_vn_dimensions == 1:
-            other = other.extend_vn_dimension()
+            other = other.extend_vn_to_diagonal()
             other_extended = True
         return other, self_extended, other_extended

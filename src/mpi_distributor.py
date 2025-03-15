@@ -7,8 +7,10 @@ import config
 
 
 class MpiDistributor:
-    """Distributes tasks among cores. Uses the first (q) dimension to slice the vertex data into chunks and sends it to
-    all active MPI processes."""
+    """
+    Distributes tasks among all available cores. Uses the first (q) dimension to slice the vertex data into chunks
+    #and sends it to all active MPI processes.
+    """
 
     def __init__(self, ntasks: int = 1, comm: MPI.Comm = None, name: str = ""):
         self._comm = comm
@@ -19,7 +21,7 @@ class MpiDistributor:
         self._my_size = None
         self._slices = None
 
-        self.distribute_tasks()
+        self._distribute_tasks()
 
         if config.output.output_path is not None:
             # creates rank file if it does not exist
@@ -96,19 +98,6 @@ class MpiDistributor:
         except:
             pass
 
-    def distribute_tasks(self):
-        n_per_rank = self.ntasks // self.mpi_size
-        n_excess = self.ntasks - n_per_rank * self.mpi_size
-        self._sizes = n_per_rank * np.ones(self.mpi_size, int)
-
-        if n_excess:
-            self._sizes[-n_excess:] += 1
-
-        slice_ends = self._sizes.cumsum()
-        self._slices = list(map(slice, slice_ends - self._sizes, slice_ends))
-        self._my_size = self._sizes[self.my_rank]
-        self._my_slice = self._slices[self.my_rank]
-
     def allgather(self, rank_result: np.ndarray = None) -> np.ndarray:
         tot_shape = (self.ntasks,) + rank_result.shape[1:]
         tot_result = np.empty(tot_shape, rank_result.dtype)
@@ -160,3 +149,16 @@ class MpiDistributor:
         if comm is None:
             comm = MPI.COMM_WORLD
         return MpiDistributor(ntasks=ntasks, comm=comm, name=name)
+
+    def _distribute_tasks(self):
+        n_per_rank = self.ntasks // self.mpi_size
+        n_excess = self.ntasks - n_per_rank * self.mpi_size
+        self._sizes = n_per_rank * np.ones(self.mpi_size, int)
+
+        if n_excess:
+            self._sizes[-n_excess:] += 1
+
+        slice_ends = self._sizes.cumsum()
+        self._slices = list(map(slice, slice_ends - self._sizes, slice_ends))
+        self._my_size = self._sizes[self.my_rank]
+        self._my_slice = self._slices[self.my_rank]

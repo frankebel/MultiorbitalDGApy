@@ -43,19 +43,19 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         Addition for LocalFourPoint objects. Allows for A + B = C.
         """
-        return self.__add__(other)
+        return self.add(other)
 
     def __sub__(self, other) -> "LocalFourPoint":
         """
         Subtraction for LocalFourPoint objects. Allows for A - B = C.
         """
-        return self.__add__(-other)
+        return self.sub(other)
 
     def __rsub__(self, other) -> "LocalFourPoint":
         """
         Subtraction for LocalFourPoint objects. Allows for A - B = C.
         """
-        return self.__add__(-other)
+        return self.sub(other)
 
     def __matmul__(self, other) -> "LocalFourPoint":
         """
@@ -126,7 +126,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         self.mat = np.einsum(f"{split[0]}...->{split[1]}...", self.mat)
         diff = len(split[0]) - len(split[1])
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         self._num_orbital_dimensions -= diff
         return self
 
@@ -137,7 +137,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if len(axis) > self.num_vn_dimensions:
             raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
         copy_mat = 1 / beta ** len(axis) * np.sum(self.mat, axis=axis)
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         return LocalFourPoint(
             copy_mat,
             self.channel,
@@ -190,14 +190,14 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if self.num_wn_dimensions != 1:
             raise ValueError(f"Cannot convert to compound indices if there are no bosonic frequencies.")
 
-        self.original_shape = self.current_shape
+        self.update_original_shape()
 
         if self.num_vn_dimensions == 0:  # [o1,o2,o3,o4,w]
             self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(2 * self.niw + 1, self.n_bands**2, self.n_bands**2)
             return self
 
         if self.num_vn_dimensions == 1:  # [o1,o2,o3,o4,w,v]
-            self.extend_vn_dimension()
+            self.extend_vn_to_diagonal()
 
         self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
             2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
@@ -235,7 +235,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def invert(self) -> "LocalFourPoint":
         """
-        Inverts the LocalNPoint object by transforming it to compound indices.
+        Inverts the object by transforming it to compound indices.
         """
         copy = deepcopy(self)
         copy = copy.to_compound_indices()
@@ -373,6 +373,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
         return result
 
+    def sub(self, other):
+        return self.add(-other)
+
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalFourPoint":
         """
         Permutes the orbitals of the four-point object.
@@ -500,7 +503,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         result = LocalFourPoint(mat, num_vn_dimensions=num_vn_dimensions).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
-            return result.compress_vn_dimensions()
+            return result.take_vn_diagonal()
         return result
 
     @staticmethod
@@ -554,7 +557,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self, other: "LocalFourPoint", other_extended: bool, self_extended: bool
     ):
         if self_extended:
-            self.compress_vn_dimensions()
+            self.take_vn_diagonal()
         if other_extended:
-            other = other.compress_vn_dimensions()
+            other = other.take_vn_diagonal()
         return other

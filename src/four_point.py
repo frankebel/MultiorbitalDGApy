@@ -1,8 +1,6 @@
-import numpy as np
-
+from interaction import NonLocalInteraction, LocalInteraction
 from local_four_point import LocalFourPoint
 from n_point_base import *
-from interaction import NonLocalInteraction, LocalInteraction
 
 
 class FourPoint(LocalFourPoint, IAmNonLocal):
@@ -39,43 +37,43 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
     def n_bands(self) -> int:
         return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
-    def __add__(self, other):
+    def __add__(self, other) -> "FourPoint":
         """
         Addition for FourPoint objects. Allows for A + B = C.
         """
         return self.add(other)
 
-    def __radd__(self, other):
+    def __radd__(self, other) -> "FourPoint":
         """
         Addition for FourPoint objects. Allows for A + B = C.
         """
-        return self.__add__(other)
+        return self.add(other)
 
-    def __sub__(self, other):
+    def __sub__(self, other) -> "FourPoint":
         """
         Subtraction for FourPoint objects. Allows for A + B = C.
         """
-        return self.__add__(-other)
+        return self.sub(other)
 
-    def __rsub__(self, other):
+    def __rsub__(self, other) -> "FourPoint":
         """
         Subtraction for FourPoint objects. Allows for A + B = C.
         """
-        return self.__add__(-other)
+        return self.sub(other)
 
-    def __matmul__(self, other):
+    def __matmul__(self, other) -> "FourPoint":
         """
         Matrix multiplication for FourPoint objects. Allows for A @ B = C using compound indices.
         """
         return self.matmul(other, True)
 
-    def __rmatmul__(self, other):
+    def __rmatmul__(self, other) -> "FourPoint":
         """
         Matrix multiplication for FourPoint objects. Allows for A @ B = C using compound indices.
         """
         return self.matmul(other, False)
 
-    def __pow__(self, power, modulo=None):
+    def __pow__(self, power, modulo=None) -> "FourPoint":
         """
         Exponentiation for FourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
         exponentiate the inverse of A |n| times, i.e., A ** (-3) = A^(-1) ** 3.
@@ -101,7 +99,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         if not self.has_compressed_q_dimension:
             self.compress_q_dimension()
 
-        self.original_shape = self.current_shape
+        self.update_original_shape()
 
         if self.num_vn_dimensions == 0:  # [q, o1, o2, o3, o4, w]
             self.mat = self.mat.transpose(0, 5, 1, 2, 3, 4).reshape(
@@ -110,7 +108,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             return self
 
         if self.num_vn_dimensions == 1:  # [q, o1, o2, o3, o4, w, v]
-            self.extend_vn_dimension()
+            self.extend_vn_to_diagonal()
 
         # [q, o1, o2, o3, o4, w, v, vp]
         self.mat = self.mat.transpose(0, 5, 1, 2, 6, 3, 4, 7).reshape(
@@ -163,32 +161,40 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         return self
 
+    def invert(self) -> "FourPoint":
+        """
+        Inverts the object by transforming it to compound indices.
+        """
+        copy = deepcopy(self)
+        copy = copy.to_compound_indices()
+        copy.mat = np.linalg.inv(copy.mat)
+        return copy.to_full_indices()
+
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "FourPoint":
         """
         Permutes the orbitals of the four-point object.
         """
         split = permutation.split("->")
-        if (
-            len(split) != 2
-            or len(split[0]) != self.num_orbital_dimensions
-            or len(split[1]) != self.num_orbital_dimensions
-        ):
+        if len(split) != 2 or len(split[0]) != 4 or len(split[1]) != 4:
             raise ValueError("Invalid permutation.")
 
+        if split[0] == split[1]:
+            return self
+
         permutation = (
-            f":{split[0]}...->:{split[1]}..."
+            f"i{split[0]}...->i{split[1]}..."
             if self.has_compressed_q_dimension
-            else f":::{split[0]}...->:::{split[1]}..."
+            else f"ijk{split[0]}...->ijk{split[1]}..."
         )
 
         copy = deepcopy(self)
-        copy.mat = np.einsum(permutation, self.mat, optimize=True)
+        copy.mat = np.einsum(permutation, copy.mat, optimize=True)
         return copy
 
     def add(self, other) -> "FourPoint":
         """
-        Helper method that allows for in-place addition and subtraction of (non-)local FourPoint objects.
-        Depending on the number of frequency dimensions, the objects have to be added differently.
+        Helper method that allows for in-place addition of (non-)local FourPoint objects.
+        Depending on the number of frequency and momentum dimensions, the objects have to be added differently.
         """
         if not isinstance(other, (FourPoint, LocalFourPoint, np.ndarray, float, int, complex)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
@@ -246,7 +252,18 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
         return result
 
+    def sub(self, other) -> "FourPoint":
+        """
+        Helper method that allows for in-place subtraction of (non-)local FourPoint objects.
+        Depending on the number of frequency and momentum dimensions, the objects have to be subtracted differently.
+        """
+        return self.add(-other)
+
     def matmul(self, other, left_hand_side: bool = True) -> "FourPoint":
+        """
+        Helper method that allows for matrix multiplication for (non-)local FourPoint objects. Depending on the
+        number of frequency and momentum dimensions, the objects have to be multiplied differently.
+        """
         if not isinstance(other, (FourPoint, LocalFourPoint, NonLocalInteraction, LocalInteraction)):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
@@ -349,7 +366,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         result = FourPoint(mat, nq=nq, num_vn_dimensions=num_vn_dimensions).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
-            return result.compress_vn_dimensions()
+            return result.take_vn_diagonal()
         return result
 
     @staticmethod

@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 
 import config
@@ -52,6 +54,34 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         """
         return GreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
 
+    def permute_orbitals(self, permutation: str = "ab->ab"):
+        """
+        Permutes the orbitals of the Green's function object. The permutation string must be given in the einsum notation.
+        """
+        split = permutation.split("->")
+        if len(split) != 2 or len(split[0]) != 2 or len(split[1]) != 2:
+            raise ValueError("Invalid permutation.")
+
+        if split[0] == split[1]:
+            return self
+
+        permutation = (
+            f"i{split[0]}...->i{split[1]}..."
+            if self.has_compressed_q_dimension
+            else f"ijk{split[0]}...->ijk{split[1]}..."
+        )
+
+        copy = deepcopy(self)
+        copy.mat = np.einsum(permutation, copy.mat, optimize=True)
+        return copy
+
+    def transpose_orbitals(self):
+        r"""
+        Transposes the orbitals of the Green's function object.
+        .. math:: G_{ab}^\nu -> G_{ba}^\nu
+        """
+        return self.permute_orbitals("ab->ba")
+
     def _get_fill(self) -> (float, np.ndarray):
         """
         Returns the total filling and the filling of each band.
@@ -74,6 +104,19 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         occ = rho_loc + np.sum(mat.real - g_model.real, axis=-1) / config.sys.beta
         n_el = 2.0 * np.trace(occ).real
         return n_el, occ
+
+    def _get_fill_nonlocal(self) -> (float, np.ndarray):
+        """
+        Returns the total filling and the filling of each band k-dependent.
+        TODO: FIX THIS OR ATLEAST TRY TO
+        """
+        mat = self._get_gfull_mat()
+        g_model = self._get_g_model_mat()
+        smom0, _ = self._sigma.smom[None, None, None, ...]
+        mu_bands: np.ndarray = config.sys.mu * np.eye(self.n_bands)[None, None, None, ...]
+
+        eigenvals, eigenvecs = np.linalg.eig(config.sys.beta * (self._ek.real + smom0 - mu_bands))
+        rho_diag = np.zeros((*self.nq, self.n_bands, self.n_bands), dtype=np.complex64)
 
     def _get_gfull_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()

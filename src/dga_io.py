@@ -1,20 +1,17 @@
-import logging
-import os
-
 import brillouin_zone as bz
 import config
 import w2dyn_aux
+from greens_function import GreensFunction
 from hamiltonian import Hamiltonian
 from local_four_point import LocalFourPoint
-from greens_function import GreensFunction
-from self_energy import SelfEnergy
 from n_point_base import *
+from self_energy import SelfEnergy
 
 
-def _uniquify_path(path: str = None):
+def uniquify_path(path: str = None):
     """
-    path: path to be checked for uniqueness
-    return: updated unique path
+    :param path: Path to be checked for uniqueness
+    :return: Updated unique path
     """
     filename, extension = os.path.splitext(path)
     counter = 1
@@ -27,6 +24,9 @@ def _uniquify_path(path: str = None):
 
 
 def load_from_w2dyn_file_and_update_config():
+    """
+    Loads data from the w2dyn file and updates the config file.
+    """
     file = w2dyn_aux.W2dynFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_1p)))
 
     config.sys.beta = file.get_beta()
@@ -62,21 +62,13 @@ def load_from_w2dyn_file_and_update_config():
     file = w2dyn_aux.W2dynG4iwFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_2p)))
     g2_dens = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="dens"), channel=SpinChannel.DENS)
     g2_magn = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="magn"), channel=SpinChannel.MAGN)
-    try:
-        # this is needed for asymptotics as proposed by Kunes, Wentzell, Tagliavini et al.
-        g2_ud_pp = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="ud_pp"), channel=SpinChannel.UD)
-    except KeyError:
-        config.logger.log("No UD spin combination for pp found in G2 file. Setting them to zero.", logging.WARN)
-        g2_ud_pp = LocalFourPoint.from_constant(
-            config.sys.n_bands, g2_dens.niw, g2_dens.niv, 1, 2, SpinChannel.UD, FrequencyNotation.PP, 0
-        )
     file.close()
 
     config.lattice.hamiltonian = set_hamiltonian(
         config.lattice.type, config.lattice.er_input, config.lattice.interaction_type, config.lattice.interaction_input
     )
 
-    _update_frequency_boxes(g2_dens.niw, g2_dens.niv)
+    update_frequency_boxes(g2_dens.niw, g2_dens.niv)
 
     output_format = "LDGA_Nk{}_Nq{}_wc{}_vc{}_vs{}".format(
         config.lattice.k_grid.nk_tot,
@@ -85,19 +77,21 @@ def load_from_w2dyn_file_and_update_config():
         config.box.niv_core,
         config.box.niv_shell,
     )
-    config.output.output_path = _uniquify_path(os.path.join(config.output.output_path, output_format))
+    config.output.output_path = uniquify_path(os.path.join(config.output.output_path, output_format))
 
     if not os.path.exists(config.output.output_path):
         os.makedirs(config.output.output_path)
 
-    g2_dens = _update_g2_from_dmft(g2_dens)
-    g2_magn = _update_g2_from_dmft(g2_magn)
-    g2_ud_pp = g2_ud_pp.symmetrize_v_vp()
+    g2_dens = update_g2_from_dmft(g2_dens)
+    g2_magn = update_g2_from_dmft(g2_magn)
 
-    return g_dmft, sigma_dmft, g2_dens, g2_magn, g2_ud_pp
+    return g_dmft, sigma_dmft, g2_dens, g2_magn
 
 
-def _update_frequency_boxes(niw: int, niv: int) -> None:
+def update_frequency_boxes(niw: int, niv: int) -> None:
+    """
+    Updates the frequency boxes based on the available frequencies in the DMFT four-point object.
+    """
     logger = config.logger
     if config.box.niv_core == -1:
         config.box.niv_core = niv
@@ -122,7 +116,11 @@ def _update_frequency_boxes(niw: int, niv: int) -> None:
     config.box.niv_full = config.box.niv_core + config.box.niv_shell
 
 
-def _update_g2_from_dmft(g2: LocalFourPoint) -> LocalFourPoint:
+def update_g2_from_dmft(g2: LocalFourPoint) -> LocalFourPoint:
+    """
+    Updates the four-point object based on the available frequencies in the DMFT four-point object. Also symmetrizes
+    with respect to v and v' if specified in the config file.
+    """
     g2 = g2.cut_niw_and_niv(config.box.niw_core, config.box.niv_core)
     if config.dmft.do_sym_v_vp:
         config.logger.log_info(f"Symmetrizing G2_{g2.channel.value} with respect to v and v'.")

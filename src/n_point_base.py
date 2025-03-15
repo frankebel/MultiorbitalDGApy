@@ -14,6 +14,7 @@ class SpinChannel(Enum):
     TRIP: str = "trip"
     UU: str = "uu"
     UD: str = "ud"
+    UD_BAR: str = "ud_bar"
     NONE: str = "none"
 
 
@@ -159,6 +160,9 @@ class IHaveMat(ABC):
         del self._mat
         gc.collect()
 
+    def update_original_shape(self):
+        self.original_shape = self.current_shape
+
     def times(self, contraction: str, *args) -> np.ndarray:
         """
         Multiplies the matrices of multiple objects with the contraction
@@ -186,21 +190,26 @@ class IAmNonLocal(IHaveMat, ABC):
     def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_momentum_dimension: bool = False):
         super().__init__(mat)
         self._nq = nq
+        self._has_reduced_q = False
         self._has_compressed_q_dimension = has_compressed_momentum_dimension
 
     @property
     def nq(self) -> tuple[int, int, int]:
         """
-        Returns the number of momenta in each direction.
+        Returns the number of momenta in the object.
         """
         return self._nq
 
     @property
     def nq_tot(self) -> int:
         """
-        Returns the total number of momenta.
+        Returns the total number of momenta in the object.
         """
-        return np.prod(self.nq).astype(int)
+        return (
+            np.prod(self._nq).astype(int)
+            if not self.has_compressed_q_dimension and not self._has_reduced_q
+            else self.original_shape[0]
+        )
 
     @property
     def has_compressed_q_dimension(self) -> bool:
@@ -209,13 +218,21 @@ class IAmNonLocal(IHaveMat, ABC):
         """
         return self._has_compressed_q_dimension
 
+    @property
+    def has_reduced_q(self) -> bool:
+        """
+        Returns a boolean descibing whether the underlying matrix has been reduced to a single
+        MPI process's q-list already.
+        """
+        return self._has_reduced_q
+
     def shift_k_by_q(self, index: tuple | list[int] = (0, 0, 0)):
         """
-        Shifts the momentum by the given value if the object does not have compressed momentum dimensions, i.e.,
-        we require (qx,qy,qz,...).
+        Shifts the momentum by the given value. If the object enters with a compressed q dimension, we first decompress
+        it and then compress it again after the shift.
         """
         if self.has_compressed_q_dimension:
-            raise ValueError("Cannot shift momenta if the object has a compressed momentum dimension.")
+            raise ValueError("Cannot shift momentum for compressed q dimension.")
 
         copy = deepcopy(self)
         copy.mat = np.roll(copy.mat, index, axis=(0, 1, 2))
@@ -223,27 +240,56 @@ class IAmNonLocal(IHaveMat, ABC):
 
     def compress_q_dimension(self):
         """
-        Converts the object from (qx,qy,qz,...) to (q,...), where len(q) = qx*qy*qz
+        Converts the object from (qx,qy,qz,...) to (q,...) in-place, where len(q) = qx*qy*qz.
         """
         if self.has_compressed_q_dimension:
             return self
 
-        self.mat = self.mat.reshape((self.nq_tot, *self.current_shape[3:]))
+        self.mat = self.mat.reshape((self.nq_tot, *self.original_shape[3:]))
         self._has_compressed_q_dimension = True
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         return self
 
-    def extend_q_dimension(self):
+    def decompress_q_dimension(self):
         """
-        Converts the object from (q,...) to (qx,qy,qz,...), where len(q) = qx*qy*qz
+        Converts the object from (q,...) to (qx,qy,qz,...) in-place, where len(q) = qx*qy*qz.
         """
         if not self.has_compressed_q_dimension:
             return self
 
         self.mat = self.mat.reshape((*self.nq, *self.current_shape[1:]))
         self._has_compressed_q_dimension = False
-        self.original_shape = self.current_shape
+        self.update_original_shape()
         return self
+
+    def reduce_q(self, q_list: np.ndarray):
+        """
+        Reduces the object to the given list of momenta in-place. Returns the object with compressed momentum dimension.
+        """
+        if self.has_reduced_q:
+            return self
+
+        if self.has_compressed_q_dimension:
+            self.decompress_q_dimension()
+
+        indices = np.indices(self.current_shape[:3])
+        mask = np.zeros(self.current_shape[:3], dtype=bool)
+        for q_elem in q_list:
+            mask |= np.all(indices == np.array(q_elem)[:, None, None, None], axis=0)
+        self.mat = self.mat[mask]
+
+        self.update_original_shape()
+        self._has_reduced_q = True
+        self._has_compressed_q_dimension = True
+        return self
+
+    def find_q(self, q: tuple[int, int, int] = (0, 0, 0)):
+        """
+        Finds the matrix element for a given momentum q.
+        """
+        result = deepcopy(self).reduce_q(np.array(list(q))[None, ...])
+        result._nq = q
+        return result
 
     def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):
         """
