@@ -70,6 +70,9 @@ class IHaveMat(ABC):
 
     @mat.setter
     def mat(self, value: np.ndarray) -> None:
+        """
+        Sets the underlying matrix.
+        """
         self._mat = value
 
     @property
@@ -254,20 +257,23 @@ class IAmNonLocal(IHaveMat, ABC):
 
     def reduce_q(self, q_list: np.ndarray):
         """
-        Reduces the object to the given list of momenta in-place. Returns the object with compressed momentum dimension.
+        Reduces the object to the given list of momenta and returns a copy.
+        Returns the object with compressed momentum dimension.
         """
-        if self.has_compressed_q_dimension:
-            self.decompress_q_dimension()
+        copy = deepcopy(self)
 
-        indices = np.indices(self.current_shape[:3])
-        mask = np.zeros(self.current_shape[:3], dtype=bool)
+        if copy.has_compressed_q_dimension:
+            copy.decompress_q_dimension()
+
+        indices = np.indices(copy.current_shape[:3])
+        mask = np.zeros(copy.current_shape[:3], dtype=bool)
         for q_elem in q_list:
             mask |= np.all(indices == np.array(q_elem)[:, None, None, None], axis=0)
-        self.mat = self.mat[mask]
+        copy.mat = copy.mat[mask]
 
-        self.update_original_shape()
-        self._has_compressed_q_dimension = True
-        return self
+        copy.update_original_shape()
+        copy._has_compressed_q_dimension = True
+        return copy
 
     def find_q(self, q: tuple[int, int, int] = (0, 0, 0)):
         """
@@ -276,6 +282,18 @@ class IAmNonLocal(IHaveMat, ABC):
         result = deepcopy(self).reduce_q(np.array(list(q))[None, ...])
         result._nq = q
         return result
+
+    def map_to_full_bz(self, inverse_map: np.ndarray):
+        """
+        Maps the object to the full Brillouin zone using the inverse of the irreducible k-point mesh in-place and
+        returns the original object.
+        """
+        if not self.has_compressed_q_dimension:
+            raise ValueError("Mapping to full Brillouin zone only possible for compressed momentum dimension.")
+
+        self.mat = self.mat[inverse_map, ...].reshape((np.prod(self.nq), *self.original_shape[1:]))
+        self.update_original_shape()
+        return self
 
     def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):
         """

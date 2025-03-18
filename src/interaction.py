@@ -1,4 +1,3 @@
-import config
 from n_point_base import *
 
 
@@ -14,6 +13,9 @@ class LocalInteraction(IHaveMat, IHaveChannel):
 
     @property
     def n_bands(self) -> int:
+        """
+        Returns the number of bands.
+        """
         return self.original_shape[0]
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalInteraction":
@@ -61,7 +63,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
             raise ValueError(f"Operation {type(self)} +/- {type(other)} not supported.")
 
         if isinstance(other, np.ndarray):
-            return NonLocalInteraction(self.mat + other, self.channel)
+            return Interaction(self.mat + other, self.channel)
 
         return LocalInteraction(
             self.mat + other.mat, self.channel if self.channel != SpinChannel.NONE else other.channel
@@ -98,7 +100,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         return self.sub(other)
 
 
-class NonLocalInteraction(LocalInteraction, IAmNonLocal):
+class Interaction(LocalInteraction, IAmNonLocal):
     r"""
     Class for non-local interactions
     .. math:: V_{abcd}^{q}.
@@ -108,15 +110,19 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         self,
         mat: np.ndarray,
         channel: SpinChannel = SpinChannel.NONE,
+        nq: tuple[int, int, int] = (1, 1, 1),
     ):
         LocalInteraction.__init__(self, mat, channel)
-        IAmNonLocal.__init__(self, mat, config.lattice.nq)
+        IAmNonLocal.__init__(self, mat, nq)
 
     @property
     def n_bands(self) -> int:
+        """
+        Returns the number of bands.
+        """
         return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
-    def permute_orbitals(self, permutation: str = "abcd->abcd") -> "NonLocalInteraction":
+    def permute_orbitals(self, permutation: str = "abcd->abcd") -> "Interaction":
         """
         Permutes the orbitals of the object. The permutation string must be given in the einsum notation.
         """
@@ -128,9 +134,9 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
             return self
 
         permutation = f"...{split[0]}->...{split[1]}"
-        return NonLocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
+        return Interaction(np.einsum(permutation, self.mat, optimize=True), self.channel, self.nq)
 
-    def as_channel(self, channel: SpinChannel) -> "NonLocalInteraction":
+    def as_channel(self, channel: SpinChannel) -> "Interaction":
         """
         Returns the spin combination for a given channel. Note that we only have the non-local ph contribution
         in the ladder DGA equations and the phbar contribution to the spin channels vanishes.
@@ -154,51 +160,50 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         else:
             raise ValueError(f"Channel {channel} not supported.")
 
-    def add(self, other) -> "NonLocalInteraction":
+    def add(self, other) -> "Interaction":
         """
         Adds two (non-)local interactions.
         """
-        if not isinstance(other, (LocalInteraction, NonLocalInteraction, np.ndarray)):
+        if not isinstance(other, (LocalInteraction, Interaction, np.ndarray)):
             raise ValueError(f"Operation {type(self)} +/- {type(other)} not supported.")
 
         if isinstance(other, np.ndarray):
-            return NonLocalInteraction(self.mat + other, self.channel)
+            return Interaction(self.mat + other, self.channel, self.nq)
 
-        if not isinstance(other, NonLocalInteraction):
+        if not isinstance(other, Interaction):
             other_mat = other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...]
         else:
             other_mat = other.mat
 
-        return NonLocalInteraction(
-            self.mat + other_mat,
-            self.channel if self.channel != SpinChannel.NONE else other.channel,
+        return Interaction(
+            self.mat + other_mat, self.channel if self.channel != SpinChannel.NONE else other.channel, self.nq
         )
 
-    def sub(self, other) -> "NonLocalInteraction":
+    def sub(self, other) -> "Interaction":
         """
         Subtracts two (non-)local interactions.
         """
         return self.add(-other)
 
-    def __add__(self, other) -> "NonLocalInteraction":
+    def __add__(self, other) -> "Interaction":
         """
         Adds two (non-)local interactions.
         """
         return self.add(other)
 
-    def __radd__(self, other) -> "NonLocalInteraction":
+    def __radd__(self, other) -> "Interaction":
         """
         Adds two (non-)local interactions.
         """
         return self.add(other)
 
-    def __sub__(self, other) -> "NonLocalInteraction":
+    def __sub__(self, other) -> "Interaction":
         """
         Subtracts two (non-)local interactions.
         """
         return self.sub(other)
 
-    def __rsub__(self, other) -> "NonLocalInteraction":
+    def __rsub__(self, other) -> "Interaction":
         """
         Subtracts two (non-)local interactions.
         """

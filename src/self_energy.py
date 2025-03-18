@@ -133,17 +133,30 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         return SelfEnergy(new_mat[None, None, None, ...])
 
     def __add__(self, other):
+        """
+        Adds two SelfEnergy objects.
+        """
         return self.add(other)
 
     def __sub__(self, other):
+        """
+        Subtracts two SelfEnergy objects.
+        """
         return self.sub(other)
 
     def add(self, other) -> "SelfEnergy":
+        """
+        Adds two SelfEnergy objects.
+        """
         if not isinstance(other, SelfEnergy):
             raise ValueError("Can only add two SelfEnergy objects.")
-        if self.original_shape != other.original_shape:
-            raise ValueError("Cannot add two SelfEnergy objects of different shapes.")
-        return SelfEnergy(self.mat + other.mat, full_niv_range=self.full_niv_range)
+        self._align_q_dimensions_for_operations(other)
+        return SelfEnergy(
+            self.mat + other.mat, full_niv_range=self.full_niv_range, has_compressed_momentum_dimension=True
+        )
 
     def sub(self, other) -> "SelfEnergy":
+        """
+        Subtracts two SelfEnergy objects.
+        """
         return self.add(-other)

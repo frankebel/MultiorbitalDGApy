@@ -1,4 +1,4 @@
-from interaction import NonLocalInteraction, LocalInteraction
+from interaction import Interaction, LocalInteraction
 from local_four_point import LocalFourPoint
 from n_point_base import *
 
@@ -219,7 +219,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         Depending on the number of frequency and momentum dimensions, the objects have to be added differently.
         """
         if not isinstance(
-            other, (FourPoint, LocalFourPoint, NonLocalInteraction, LocalInteraction, np.ndarray, float, int, complex)
+            other, (FourPoint, LocalFourPoint, Interaction, LocalInteraction, np.ndarray, float, int, complex)
         ):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
 
@@ -238,10 +238,10 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
-        if isinstance(other, (NonLocalInteraction, LocalInteraction)):
+        if isinstance(other, (Interaction, LocalInteraction)):
             self.compress_q_dimension()
 
-            other_mat = other.mat[None, ...] if not isinstance(other, NonLocalInteraction) else other.mat
+            other_mat = other.mat[None, ...] if not isinstance(other, Interaction) else other.mat
             other_mat = other_mat.reshape(other.mat.shape + (1,) * (self.num_wn_dimensions + self.num_vn_dimensions))
             return FourPoint(
                 self.mat + other_mat,
@@ -312,11 +312,11 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         Helper method that allows for matrix multiplication for (non-)local FourPoint objects. Depending on the
         number of frequency and momentum dimensions, the objects have to be multiplied differently.
         """
-        if not isinstance(other, (FourPoint, LocalFourPoint, NonLocalInteraction, LocalInteraction)):
+        if not isinstance(other, (FourPoint, LocalFourPoint, Interaction, LocalInteraction)):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
 
-        if isinstance(other, (LocalInteraction, NonLocalInteraction)):
-            is_local = not isinstance(other, NonLocalInteraction)
+        if isinstance(other, (LocalInteraction, Interaction)):
+            is_local = not isinstance(other, Interaction)
             q_prefix = "" if is_local else "q"
 
             self.compress_q_dimension()
