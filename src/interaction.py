@@ -1,5 +1,3 @@
-import numpy as np
-
 import config
 from n_point_base import *
 
@@ -69,7 +67,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
             self.mat + other.mat, self.channel if self.channel != SpinChannel.NONE else other.channel
         )
 
-    def sub(self, other):
+    def sub(self, other) -> "LocalInteraction":
         """
         Subtracts two local interactions.
         """
@@ -81,7 +79,19 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         """
         return self.add(other)
 
+    def __radd__(self, other) -> "LocalInteraction":
+        """
+        Adds two local interactions.
+        """
+        return self.add(other)
+
     def __sub__(self, other) -> "LocalInteraction":
+        """
+        Subtracts two local interactions.
+        """
+        return self.sub(other)
+
+    def __rsub__(self, other) -> "LocalInteraction":
         """
         Subtracts two local interactions.
         """
@@ -120,7 +130,7 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         permutation = f"...{split[0]}->...{split[1]}"
         return NonLocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
 
-    def as_channel(self, channel: SpinChannel) -> "LocalInteraction":
+    def as_channel(self, channel: SpinChannel) -> "NonLocalInteraction":
         """
         Returns the spin combination for a given channel. Note that we only have the non-local ph contribution
         in the ladder DGA equations and the phbar contribution to the spin channels vanishes.
@@ -154,15 +164,17 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         if isinstance(other, np.ndarray):
             return NonLocalInteraction(self.mat + other, self.channel)
 
-        if isinstance(other, LocalInteraction):
-            other = other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...]
+        if not isinstance(other, NonLocalInteraction):
+            other_mat = other.mat[None, ...] if self.has_compressed_q_dimension else other.mat[None, None, None, ...]
+        else:
+            other_mat = other.mat
 
         return NonLocalInteraction(
-            self.mat + other.mat,
+            self.mat + other_mat,
             self.channel if self.channel != SpinChannel.NONE else other.channel,
         )
 
-    def sub(self, other):
+    def sub(self, other) -> "NonLocalInteraction":
         """
         Subtracts two (non-)local interactions.
         """
@@ -174,7 +186,19 @@ class NonLocalInteraction(LocalInteraction, IAmNonLocal):
         """
         return self.add(other)
 
+    def __radd__(self, other) -> "NonLocalInteraction":
+        """
+        Adds two (non-)local interactions.
+        """
+        return self.add(other)
+
     def __sub__(self, other) -> "NonLocalInteraction":
+        """
+        Subtracts two (non-)local interactions.
+        """
+        return self.sub(other)
+
+    def __rsub__(self, other) -> "NonLocalInteraction":
         """
         Subtracts two (non-)local interactions.
         """

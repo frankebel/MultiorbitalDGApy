@@ -10,6 +10,10 @@ from local_n_point import LocalNPoint
 
 
 class SelfEnergy(LocalNPoint, IAmNonLocal):
+    """
+    Represents the self-energy.
+    """
+
     def __init__(
         self,
         mat: np.ndarray,
@@ -26,14 +30,23 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         self._niv_core = self._estimate_niv_core() if estimate_niv_core else self.niv
 
     @property
-    def smom(self) -> (float, float):
+    def smom(self) -> tuple[float, float]:
+        """
+        Returns the first two local momenta of the self-energy.
+        """
         return self._smom0, self._smom1
 
     @property
     def n_bands(self) -> int:
+        """
+        Returns the number of bands.
+        """
         return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
     def _fit_smom(self):
+        """
+        Fits the first two local momenta of the self-energy.
+        """
         mat_half_v = np.mean(self.mat[..., self.niv :], axis=(0, 1, 2))
         iv = 1j * MFHelper.vn(self.niv, config.sys.beta, return_only_positive=True)
 
@@ -49,7 +62,9 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         return mom0, mom1
 
     def _estimate_niv_core(self, err: float = 1e-5):
-        """Check when the real and the imaginary part are within an error margin of the asymptotic"""
+        """
+        Check when the real and the imaginary part are within an error margin of the asymptotic.
+        """
         asympt = self._get_asympt(niv_full=self.niv, n_min=0)
 
         max_ind_real = 0
@@ -118,11 +133,17 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         return SelfEnergy(new_mat[None, None, None, ...])
 
     def __add__(self, other):
+        return self.add(other)
+
+    def __sub__(self, other):
+        return self.sub(other)
+
+    def add(self, other) -> "SelfEnergy":
         if not isinstance(other, SelfEnergy):
             raise ValueError("Can only add two SelfEnergy objects.")
         if self.original_shape != other.original_shape:
             raise ValueError("Cannot add two SelfEnergy objects of different shapes.")
         return SelfEnergy(self.mat + other.mat, full_niv_range=self.full_niv_range)
 
-    def __sub__(self, other):
-        return self.__add__(-other)
+    def sub(self, other) -> "SelfEnergy":
+        return self.add(-other)

@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
 
-from interaction import LocalInteraction
+from interaction import LocalInteraction, NonLocalInteraction
 from local_n_point import LocalNPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import *
@@ -109,7 +109,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         return result
 
-    def symmetrize_v_vp(self) -> "LocalFourPoint":
+    def symmetrize_v_vp(self):
         """
         Symmetrize with respect to (v,v'). This is justified for SU(2) symmetric systems. (Thesis Rohringer p. 72)
         """
@@ -147,7 +147,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.full_niv_range,
         )
 
-    def sum_over_all_vn(self, beta: float) -> "LocalFourPoint":
+    def sum_over_all_vn(self, beta: float):
         """
         Sums over all fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
         """
@@ -233,14 +233,14 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         return self
 
-    def invert(self) -> "LocalFourPoint":
+    def invert(self):
         """
         Inverts the object by transforming it to compound indices.
         """
         copy = deepcopy(self)
-        copy = copy.to_compound_indices()
+        copy = copy.to_half_niw_range().to_compound_indices()
         copy.mat = np.linalg.inv(copy.mat)
-        return copy.to_full_indices()
+        return copy.to_full_indices().to_full_niw_range()
 
     def matmul(self, other, left_hand_side: bool = True) -> "LocalFourPoint":
         """
@@ -293,18 +293,38 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             )
 
         # we do not use np.einsum here because it is faster to use np.matmul with compound indices instead of np.einsum
-        self.to_compound_indices()
-        other = other.to_compound_indices()
+        self.to_half_niw_range().to_compound_indices()
+        other = other.to_half_niw_range().to_compound_indices()
         # for __matmul__ self needs to be the LHS object, for __rmatmul__ self needs to be the RHS object
         new_mat = np.matmul(self.mat, other.mat) if left_hand_side else np.matmul(other.mat, self.mat)
-        self.to_full_indices()
-        other = other.to_full_indices()
 
-        return LocalFourPoint(
-            new_mat, channel, 1, 2, full_niw_range=self.full_niw_range, full_niv_range=self.full_niv_range
-        ).to_full_indices(self.original_shape if self.num_vn_dimensions == 2 else other.original_shape)
+        shape = (
+            self.original_shape
+            if self.num_vn_dimensions == max(self.num_vn_dimensions, other.num_vn_dimensions)
+            else other.original_shape
+        )
+
+        self.to_full_indices().to_full_niw_range()
+        other = other.to_full_indices().to_full_niw_range()
+
+        return (
+            LocalFourPoint(
+                new_mat,
+                channel,
+                self.num_wn_dimensions,
+                max(self.num_vn_dimensions, other.num_vn_dimensions),
+                full_niw_range=False,
+                full_niv_range=self.full_niv_range,
+            )
+            .to_full_indices(shape)
+            .to_full_niw_range()
+        )
 
     def add(self, other):
+        """
+        Helper method that allows for addition of local FourPoint objects.
+        Depending on the number of frequency and momentum dimensions, the objects have to be added differently.
+        """
         if not isinstance(other, (LocalFourPoint, LocalInteraction, np.ndarray, float, int, complex)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
 

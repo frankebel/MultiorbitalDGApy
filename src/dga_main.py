@@ -61,7 +61,7 @@ def execute_dga_routine():
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
 
-    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = (
+    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, f_dens_2, f_magn_2, sigma_local = (
         local_sde.perform_local_schwinger_dyson(giwk, g2_dens, g2_magn, u_loc)
     )
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
@@ -131,9 +131,8 @@ def execute_dga_routine():
     del vrg_dens, vrg_magn, chi_dens, chi_magn, sigma_dmft, sigma_local
 
     logger.log_info("Starting nonlocal ladder-DGA routine.")
-
     sigma_nonlocal = nonlocal_sde.calculate_self_energy_q(
-        comm, giwk, gamma_dens, gamma_magn, f_dens, f_magn, u_loc, v_nonloc
+        comm, giwk, gamma_dens, gamma_magn, f_dens, f_magn, u_loc, v_nonloc, f_dens_2, f_magn_2
     )
 
 

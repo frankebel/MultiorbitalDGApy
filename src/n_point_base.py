@@ -161,6 +161,9 @@ class IHaveMat(ABC):
         gc.collect()
 
     def update_original_shape(self):
+        """
+        Updates the original shape of the matrix. This is needed when the matrix is reshaped.
+        """
         self.original_shape = self.current_shape
 
     def times(self, contraction: str, *args) -> np.ndarray:
@@ -190,7 +193,6 @@ class IAmNonLocal(IHaveMat, ABC):
     def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_momentum_dimension: bool = False):
         super().__init__(mat)
         self._nq = nq
-        self._has_reduced_q = False
         self._has_compressed_q_dimension = has_compressed_momentum_dimension
 
     @property
@@ -205,11 +207,7 @@ class IAmNonLocal(IHaveMat, ABC):
         """
         Returns the total number of momenta in the object.
         """
-        return (
-            np.prod(self._nq).astype(int)
-            if not self.has_compressed_q_dimension and not self._has_reduced_q
-            else self.original_shape[0]
-        )
+        return np.prod(self.nq).astype(int) if not self.has_compressed_q_dimension else self.original_shape[0]
 
     @property
     def has_compressed_q_dimension(self) -> bool:
@@ -217,14 +215,6 @@ class IAmNonLocal(IHaveMat, ABC):
         Returns whether the underlying matrix has a compressed momentum dimension (q,...) or not (qx,qy,qz,...).
         """
         return self._has_compressed_q_dimension
-
-    @property
-    def has_reduced_q(self) -> bool:
-        """
-        Returns a boolean descibing whether the underlying matrix has been reduced to a single
-        MPI process's q-list already.
-        """
-        return self._has_reduced_q
 
     def shift_k_by_q(self, index: tuple | list[int] = (0, 0, 0)):
         """
@@ -266,9 +256,6 @@ class IAmNonLocal(IHaveMat, ABC):
         """
         Reduces the object to the given list of momenta in-place. Returns the object with compressed momentum dimension.
         """
-        if self.has_reduced_q:
-            return self
-
         if self.has_compressed_q_dimension:
             self.decompress_q_dimension()
 
@@ -279,7 +266,6 @@ class IAmNonLocal(IHaveMat, ABC):
         self.mat = self.mat[mask]
 
         self.update_original_shape()
-        self._has_reduced_q = True
         self._has_compressed_q_dimension = True
         return self
 

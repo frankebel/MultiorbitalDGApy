@@ -50,7 +50,7 @@ class MFHelper:
         return np.pi / beta * (2 * MFHelper.vn(niv, shift, return_only_positive) + 1)
 
     @staticmethod
-    def get_frequency_shift(wn: int, freq_notation: FrequencyShift) -> (int, int):
+    def get_frequency_shift(wn: int, freq_notation: FrequencyShift) -> tuple[int, int]:
         """
         Returns w and v for the given frequency shift notation.
         """

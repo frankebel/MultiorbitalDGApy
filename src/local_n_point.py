@@ -27,13 +27,8 @@ class LocalNPoint(IHaveMat):
         assert num_wn_dimensions in (0, 1), "0 or 1 bosonic frequency dimensions are supported."
         self._num_wn_dimensions = num_wn_dimensions
 
-        # TODO: debate whether this makes sense here or should it be handled on a higher level
         self._full_niv_range = full_niv_range
-        if not self._full_niv_range:
-            self.to_full_niv_range()
         self._full_niw_range = full_niw_range
-        if not self._full_niw_range:
-            self.to_full_niw_range()
 
     @property
     def n_bands(self) -> int:
@@ -98,7 +93,7 @@ class LocalNPoint(IHaveMat):
         """
         return self._full_niv_range
 
-    def cut_niw(self, niw_cut: int) -> "LocalNPoint":
+    def cut_niw(self, niw_cut: int):
         """
         Allows to place a cutoff on the number of bosonic frequencies of the object.
         """
@@ -128,7 +123,7 @@ class LocalNPoint(IHaveMat):
         copy.original_shape = copy.mat.shape
         return copy
 
-    def cut_niv(self, niv_cut: int) -> "LocalNPoint":
+    def cut_niv(self, niv_cut: int):
         """
         Allows to place a cutoff on the number of fermionic frequencies of the object.
         """
@@ -156,13 +151,13 @@ class LocalNPoint(IHaveMat):
         copy.original_shape = copy.mat.shape
         return copy
 
-    def cut_niw_and_niv(self, niw_cut: int, niv_cut: int) -> "LocalNPoint":
+    def cut_niw_and_niv(self, niw_cut: int, niv_cut: int):
         """
         Allows to place a cutoff on the number of bosonic and fermionic frequencies of the object.
         """
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
-    def extend_vn_to_diagonal(self) -> "LocalNPoint":
+    def extend_vn_to_diagonal(self):
         """
         Extends an object [...,w,v] to [...,w,v,v] by making a diagonal from the last dimension if the number of fermionic
         frequency dimensions is one.
@@ -176,7 +171,7 @@ class LocalNPoint(IHaveMat):
         self.update_original_shape()
         return self
 
-    def take_vn_diagonal(self) -> "LocalNPoint":
+    def take_vn_diagonal(self):
         """
         Compresses an object [...w,v,v] to [...,w,v] by taking the diagonal of the last two dimensions.
         """
@@ -191,7 +186,7 @@ class LocalNPoint(IHaveMat):
 
     def to_full_niw_range(self):
         """
-        Converts the object to the full bosonic frequency range.
+        Converts the object to the full bosonic frequency range in-place.
         """
         if self.num_wn_dimensions == 0:
             raise ValueError("Cannot convert to full bosonic frequency range if there are no bosonic frequencies.")
@@ -212,9 +207,25 @@ class LocalNPoint(IHaveMat):
         self._full_niw_range = True
         return self
 
+    def to_half_niw_range(self):
+        """
+        Converts the object to the half bosonic frequency range in-place.
+        """
+        if self.num_wn_dimensions == 0:
+            raise ValueError("Cannot convert to half bosonic frequency range if there are no bosonic frequencies.")
+        if not self.full_niw_range:
+            return self
+
+        axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
+        ind = np.arange(self.current_shape[axis] // 2, self.current_shape[axis])
+        self.mat = np.take(self.mat, ind, axis=axis)
+        self.update_original_shape()
+        self._full_niw_range = False
+        return self
+
     def to_full_niv_range(self):
         """
-        Converts the object to the full fermionic frequency range.
+        Converts the object to the full fermionic frequency range in-place.
         """
         if self.num_vn_dimensions == 0:
             raise ValueError("Cannot convert to full fermionic frequency range if there are no fermionic frequencies.")
@@ -225,6 +236,23 @@ class LocalNPoint(IHaveMat):
         self.mat = np.concatenate((np.conj(np.flip(self.mat, axis)), self.mat), axis=axis)
         self.update_original_shape()
         self._full_niv_range = True
+        return self
+
+    def to_half_niv_range(self):
+        """
+        Converts the object to the half fermionic frequency range in-place.
+        """
+        if self.num_vn_dimensions == 0:
+            raise ValueError("Cannot convert to half fermionic frequency range if there are no fermionic frequencies.")
+        if not self.full_niv_range:
+            return self
+
+        ind = np.arange(self.current_shape[-1] // 2, self.current_shape[-1])
+        self.mat = np.take(self.mat, ind, axis=-1)
+        if self.num_vn_dimensions == 2:
+            self.mat = np.take(self.mat, ind, axis=-2)
+        self.update_original_shape()
+        self._full_niv_range = False
         return self
 
     def _align_frequency_dimensions_for_operation(self, other: "LocalNPoint"):

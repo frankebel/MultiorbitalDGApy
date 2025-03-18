@@ -29,7 +29,8 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
 
         if sigma is not None and ek is not None and calc_filling:
             self.mat = self._get_gloc_mat()
-            config.sys.n, config.sys.occ = self._get_fill()
+            # config.sys.n, config.sys.occ = self._get_fill()
+            config.sys.n, config.sys.occ, config.sys.occ_k = self._get_fill_nonlocal()
 
     @property
     def e_kin(self):
@@ -82,7 +83,7 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         """
         return self.permute_orbitals("ab->ba")
 
-    def _get_fill(self) -> (float, np.ndarray):
+    def _get_fill(self) -> tuple[float, np.ndarray]:
         """
         Returns the total filling and the filling of each band.
         """
@@ -105,18 +106,28 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         n_el = 2.0 * np.trace(occ).real
         return n_el, occ
 
-    def _get_fill_nonlocal(self) -> (float, np.ndarray):
+    def _get_fill_nonlocal(self) -> tuple[float, np.ndarray, np.ndarray]:
         """
-        Returns the total filling and the filling of each band k-dependent.
-        TODO: FIX THIS OR ATLEAST TRY TO
+        Returns the total filling, the k-mean of the occupation and the occupation.
         """
         mat = self._get_gfull_mat()
-        g_model = self._get_g_model_mat()
-        smom0, _ = self._sigma.smom[None, None, None, ...]
+        g_model = self._get_g_model_q_mat()
+        smom0 = self._sigma.smom[0][None, None, None, ...]
         mu_bands: np.ndarray = config.sys.mu * np.eye(self.n_bands)[None, None, None, ...]
 
         eigenvals, eigenvecs = np.linalg.eig(config.sys.beta * (self._ek.real + smom0 - mu_bands))
-        rho_diag = np.zeros((*self.nq, self.n_bands, self.n_bands), dtype=np.complex64)
+        eigenvals = eigenvals.reshape((self.nq_tot, self.n_bands))
+        eigenvecs = eigenvecs.reshape((self.nq_tot, self.n_bands, self.n_bands))
+
+        rho_diag_k = np.where(eigenvals > 0, np.exp(-eigenvals) / (1 + np.exp(-eigenvals)), 1 / (1 + np.exp(eigenvals)))
+        rho_diag_k = np.einsum("...i,ij->...ij", rho_diag_k, np.eye(self.n_bands))
+
+        rho_k = (eigenvecs @ rho_diag_k @ np.linalg.inv(eigenvecs)).reshape((*self.nq, self.n_bands, self.n_bands))
+        occ_k = rho_k + np.sum(mat.real - g_model.real, axis=-1) / config.sys.beta
+
+        occ_mean = np.mean(occ_k, axis=(0, 1, 2))
+        n_el = 2.0 * np.trace(occ_mean).real
+        return n_el, occ_mean, occ_k
 
     def _get_gfull_mat(self):
         iv_bands, mu_bands = self._get_g_params_local()
@@ -136,8 +147,14 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         iv_bands, mu_bands = self._get_g_params_local()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
-        mat = iv_bands + mu_bands - hloc[..., None] - smom0[..., np.newaxis]
+        mat = iv_bands + mu_bands - hloc[..., None] - smom0[..., None]
         return np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
+
+    def _get_g_model_q_mat(self):
+        iv_bands, mu_bands = self._get_g_params_local()
+        smom0 = self._sigma.smom[0][None, None, None, ...]
+        mat = iv_bands[None, None, None] + mu_bands[None, None, None] - self._ek[..., None] - smom0[..., None]
+        return np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
 
     def _get_g_params_local(self):
         eye_bands = np.eye(self.n_bands, self.n_bands)

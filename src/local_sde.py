@@ -84,7 +84,7 @@ def create_gamma_r_with_shell_correction(
 def create_auxiliary_chi(gamma_r: LocalFourPoint, gchi0_inv: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
     r"""
     Returns the auxiliary susceptibility
-    .. math:: \chi^{*;wvv'}_{r;lmm'l'} = (\chi_{0;lmm'l'}^{-1} + (\Gamma_{r;lmm'l'}-U_{r;lmm'l'})/\beta^2)^{-1}.
+    .. math:: \chi^{*;wvv'}_{r;lmm'l'} = ((\chi_{0;lmm'l'}^{wv})^{-1} + (\Gamma_{r;lmm'l'}^{wvv'}-U_{r;lmm'l'})/\beta^2)^{-1}.
     See Eq. (3.68) in Paul Worm's thesis.
     """
     return (gchi0_inv + (gamma_r - u_loc.as_channel(gamma_r.channel)) / config.sys.beta**2).invert()
@@ -114,7 +114,7 @@ def create_full_vertex(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> Loc
 def create_vrg(gchi_aux: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the three-leg vertex
-    .. math:: \gamma_{r;lmm'l'} = \beta * (\chi^{wvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;wvv'}_{r;bam'l'}).
+    .. math:: \gamma_{r;lmm'l'}^{wv} = \beta * (\chi^{wvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;wvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_sum = gchi_aux.sum_over_vn(config.sys.beta, axis=(-1,))
@@ -127,7 +127,7 @@ def create_vertex_functions(
     gchi0_inv_core: LocalFourPoint,
     g_loc: GreensFunction,
     u_loc: LocalInteraction,
-) -> (LocalFourPoint, LocalFourPoint, LocalFourPoint):
+) -> tuple[LocalFourPoint, LocalFourPoint, LocalFourPoint, LocalFourPoint]:
     """
     Calculates the three-leg vertex, the auxiliary susceptibility and the irreducible vertex. Employs explicit
     asymptotics as proposed by Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
@@ -201,12 +201,27 @@ def perform_local_schwinger_dyson(
 
     gamma_dens, gchi_dens_sum, vrg_dens, f_dens = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
     gamma_magn, gchi_magn_sum, vrg_magn, f_magn = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)
-    del gchi0
 
     sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
     config.logger.log_info("Self-energy Sigma^v done.")
 
-    return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
+    f_dens_2 = gamma_dens @ (LocalFourPoint.identity_like(gamma_dens) - gchi0 @ gamma_dens).invert()
+    f_magn_2 = gamma_magn @ (LocalFourPoint.identity_like(gamma_magn) - gchi0 @ gamma_magn).invert()
+    del gchi0
+
+    return (
+        gamma_dens,
+        gamma_magn,
+        gchi_dens_sum,
+        gchi_magn_sum,
+        vrg_dens,
+        vrg_magn,
+        f_dens,
+        f_magn,
+        f_dens_2,
+        f_magn_2,
+        sigma,
+    )
 
 
 # ----------------------------------------------- AbinitioDGA algorithms -----------------------------------------------
