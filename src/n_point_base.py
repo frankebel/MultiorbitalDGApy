@@ -267,8 +267,7 @@ class IAmNonLocal(IHaveMat, ABC):
 
         indices = np.indices(copy.current_shape[:3])
         mask = np.zeros(copy.current_shape[:3], dtype=bool)
-        for q_elem in q_list:
-            mask |= np.all(indices == np.array(q_elem)[:, None, None, None], axis=0)
+        mask |= np.any(np.all(indices == np.array(q_list)[:, :, None, None, None], axis=1), axis=0)
         copy.mat = copy.mat[mask]
 
         copy.update_original_shape()

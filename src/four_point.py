@@ -414,20 +414,26 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
     @staticmethod
     def identity(
-        n_bands: int, niw: int, niv: int, nq: tuple[int, int, int] = (1, 1, 1), num_vn_dimensions: int = 2
+        n_bands: int,
+        niw: int,
+        niv: int,
+        nq_tot: int = 1,
+        nq: tuple[int, int, int] = (1, 1, 1),
+        num_vn_dimensions: int = 2,
     ) -> "FourPoint":
         if num_vn_dimensions not in (1, 2):
             raise ValueError("Invalid number of fermionic frequency dimensions.")
-        nq_tot = np.prod(nq)
         full_shape = (nq_tot,) + (n_bands,) * 4 + (2 * niw + 1,) + (2 * niv,) * num_vn_dimensions
         compound_index_size = 2 * niv * n_bands**2
         mat = np.tile(np.eye(compound_index_size)[None, None, ...], (nq_tot, 2 * niw + 1, 1, 1))
 
-        result = FourPoint(mat, nq=nq, num_vn_dimensions=num_vn_dimensions).to_full_indices(full_shape)
+        result = FourPoint(
+            mat, nq=nq, num_vn_dimensions=num_vn_dimensions, has_compressed_momentum_dimension=True
+        ).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
             return result.take_vn_diagonal()
         return result
 
     @staticmethod
     def identity_like(other: "FourPoint") -> "FourPoint":
-        return FourPoint.identity(other.n_bands, other.niw, other.niv, other.nq, other.num_vn_dimensions)
+        return FourPoint.identity(other.n_bands, other.niw, other.niv, other.nq_tot, other.nq, other.num_vn_dimensions)

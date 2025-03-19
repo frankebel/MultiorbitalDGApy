@@ -1,3 +1,5 @@
+import numpy as np
+
 import config
 from greens_function import GreensFunction
 from interaction import LocalInteraction
@@ -178,13 +180,30 @@ def get_loc_self_energy_vrg(
     see Paul Worm's thesis, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
-    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
-    inner_dens = vrg_dens - (vrg_dens @ u_loc.as_channel(SpinChannel.DENS) @ gchi_dens_sum)
-    inner_magn = vrg_magn - (vrg_magn @ u_loc.as_channel(SpinChannel.MAGN) @ gchi_magn_sum)
-    sigma_sum = -1.0 / config.sys.beta * u_loc.times("kjop,ilpowv,lkwv->ijv", 0.5 * (inner_dens - inner_magn), g_1)
-    hartree = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
+    g_wv = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
+    inner_dens = vrg_dens - vrg_dens @ u_loc.as_channel(SpinChannel.DENS) @ gchi_dens_sum
+    inner_magn = vrg_magn - vrg_magn @ u_loc.as_channel(SpinChannel.MAGN) @ gchi_magn_sum
+    sigma_sum = -1.0 / config.sys.beta * u_loc.times("kjop,ilpowv,lkwv->ijv", 0.5 * (inner_dens - inner_magn), g_wv)
+    hartree_fock = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
 
-    return SelfEnergy((hartree + sigma_sum)[None, None, None, ...])
+    return SelfEnergy((hartree_fock + sigma_sum)[None, None, None, ...])
+
+
+def create_dc_kernel(gamma_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
+    gamma_urange_mat = np.tile(
+        u_loc.as_channel(gamma_r.channel).mat[..., None, None, None],
+        (1, 1, 1, 1, 2 * gamma_r.niw + 1, 2 * config.box.niv_full, 2 * config.box.niv_full),
+    )
+    gamma_urange_mat[
+        ...,
+        config.box.niv_shell : config.box.niv_shell + 2 * gamma_r.niv,
+        config.box.niv_shell : config.box.niv_shell + 2 * gamma_r.niv,
+    ] = gamma_r.mat
+    gamma_urange = LocalFourPoint(gamma_urange_mat, gamma_r.channel)
+
+    return (
+        gamma_urange @ (config.sys.beta**2 * LocalFourPoint.identity_like(gamma_urange) + gamma_urange @ gchi0).invert()
+    ).cut_niv(config.box.niv_core)
 
 
 def perform_local_schwinger_dyson(
@@ -205,10 +224,6 @@ def perform_local_schwinger_dyson(
     sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
     config.logger.log_info("Self-energy Sigma^v done.")
 
-    f_dens_2 = gamma_dens @ (LocalFourPoint.identity_like(gamma_dens) - gchi0 @ gamma_dens).invert()
-    f_magn_2 = gamma_magn @ (LocalFourPoint.identity_like(gamma_magn) - gchi0 @ gamma_magn).invert()
-    del gchi0
-
     return (
         gamma_dens,
         gamma_magn,
@@ -218,8 +233,6 @@ def perform_local_schwinger_dyson(
         vrg_magn,
         f_dens,
         f_magn,
-        f_dens_2,
-        f_magn_2,
         sigma,
     )
 

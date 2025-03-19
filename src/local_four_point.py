@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
 
-from interaction import LocalInteraction, Interaction
+from interaction import LocalInteraction
 from local_n_point import LocalNPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import *

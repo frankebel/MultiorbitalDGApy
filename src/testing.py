@@ -1,73 +1,33 @@
-import time
-
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-class Matrix:
-    def __init__(self):
-        self.mat = np.random.rand(20, 20)
-
-
-def manipulate_matrix(mat: Matrix) -> Matrix:
-    mat.mat = mat.mat + 2
-    return mat
-
-
 if __name__ == "__main__":
+    beta = 12.5
 
-    test = np.random.rand(90, 90) + 1j * np.random.rand(90, 90)
-    start = time.time()
-    test1, test2 = np.linalg.eig(test)
-    end = time.time()
-    print(end - start)
-    exit()
+    siw_dmft = np.load("/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc80_vc50_vs0/sigma_dmft.npy")[
+        0, 0, 0, 0, 0
+    ]
+    siw_dga_local = np.load(
+        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc80_vc50_vs0/siw_sde_full.npy"
+    )
+    siw_dga_nonlocal = np.load("/home/julpe/Desktop/sigma_dga.npy")
 
-    matrix1 = Matrix()
-    matrix2 = manipulate_matrix(matrix1)
+    dmft_niv = siw_dmft.shape[-1] // 2
+    niv_core = siw_dga_nonlocal.shape[-1] // 2
 
-    g_1 = np.load("/home/julpe/Desktop/g_1.npy")
-    mat_grid = np.load("/home/julpe/Desktop/mat_grid.npy")
+    siw_dmft = siw_dmft[..., dmft_niv : dmft_niv + niv_core]
+    siw_dga_local = siw_dga_local[..., niv_core:]
+    siw_dga_nonlocal = siw_dga_nonlocal[0, 0, 0, niv_core:]
 
-    gchi_dens_paul = np.load("/home/julpe/Desktop/gchi_dens_paul.npy")
-    gchi_dens_me = np.load("/home/julpe/Desktop/gchi_dens_me.npy")
-    gchi_dens_me = gchi_dens_me[0, 0, 0, 0]
-
-    gchi_magn_paul = np.load("/home/julpe/Desktop/gchi_magn_paul.npy")
-    gchi_magn_me = np.load("/home/julpe/Desktop/gchi_magn_me.npy")
-    gchi_magn_me = gchi_magn_me[0, 0, 0, 0]
-
-    niv = gchi_magn_me.shape[-1] // 2
-
-    assert np.allclose(gchi_dens_paul, gchi_dens_me, atol=1e-6)
-    assert np.allclose(gchi_magn_paul, gchi_magn_me, atol=1e-6)
-    assert np.allclose(g_1, mat_grid, atol=1e-6)
-
-    siw_paul = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_spch_Nk256_Nq256_wc140_vc140_vs0_9/siw_sde_full.npy"
-    )[niv:]
-    siw_me = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc140_vs0_93/siw_sde_full.npy"
-    )[0, 0, niv:]
-    siw_dmft = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc140_vs0_93/sigma_dmft.npy"
-    )[0, 0]
-    niv_dmft = siw_dmft.shape[-1] // 2
-    siw_dmft = siw_dmft[niv_dmft : niv_dmft + niv]
+    # siw = (siw_dga_nonlocal - 0.5 * (siw_dc_d1 - siw_dc_m1))[0, 0, 0, :]
 
     plt.figure()
-    plt.plot(siw_paul.real, label="Paul, real")
-    plt.plot(siw_me.real, label="Me, real")
-    plt.plot(siw_paul.imag, label="Paul, imag")
-    plt.plot(siw_me.imag, label="Me, imag")
-    plt.plot(siw_dmft.real, label="DMFT, real")
-    plt.plot(siw_dmft.imag, label="DMFT, imag")
-    plt.grid()
-    plt.legend()
-    plt.title("Comparison of the self-energy")
-    plt.xlabel(r"$\nu_n$")
-    plt.ylabel(r"$\Sigma(i\nu_n)$")
+    plt.plot(siw_dga_nonlocal.real, label="real, dga")
+    plt.plot(siw_dga_nonlocal.imag, label="imag, dga")
+    plt.plot(siw_dmft.real, label="real, dmft")
+    plt.plot(siw_dmft.imag, label="imag, dmft")
     plt.tight_layout()
+    plt.legend()
+    plt.grid()
     plt.show()
-
-    print("Hellow")

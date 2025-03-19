@@ -117,24 +117,32 @@ def create_vertex_functions_q(
     return vrg_q_r, gchi_aux_q_r_sum
 
 
-def get_hartree_fock(u_loc: LocalInteraction, v_nonloc: Interaction, full_q_list: np.ndarray) -> np.ndarray:
+def get_hartree_fock(
+    u_loc: LocalInteraction, v_nonloc: Interaction, full_q_list: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     r"""
-    Returns the Hartree-Fock term for the local and non-local interaction.
-    .. math:: \Sigma_{HF}^k = (2*U_{abcd} - U_{adcb} + 2*V^{q=0}_{abcd}) n_{dc} - 1/N_q \sum_q V^{q}_{adcb} n^{k-q}_{dc}
-    where
+    Returns the Hartree-Fock term separately for the local and non-local interaction. Since we are always SU(2)-symmetric,
+    the sum over the spins of the first term in Eq. (4.55) in Anna Galler's thesis results in a simple factor of 2.
+    .. math:: \Sigma_{HF}^k = 2(U_{abcd} + V^{q=0}_{abcd}) n_{dc} - 1/N_q \sum_q (U_{adcb} + V^{q}_{adcb}) n^{k-q}_{dc}
+    where the Hartree-term is given by
 
-    .. math:: 2*U_{abcd} - U_{adcb} = U_{dens,abcd}.
+    .. math:: \Sigma_{H} = 2(U_{abcd} + V^{q=0}_{abcd}) n_{dc}
+    and the Fock-term reads
+
+    .. math:: \Sigma_{F}^k = - 1/N_q \sum_q (U_{adcb} + V^{q}_{adcb}) n^{k-q}_{dc}.
     """
     v_q0 = v_nonloc.find_q((0, 0, 0))
     occ_qk = np.array([np.roll(config.sys.occ_k, [-i for i in q], axis=(0, 1, 2)) for q in full_q_list])  # [q,k,o1,o2]
     nq_tot, nk_tot = np.prod(config.lattice.nq), np.prod(config.lattice.nk)
     occ_qk = occ_qk.reshape(nq_tot, nk_tot, config.sys.n_bands, config.sys.n_bands)
 
-    hartree_local_n = (u_loc.as_channel(SpinChannel.DENS) + 2 * v_q0).times("qabcd,dc->ab", config.sys.occ)
-    hartree_nonlocal_n = (
-        -1.0 / nq_tot * v_nonloc.compress_q_dimension().permute_orbitals("abcd->adcb").times("qabcd,qkdc->kab", occ_qk)
+    hartree = 2 * (u_loc + v_q0).times("qabcd,dc->ab", config.sys.occ)
+    fock = (
+        -1.0
+        / nq_tot
+        * (u_loc + v_nonloc).compress_q_dimension().permute_orbitals("abcd->adcb").times("qabcd,qkdc->kab", occ_qk)
     )
-    return hartree_local_n[None, ...] + hartree_nonlocal_n
+    return hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
 
 
 def get_sigma_kernel_vrg_r_q(
@@ -142,70 +150,63 @@ def get_sigma_kernel_vrg_r_q(
 ) -> tuple[Interaction, FourPoint]:
     r"""
     Returns the kernel for the self-energy calculation.
-    .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
+    .. math:: K = -\gamma_{r;abcd}^{qv} + \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
+
+    Plus 2/3 times the identity if the channel is the magnetic channel, since there is an additional contribution of 2
+    in the equations and the magnetic part is multiplied by 3.
     """
     u_r = v_nonloc.as_channel(vrg_r_q.channel) + u_loc.as_channel(vrg_r_q.channel)
-    return u_r, vrg_r_q - vrg_r_q @ u_r @ gchi_r_q_sum
+    kernel = -vrg_r_q + vrg_r_q @ u_r @ gchi_r_q_sum
+    if vrg_r_q.channel == SpinChannel.MAGN:
+        kernel += 2.0 / 3.0 * FourPoint.identity_like(vrg_r_q)
+    return u_r, kernel
 
 
-def calculate_u_kernel_g_mat(u_r: Interaction, kernel_r: FourPoint, g_qk: np.ndarray) -> np.ndarray:
+def calculate_sde_r(u_r: Interaction, kernel_r: FourPoint, g_qk: np.ndarray) -> np.ndarray:
     r"""
     Returns
-    .. math:: \Sigma_{ij}^{k} = -1/\beta \sum_q [ U^q_{aibc} * K_{cbjd}^{qv} * G_{ad}^{w-v} ],
+    .. math:: \Sigma_{ij}^{k} = -1/\beta \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ],
     where
 
-    .. math:: K_{r;abcd}^{qv} = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
+    .. math:: K_{r;abcd}^{qv} = 1 - \gamma_{r;abcd}^{qv} + \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
     """
-    return -1.0 / config.sys.beta / np.prod(config.lattice.nq) * u_r.times("qrjop,qilpowv,qklrwv->kijv", kernel_r, g_qk)
+    return (
+        0.5
+        / config.sys.beta**2
+        / config.lattice.q_grid.nk_tot
+        * u_r.times("qrjop,qilpowv,qklrwv->kijv", kernel_r, g_qk)
+    )
 
 
-def get_nonlocal_self_energy_q(
-    u_dens: Interaction,
-    u_magn: Interaction,
-    kernel_dens: FourPoint,
-    kernel_magn: FourPoint,
-    g_qk: np.ndarray,
-):
-    """
-    Returns the non-local self-energy from kernel functions. See big [] brackets in my thesis Eq. (1.125).
-    """
-    return calculate_u_kernel_g_mat(u_dens, kernel_dens, g_qk) + 3 * calculate_u_kernel_g_mat(u_magn, kernel_magn, g_qk)
-
-
-def get_self_energy_dc_kernel_q(
+def get_self_energy_dc_q(
     f_dens: LocalFourPoint,
     f_magn: LocalFourPoint,
-    f_dens_2: LocalFourPoint,
-    f_magn_2: LocalFourPoint,
     u_loc: LocalInteraction,
     gchi0_q_core: FourPoint,
     g_qk: np.ndarray,
 ):
-    kernel_dens_1 = (gchi0_q_core @ f_dens).sum_over_vn(config.sys.beta, axis=(-2,))
-    kernel_magn_1 = (gchi0_q_core @ f_magn).sum_over_vn(config.sys.beta, axis=(-2,))
-    kernel_dens_2 = (gchi0_q_core @ f_dens_2).sum_over_vn(config.sys.beta, axis=(-2,))
-    kernel_magn_2 = (gchi0_q_core @ f_magn_2).sum_over_vn(config.sys.beta, axis=(-2,))
+    """
+    Returns the double-counting kernel, see Eq. (1.124) in my thesis.
+    """
+
+    def calc_kernel(f_r):
+        return (
+            (gchi0_q_core @ f_r).sum_over_vn(config.sys.beta, axis=(-2,)).map_to_full_bz(config.lattice.q_grid.irrk_inv)
+        )
+
+    kernel_dens = calc_kernel(f_dens)
+    kernel_magn = calc_kernel(f_magn)
 
     def calc_dc(kernel_r):
         mat = (
             0.5
-            / config.sys.beta
-            / np.prod(config.lattice.nq)
-            * u_loc.as_channel(SpinChannel.MAGN).times("rjop,qilpowv,qklrwv->kijv", kernel_r, g_qk)
+            / config.sys.beta**2
+            / config.lattice.q_grid.nk_tot
+            * u_loc.permute_orbitals("abcd->adcb").times("aibc,qcbjdwv,qkadwv->kijv", kernel_r, g_qk)
         )
         return SelfEnergy(mat, config.lattice.nk, True, True)
 
-    sigma_dc_dens_1 = calc_dc(kernel_dens_1)
-    sigma_dc_dens_2 = calc_dc(kernel_dens_2)
-    sigma_dc_magn_1 = calc_dc(kernel_magn_1)
-    sigma_dc_magn_2 = calc_dc(kernel_magn_2)
-
-    np.save("/home/julpe/Desktop/sigma_dc_dens_1.npy", sigma_dc_dens_1)
-    np.save("/home/julpe/Desktop/sigma_dc_dens_2.npy", sigma_dc_dens_2)
-    np.save("/home/julpe/Desktop/sigma_dc_magn_1.npy", sigma_dc_magn_1)
-    np.save("/home/julpe/Desktop/sigma_dc_magn_2.npy", sigma_dc_magn_2)
-
-    return sigma_dc_dens_1, sigma_dc_dens_2, sigma_dc_magn_1, sigma_dc_magn_2
+    return calc_dc(kernel_dens) + 3 * calc_dc(kernel_magn)
 
 
 def get_g_qk_wv(giwk: GreensFunction, q_list: np.ndarray) -> np.ndarray:
@@ -221,7 +222,7 @@ def get_g_qk_wv(giwk: GreensFunction, q_list: np.ndarray) -> np.ndarray:
         config.sys.n_bands,
         2 * config.box.niw_core + 1,
         2 * config.box.niv_core,
-    )  # has [q,k,o1,o2,w,v], should be atleast (#o)^2 times smaller than most other objects in size
+    )  # has [q,k,o1,o2,w,v], might be a big memory problem
     return g_qk
 
 
@@ -241,24 +242,22 @@ def calculate_self_energy_q(
     f_magn: LocalFourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
-    f_dens_2: LocalFourPoint,
-    f_magn_2: LocalFourPoint,
 ) -> SelfEnergy:
     logger = config.logger
     logger.log_info("Initializing MPI distributor.")
     mpi_distributor = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_irr, comm=comm, name="Q")
     comm.barrier()
     full_q_list = config.lattice.q_grid.get_q_list()
-    my_q_list = config.lattice.q_grid.get_irrq_list()[mpi_distributor.my_slice]
+    my_irr_q_list = config.lattice.q_grid.get_irrq_list()[mpi_distributor.my_slice]
 
-    hartree = get_hartree_fock(u_loc, v_nonloc, full_q_list)
-    my_v_nonloc = v_nonloc.reduce_q(my_q_list)
+    hartree, fock = get_hartree_fock(u_loc, v_nonloc, full_q_list)
+    my_v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
     logger.log_info("Starting with non-local DGA routine.")
     giwk_full = giwk.get_g_full()
     del giwk
 
-    gchi0_q = create_generalized_chi0_q(giwk_full, my_q_list)  # this is for the q list of the current rank
+    gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)  # this is for the q list of the current rank
     logger.log_info("Non-local bare susceptibility chi_0^qv done.")
     logger.log_memory_usage("gchi0_q", gchi0_q.memory_usage_in_gb, n_exists=1)
 
@@ -270,11 +269,9 @@ def calculate_self_energy_q(
     gchi0_q_core_inv = gchi0_q_core.invert().take_vn_diagonal()
     logger.log_info("Inverted the non-local bare susceptibility chi_0^qv in the niv_core region.")
 
-    g_qk = get_g_qk_wv(giwk_full, my_q_list)
-    sigma_dc_dens_1, sigma_dc_dens_2, sigma_dc_magn_1, sigma_dc_magn_2 = get_self_energy_dc_kernel_q(
-        f_dens, f_magn, f_dens_2, f_magn_2, u_loc, gchi0_q_core, g_qk
-    )
-    del sigma_dc_dens_1, sigma_dc_dens_2, sigma_dc_magn_1, sigma_dc_magn_2, f_dens, f_magn, f_dens_2, f_magn_2
+    g_qk = get_g_qk_wv(giwk_full, full_q_list)
+    sigma_dc = get_self_energy_dc_q(f_dens, f_magn, u_loc, gchi0_q_core, g_qk)
+    del f_dens, f_magn, g_qk
 
     gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
     del gchi0_q_core
@@ -284,13 +281,13 @@ def calculate_self_energy_q(
         gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, my_v_nonloc
     )
     del gamma_dens
-    logger.log_info("Vertex functions for the density channel calculated.")
+    logger.log_info("Three-leg vertex and physical susceptibility for the density channel calculated.")
 
     vrg_magn_q, gchi_magn_q_sum = create_vertex_functions_q(
         gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, my_v_nonloc
     )
-    del gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
-    logger.log_info("Vertex functions for the magnetic channel calculated.")
+    del gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, my_v_nonloc
+    logger.log_info("Three-leg vertex and physical susceptibility for the magnetic channel calculated.")
 
     vrg_dens_q = gather_and_scatter(mpi_distributor, vrg_dens_q)
     gchi_dens_q_sum = gather_and_scatter(mpi_distributor, gchi_dens_q_sum)
@@ -301,8 +298,10 @@ def calculate_self_energy_q(
     mpi_distributor = MpiDistributor(config.lattice.q_grid.nk_tot, comm, "FBZ")
     my_full_q_list = config.lattice.q_grid.get_q_list()[mpi_distributor.my_slice]
 
-    vrg_dens_q = vrg_dens_q.map_to_full_bz(config.lattice.q_grid.irrk_inv)
-    gchi_dens_q_sum = gchi_dens_q_sum.map_to_full_bz(config.lattice.q_grid.irrk_inv)
+    vrg_dens_q = vrg_dens_q.map_to_full_bz(config.lattice.q_grid.irrk_inv).reduce_q(my_full_q_list)
+    gchi_dens_q_sum = gchi_dens_q_sum.map_to_full_bz(config.lattice.q_grid.irrk_inv).reduce_q(my_full_q_list)
+    v_nonloc = v_nonloc.reduce_q(my_full_q_list)
+
     u_dens, kernel_dens = get_sigma_kernel_vrg_r_q(vrg_dens_q, gchi_dens_q_sum, u_loc, v_nonloc)
     del vrg_dens_q, gchi_dens_q_sum
     logger.log_info("Kernel function for sigma for the density channel calculated.")
@@ -310,8 +309,14 @@ def calculate_self_energy_q(
     u_dens = gather_and_scatter(mpi_distributor, u_dens)
     kernel_dens = gather_and_scatter(mpi_distributor, kernel_dens)
 
-    vrg_magn_q = vrg_magn_q.map_to_full_bz(config.lattice.q_grid.irrk_inv)
-    gchi_magn_q_sum = gchi_magn_q_sum.map_to_full_bz(config.lattice.q_grid.irrk_inv)
+    g_qk = get_g_qk_wv(giwk_full, my_full_q_list)
+    sigma_mat = calculate_sde_r(u_dens, kernel_dens, g_qk)
+    del g_qk, u_dens, kernel_dens
+    logger.log_info("First Kernel function for sigma for the density channel calculated.")
+
+    vrg_magn_q = vrg_magn_q.map_to_full_bz(config.lattice.q_grid.irrk_inv).reduce_q(my_full_q_list)
+    gchi_magn_q_sum = gchi_magn_q_sum.map_to_full_bz(config.lattice.q_grid.irrk_inv).reduce_q(my_full_q_list)
+
     u_magn, kernel_magn = get_sigma_kernel_vrg_r_q(vrg_magn_q, gchi_magn_q_sum, u_loc, v_nonloc)
     del vrg_magn_q, gchi_magn_q_sum
     logger.log_info("Kernel function for sigma for the magnetic channel calculated.")
@@ -319,5 +324,16 @@ def calculate_self_energy_q(
     u_magn = gather_and_scatter(mpi_distributor, u_magn)
     kernel_magn = gather_and_scatter(mpi_distributor, kernel_magn)
 
-    exit()
-    sigma = get_nonlocal_self_energy_q(u_dens, u_magn, kernel_dens, kernel_magn, g_qk)
+    g_qk = get_g_qk_wv(giwk_full, my_full_q_list)
+    sigma_mat += 3 * calculate_sde_r(u_magn, kernel_magn, g_qk)
+    del g_qk
+    del u_magn, kernel_magn
+    logger.log_info("Second Kernel function for sigma for the magnetic channel calculated.")
+
+    sigma_mat = mpi_distributor.allreduce(sigma_mat)
+    sigma_mat += hartree
+    sigma_mat += fock
+    sigma_mat -= sigma_dc.mat
+
+    # no dc kernel subtracted yet!
+    return SelfEnergy(sigma_mat, config.lattice.nk, True, True, False)
