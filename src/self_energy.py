@@ -148,8 +148,16 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         """
         Adds two SelfEnergy objects.
         """
-        if not isinstance(other, SelfEnergy):
-            raise ValueError("Can only add two SelfEnergy objects.")
+        if not isinstance(other, (SelfEnergy, np.ndarray)):
+            raise ValueError(f"Can not add {type(other)} to {type(self)}.")
+
+        if isinstance(other, np.ndarray):
+            return SelfEnergy(
+                self.mat + other,
+                full_niv_range=self.full_niv_range,
+                has_compressed_momentum_dimension=self.has_compressed_q_dimension,
+            )
+
         self._align_q_dimensions_for_operations(other)
         return SelfEnergy(
             self.mat + other.mat, full_niv_range=self.full_niv_range, has_compressed_momentum_dimension=True

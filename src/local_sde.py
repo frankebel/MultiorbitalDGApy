@@ -224,17 +224,7 @@ def perform_local_schwinger_dyson(
     sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
     config.logger.log_info("Self-energy Sigma^v done.")
 
-    return (
-        gamma_dens,
-        gamma_magn,
-        gchi_dens_sum,
-        gchi_magn_sum,
-        vrg_dens,
-        vrg_magn,
-        f_dens,
-        f_magn,
-        sigma,
-    )
+    return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
 
 
 # ----------------------------------------------- AbinitioDGA algorithms -----------------------------------------------

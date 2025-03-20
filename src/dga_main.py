@@ -136,7 +136,7 @@ def execute_dga_routine():
     logger.log_info("Non-local ladder-DGA routine finished.")
 
     if is_root() and config.output.save_quantities:
-        sigma_dga.save("/home/julpe/Desktop", "sigma_dga")
+        sigma_dga.save(name="sigma_dga", output_dir=config.output.output_path)
         logger.log_info("Saved sigma_dga as numpy file.")
 
 

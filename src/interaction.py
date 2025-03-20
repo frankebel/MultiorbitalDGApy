@@ -111,9 +111,10 @@ class Interaction(LocalInteraction, IAmNonLocal):
         mat: np.ndarray,
         channel: SpinChannel = SpinChannel.NONE,
         nq: tuple[int, int, int] = (1, 1, 1),
+        has_compressed_momentum_dimension: bool = False,
     ):
         LocalInteraction.__init__(self, mat, channel)
-        IAmNonLocal.__init__(self, mat, nq)
+        IAmNonLocal.__init__(self, mat, nq, has_compressed_momentum_dimension)
 
     @property
     def n_bands(self) -> int:
@@ -134,7 +135,9 @@ class Interaction(LocalInteraction, IAmNonLocal):
             return self
 
         permutation = f"...{split[0]}->...{split[1]}"
-        return Interaction(np.einsum(permutation, self.mat, optimize=True), self.channel, self.nq)
+        return Interaction(
+            np.einsum(permutation, self.mat, optimize=True), self.channel, self.nq, self.has_compressed_q_dimension
+        )
 
     def as_channel(self, channel: SpinChannel) -> "Interaction":
         """
@@ -176,7 +179,10 @@ class Interaction(LocalInteraction, IAmNonLocal):
             other_mat = other.mat
 
         return Interaction(
-            self.mat + other_mat, self.channel if self.channel != SpinChannel.NONE else other.channel, self.nq
+            self.mat + other_mat,
+            self.channel if self.channel != SpinChannel.NONE else other.channel,
+            self.nq,
+            self.has_compressed_q_dimension,
         )
 
     def sub(self, other) -> "Interaction":
