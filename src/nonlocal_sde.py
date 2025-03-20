@@ -223,7 +223,7 @@ def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
     )
 
 
-def gather_map_to_fbz_scatter(obj: IAmNonLocal, mpi_distributor: MpiDistributor, comm: MPI.Comm):
+def gather_map_to_fbz_scatter(obj, mpi_distributor: MpiDistributor, comm: MPI.Comm):
     """
     Gathers the objects from the irreducible Brillouin zone, maps it to the full Brillouin zone and then scatters
     it across all MPI cores.
