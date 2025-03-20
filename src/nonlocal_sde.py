@@ -146,7 +146,12 @@ def get_hartree_fock(
 
 
 def get_sigma_kernel_vrg_r_q(
-    vrg_r_q: FourPoint, gchi_r_q_sum: FourPoint, u_loc: LocalInteraction, v_nonloc: Interaction
+    vrg_r_q: FourPoint,
+    gchi_r_q_sum: FourPoint,
+    u_loc: LocalInteraction,
+    v_nonloc: Interaction,
+    mpi_distributor: MpiDistributor,
+    comm: MPI.Comm,
 ) -> tuple[Interaction, FourPoint]:
     r"""
     Returns the kernel for the self-energy calculation.
@@ -155,6 +160,9 @@ def get_sigma_kernel_vrg_r_q(
     Plus 2/3 times the identity if the channel is the magnetic channel, since there is an additional contribution of 2
     in the equations and the magnetic part is multiplied by 3.
     """
+    vrg_r_q = gather_map_to_fbz_scatter(vrg_r_q, mpi_distributor, comm)
+    gchi_r_q_sum = gather_map_to_fbz_scatter(gchi_r_q_sum, mpi_distributor, comm)
+
     u_r = v_nonloc.as_channel(vrg_r_q.channel) + u_loc.as_channel(vrg_r_q.channel)
     kernel = -vrg_r_q + vrg_r_q @ u_r @ gchi_r_q_sum
     if vrg_r_q.channel == SpinChannel.MAGN:
@@ -162,7 +170,14 @@ def get_sigma_kernel_vrg_r_q(
     return u_r, kernel
 
 
-def calculate_sde_r(u_r: Interaction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray) -> SelfEnergy:
+def calculate_sde_r(
+    u_r: LocalInteraction,
+    kernel_r: FourPoint,
+    giwk: GreensFunction,
+    q_list: np.ndarray,
+    mpi_distributor: MpiDistributor,
+    comm: MPI.Comm,
+) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} =1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
@@ -177,14 +192,26 @@ def calculate_sde_r(u_r: Interaction, kernel_r: FourPoint, giwk: GreensFunction,
         dtype=kernel_r.mat.dtype,
     )
 
+    if isinstance(u_r, Interaction):
+        u_r = gather_map_to_fbz_scatter(u_r, mpi_distributor, comm)
+    kernel_r = gather_map_to_fbz_scatter(kernel_r, mpi_distributor, comm)
+
     for idx, q in enumerate(q_list):
-        mat += np.einsum("aibc,cbjdwv,kadwv->kijv", u_r[idx], kernel_r.mat[idx], get_qk_single_q(giwk, q))
+        mat += np.einsum(
+            "aibc,cbjdwv,kadwv->kijv",
+            u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx],
+            kernel_r.mat[idx],
+            get_qk_single_q(giwk, q),
+        )
 
     mat = 0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot * mat
     return SelfEnergy(mat, config.lattice.nk, has_compressed_momentum_dimension=True)
 
 
 def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
+    """
+    Returns G_{ab}^{q-k} for a single q point, shape is [1,k,o1,o2,w,v].
+    """
     return np.array(
         MFHelper.wn_slices_gen(giwk.shift_k_by_q([-i for i in q]).mat, config.box.niv_core, config.box.niw_core)
     ).reshape(
@@ -196,48 +223,11 @@ def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
     )
 
 
-def get_self_energy_dc_q(
-    f_dens: LocalFourPoint,
-    f_magn: LocalFourPoint,
-    u_loc: LocalInteraction,
-    gchi0_q_core: FourPoint,
-    giwk: GreensFunction,
-    q_list: np.ndarray,
-):
-    """
-    Returns the double-counting kernel, see Eq. (1.124) in my thesis.
-    """
-
-    def calc_kernel(f_r):
-        return (
-            (gchi0_q_core @ f_r).sum_over_vn(config.sys.beta, axis=(-2,)).map_to_full_bz(config.lattice.q_grid.irrk_inv)
-        )
-
-    gchi0_f_dens = calc_kernel(f_dens)
-    gchi0_f_magn = calc_kernel(f_magn)
-
-    def calc_dc(kernel_r):
-        mat = np.zeros(
-            (
-                np.prod(config.lattice.nk),
-                config.sys.n_bands,
-                config.sys.n_bands,
-                2 * config.box.niv_core,
-            ),
-            dtype=kernel_r.mat.dtype,
-        )
-
-        u = u_loc.permute_orbitals("abcd->adcb")
-        for idx, q in enumerate(q_list):
-            mat += u.times("aibc,cbjdwv,kadwv->kijv", kernel_r.mat[idx], get_qk_single_q(giwk, q))
-
-        mat = 0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot * mat
-        return SelfEnergy(mat, config.lattice.nk, has_compressed_momentum_dimension=True)
-
-    return calc_dc(gchi0_f_dens) + 3 * calc_dc(gchi0_f_magn)
-
-
 def gather_map_to_fbz_scatter(obj: IAmNonLocal, mpi_distributor: MpiDistributor, comm: MPI.Comm):
+    """
+    Gathers the objects from the irreducible Brillouin zone, maps it to the full Brillouin zone and then scatters
+    it across all MPI cores.
+    """
     obj.mat = mpi_distributor.gather(obj.mat)
     obj.update_original_shape()
     if comm.rank == 0:
@@ -304,43 +294,34 @@ def calculate_self_energy_q(
     my_full_q_list = config.lattice.q_grid.get_q_list()[mpi_distributor.my_slice]
 
     gchi0_q_core = gather_map_to_fbz_scatter(gchi0_q_core, mpi_distributor, comm)
-    sigma_dc = get_self_energy_dc_q(f_dens, f_magn, u_loc, gchi0_q_core, giwk_full, my_full_q_list)
-    sigma_dc.mat = mpi_distributor.allreduce(sigma_dc.mat)
+
+    kernel_dc = (gchi0_q_core @ (f_dens + 3 * f_magn)).sum_over_vn(config.sys.beta, axis=(-2,))
     del f_dens, f_magn, gchi0_q_core
+    logger.log_info("Double-counting kernel calculated.")
+
+    u_dc = u_loc.permute_orbitals("abcd->adcb")
+    sigma_dc = calculate_sde_r(u_dc, kernel_dc, giwk_full, my_full_q_list, mpi_distributor, comm)
+    del kernel_dc, u_dc
+    sigma_dc.mat = mpi_distributor.allreduce(sigma_dc.mat)
+    logger.log_info("Double-counting correction to sigma^k calculated.")
 
     v_nonloc = gather_map_to_fbz_scatter(v_nonloc, mpi_distributor, comm)
-    vrg_dens_q = gather_map_to_fbz_scatter(vrg_dens_q, mpi_distributor, comm)
-    gchi_dens_q_sum = gather_map_to_fbz_scatter(gchi_dens_q_sum, mpi_distributor, comm)
 
-    u_dens, kernel_dens = get_sigma_kernel_vrg_r_q(vrg_dens_q, gchi_dens_q_sum, u_loc, v_nonloc)
+    u_dens, kernel_dens = get_sigma_kernel_vrg_r_q(vrg_dens_q, gchi_dens_q_sum, u_loc, v_nonloc, mpi_distributor, comm)
     del vrg_dens_q, gchi_dens_q_sum
-    logger.log_info("Kernel function for sigma for the density channel calculated.")
+    logger.log_info("Kernel for sigma for the density channel calculated.")
 
-    logger.log_info("First Kernel function for sigma for the density channel calculated.")
+    sigma_dga = calculate_sde_r(u_dens, kernel_dens, giwk_full, my_full_q_list, mpi_distributor, comm)
+    del u_dens, kernel_dens
+    logger.log_info("Sigma for the density channel calculated.")
 
-    vrg_magn_q = gather_map_to_fbz_scatter(vrg_magn_q, mpi_distributor, comm)
-    gchi_magn_q_sum = gather_map_to_fbz_scatter(gchi_magn_q_sum, mpi_distributor, comm)
-
-    u_magn, kernel_magn = get_sigma_kernel_vrg_r_q(vrg_magn_q, gchi_magn_q_sum, u_loc, v_nonloc)
+    u_magn, kernel_magn = get_sigma_kernel_vrg_r_q(vrg_magn_q, gchi_magn_q_sum, u_loc, v_nonloc, mpi_distributor, comm)
     del vrg_magn_q, gchi_magn_q_sum
     logger.log_info("Kernel function for sigma for the magnetic channel calculated.")
 
-    u_dens = gather_map_to_fbz_scatter(u_dens, mpi_distributor, comm)
-    kernel_dens = gather_map_to_fbz_scatter(kernel_dens, mpi_distributor, comm)
-
-    sigma_dga = calculate_sde_r(u_dens, kernel_dens, giwk_full, my_full_q_list)
-    del u_dens, kernel_dens
-
-    u_magn = gather_map_to_fbz_scatter(u_magn, mpi_distributor, comm)
-    kernel_magn = gather_map_to_fbz_scatter(kernel_magn, mpi_distributor, comm)
-
-    sigma_dga += 3 * calculate_sde_r(u_magn, kernel_magn, giwk_full, my_full_q_list)
+    sigma_dga += 3 * calculate_sde_r(u_magn, kernel_magn, giwk_full, my_full_q_list, mpi_distributor, comm)
     del u_magn, kernel_magn
-    logger.log_info("Second Kernel function for sigma for the magnetic channel calculated.")
+    logger.log_info("Sigma for the magnetic channel calculated.")
 
     sigma_dga.mat = mpi_distributor.allreduce(sigma_dga.mat)
-    sigma_dga += hartree
-    sigma_dga += fock
-    sigma_dga -= sigma_dc
-
-    return sigma_dga
+    return sigma_dga + hartree + fock - sigma_dc

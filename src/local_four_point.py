@@ -116,7 +116,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
         return self
 
-    def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad") -> "LocalFourPoint":
+    def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad"):
         """
         Sums over the given orbitals.
         """
@@ -130,7 +130,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self._num_orbital_dimensions -= diff
         return self
 
-    def sum_over_vn(self, beta: float, axis: tuple = (-1,)) -> "LocalFourPoint":
+    def sum_over_vn(self, beta: float, axis: tuple = (-1,)):
         """
         Sums over specific fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
         """
@@ -161,7 +161,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
         return self.sum_over_vn(beta, axis=axis)
 
-    def contract_legs(self, beta: float) -> "LocalFourPoint":
+    def contract_legs(self, beta: float):
         """
         Sums over all fermionic frequency dimensions if the object has 2 fermionic frequency dimensions and sums over
         the inner two orbitals.
