@@ -7,7 +7,7 @@ from interaction import LocalInteraction, Interaction
 from local_four_point import LocalFourPoint
 from matsubara_frequencies import *
 from mpi_distributor import MpiDistributor
-from n_point_base import SpinChannel, IAmNonLocal
+from n_point_base import SpinChannel
 from self_energy import SelfEnergy
 
 
@@ -44,77 +44,19 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
     )
 
 
-def create_auxiliary_chi_q(
-    gamma_r: LocalFourPoint, gchi0_q_inv: FourPoint, u_loc: LocalInteraction, v_nonloc: Interaction
-) -> FourPoint:
-    r"""
-    Returns the auxiliary susceptibility
-    .. math:: \chi^{*;qvv'}_{r;lmm'l'} = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{qvv'}-U_{r;lmm'l'}-V_{r;lmm'l'}^q)/\beta^2)^{-1}
-
-    .. math:: = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{wvv'}-U_{r;lmm'l'})/\beta^2)^{-1}.
-    See Eq. (3.68) in Paul Worm's thesis.
+def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
     """
-    return (
-        (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
-        - 1.0 / config.sys.beta**2 * (v_nonloc.as_channel(gamma_r.channel) + u_loc.as_channel(gamma_r.channel))
-    ).invert()
-
-
-def create_generalized_chi_q_with_shell_correction(
-    gchi_aux_q_sum: FourPoint,
-    gchi0_q_full_sum: FourPoint,
-    gchi0_q_core_sum: FourPoint,
-    u_loc: LocalInteraction,
-    v_nonloc: Interaction,
-) -> FourPoint:
+    Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v].
     """
-    Calculates the generalized susceptibility with the shell correction as described by
-    Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d. Eq. A.15
-    """
-    return (
-        (gchi_aux_q_sum + gchi0_q_full_sum - gchi0_q_core_sum).invert()
-        + (u_loc.as_channel(gchi_aux_q_sum.channel) + v_nonloc.as_channel(gchi_aux_q_sum.channel))
-    ).invert()
-
-
-def create_vrg_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
-    r"""
-    Returns the three-leg vertex
-    .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
-    See Eq. (3.71) in Paul Worm's thesis.
-    """
-    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
-    return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
-
-
-def create_vertex_functions_q(
-    gamma_r: LocalFourPoint,
-    gchi0_inv_core: FourPoint,
-    gchi0_q_full_sum: FourPoint,
-    gchi0_q_core_sum: FourPoint,
-    u_loc: LocalInteraction,
-    v_nonloc: Interaction,
-):
-    logger = config.logger
-
-    gchi_aux_q_r = create_auxiliary_chi_q(gamma_r, gchi0_inv_core, u_loc, v_nonloc)
-    del gamma_r
-    logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
-
-    vrg_q_r = create_vrg_q(gchi_aux_q_r, gchi0_inv_core)
-    logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
-
-    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
-    del gchi_aux_q_r
-
-    gchi_aux_q_r_sum = create_generalized_chi_q_with_shell_correction(
-        gchi_aux_q_r_sum, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+    return np.array(
+        MFHelper.wn_slices_gen(giwk.shift_k_by_q([-i for i in q]).mat, config.box.niv_core, config.box.niw_core)
+    ).reshape(
+        np.prod(config.lattice.nk),
+        config.sys.n_bands,
+        config.sys.n_bands,
+        2 * config.box.niw_core + 1,
+        2 * config.box.niv_core,
     )
-    logger.log_info(
-        f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
-    )
-
-    return vrg_q_r, gchi_aux_q_r_sum
 
 
 def get_hartree_fock(
@@ -145,42 +87,107 @@ def get_hartree_fock(
     return hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
 
 
-def get_sigma_kernel_vrg_r_q(
-    vrg_r_q: FourPoint,
-    gchi_r_q_sum: FourPoint,
+def create_auxiliary_chi_q(
+    gamma_r: LocalFourPoint, gchi0_q_inv: FourPoint, u_loc: LocalInteraction, v_nonloc: Interaction
+) -> FourPoint:
+    r"""
+    Returns the auxiliary susceptibility
+    .. math:: \chi^{*;qvv'}_{r;lmm'l'} = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{qvv'}-U_{r;lmm'l'}-V_{r;lmm'l'}^q)/\beta^2)^{-1}
+
+    .. math:: = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{wvv'}-U_{r;lmm'l'})/\beta^2)^{-1}.
+    See Eq. (3.68) in Paul Worm's thesis.
+    """
+    return (
+        (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
+        - 1.0 / config.sys.beta**2 * (v_nonloc.as_channel(gamma_r.channel) + u_loc.as_channel(gamma_r.channel))
+    ).invert()
+
+
+def create_vrg_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
+    r"""
+    Returns the three-leg vertex
+    .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
+    See Eq. (3.71) in Paul Worm's thesis.
+    """
+    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
+    return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
+
+
+def create_generalized_chi_q_with_shell_correction(
+    gchi_aux_q_sum: FourPoint,
+    gchi0_q_full_sum: FourPoint,
+    gchi0_q_core_sum: FourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
-    mpi_distributor: MpiDistributor,
-    comm: MPI.Comm,
-) -> tuple[Interaction, FourPoint]:
+) -> FourPoint:
+    """
+    Calculates the generalized susceptibility with the shell correction as described by
+    Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d. Eq. A.15
+    """
+    return (
+        (gchi_aux_q_sum + gchi0_q_full_sum - gchi0_q_core_sum).invert()
+        + (u_loc.as_channel(gchi_aux_q_sum.channel) + v_nonloc.as_channel(gchi_aux_q_sum.channel))
+    ).invert()
+
+
+def calculate_sigma_dc_kernel(f_dens: LocalFourPoint, f_magn: LocalFourPoint, gchi0_q_core: FourPoint) -> FourPoint:
+    """
+    Returns the double-counting kernel for the self-energy calculation.
+    """
+    return (gchi0_q_core @ (f_dens + 3 * f_magn)).sum_over_vn(config.sys.beta, axis=(-2,))
+
+
+def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
     r"""
     Returns the kernel for the self-energy calculation.
-    .. math:: K = -\gamma_{r;abcd}^{qv} + \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
+    .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
 
-    Plus 2/3 times the identity if the channel is the magnetic channel, since there is an additional contribution of 2
-    in the equations and the magnetic part is multiplied by 3.
+    minus 2/3 times the identity if the channel is the magnetic channel (due to the extra u in Eq. (1.125)).
     """
-    vrg_r_q = gather_map_to_fbz_scatter(vrg_r_q, mpi_distributor, comm)
-    gchi_r_q_sum = gather_map_to_fbz_scatter(gchi_r_q_sum, mpi_distributor, comm)
-
-    u_r = v_nonloc.as_channel(vrg_r_q.channel) + u_loc.as_channel(vrg_r_q.channel)
-    kernel = -vrg_r_q + vrg_r_q @ u_r @ gchi_r_q_sum
-    if vrg_r_q.channel == SpinChannel.MAGN:
+    u_r = v_nonloc.as_channel(vrg_q_r.channel) + u_loc.as_channel(vrg_q_r.channel)
+    kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
+    if vrg_q_r.channel == SpinChannel.MAGN:
         kernel -= 2.0 / 3.0 * FourPoint.identity_like(kernel)
     return u_r, kernel
 
 
-def calculate_sde_r(
-    u_r: LocalInteraction,
-    kernel_r: FourPoint,
-    giwk: GreensFunction,
-    q_list: np.ndarray,
-    mpi_distributor: MpiDistributor,
-    comm: MPI.Comm,
+def calculate_sigma_kernel_r_q(
+    gamma_r: LocalFourPoint,
+    gchi0_q_core_inv: FourPoint,
+    gchi0_q_full_sum: FourPoint,
+    gchi0_q_core_sum: FourPoint,
+    u_loc: LocalInteraction,
+    v_nonloc: Interaction,
+) -> tuple[Interaction, FourPoint]:
+    logger = config.logger
+
+    gchi_aux_q_r = create_auxiliary_chi_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
+    logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
+
+    vrg_q_r = create_vrg_q(gchi_aux_q_r, gchi0_q_core_inv)
+    logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
+
+    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
+    del gchi_aux_q_r
+
+    gchi_aux_q_r_sum = create_generalized_chi_q_with_shell_correction(
+        gchi_aux_q_r_sum, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+    )
+    logger.log_info(
+        f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
+    )
+
+    u_r, kernel = calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
+    logger.log_info(f"Kernel ({kernel.channel.value}) for sigma calculated.")
+    return u_r, kernel
+
+
+def calculate_u_kernel_g(
+    u_r: LocalInteraction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray
 ) -> SelfEnergy:
     r"""
     Returns
-    .. math:: \Sigma_{ij}^{k} =1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
+    .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
     """
     mat = np.zeros(
         (
@@ -192,10 +199,6 @@ def calculate_sde_r(
         dtype=kernel_r.mat.dtype,
     )
 
-    if isinstance(u_r, Interaction):
-        u_r = gather_map_to_fbz_scatter(u_r, mpi_distributor, comm)
-    kernel_r = gather_map_to_fbz_scatter(kernel_r, mpi_distributor, comm)
-
     for idx, q in enumerate(q_list):
         mat += np.einsum(
             "aibc,cbjdwv,kadwv->kijv",
@@ -204,35 +207,20 @@ def calculate_sde_r(
             get_qk_single_q(giwk, q),
         )
 
-    mat = 0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot * mat
+    mat = -0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot * mat
     return SelfEnergy(mat, config.lattice.nk, has_compressed_momentum_dimension=True)
 
 
-def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
-    """
-    Returns G_{ab}^{q-k} for a single q point, shape is [1,k,o1,o2,w,v].
-    """
-    return np.array(
-        MFHelper.wn_slices_gen(giwk.shift_k_by_q([-i for i in q]).mat, config.box.niv_core, config.box.niw_core)
-    ).reshape(
-        np.prod(config.lattice.nk),
-        config.sys.n_bands,
-        config.sys.n_bands,
-        2 * config.box.niw_core + 1,
-        2 * config.box.niv_core,
-    )
-
-
-def gather_map_to_fbz_scatter(obj, mpi_distributor: MpiDistributor, comm: MPI.Comm):
+def gather_from_irrk_map_to_fbz_scatter(obj, mpi_dist_irrk: MpiDistributor, mpi_dist_fbz, comm: MPI.Comm):
     """
     Gathers the objects from the irreducible Brillouin zone, maps it to the full Brillouin zone and then scatters
     it across all MPI cores.
     """
-    obj.mat = mpi_distributor.gather(obj.mat)
+    obj.mat = mpi_dist_irrk.gather(obj.mat, 0)
     obj.update_original_shape()
     if comm.rank == 0:
         obj = obj.map_to_full_bz(config.lattice.q_grid.irrk_inv)
-    obj.mat = mpi_distributor.scatter(obj.mat)
+    obj.mat = mpi_dist_fbz.scatter(obj.mat, 0)
     return obj
 
 
@@ -249,15 +237,14 @@ def calculate_self_energy_q(
     logger = config.logger
     logger.log_info("Starting with non-local DGA routine.")
     logger.log_info("Initializing MPI distributor.")
-    mpi_distributor = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_irr, comm=comm, name="Q")
-    comm.barrier()
+    mpi_dist_irrk = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_irr, comm=comm, name="Q")
     full_q_list = config.lattice.q_grid.get_q_list()
-    my_irr_q_list = config.lattice.q_grid.get_irrq_list()[mpi_distributor.my_slice]
+    my_irr_q_list = config.lattice.q_grid.get_irrq_list()[mpi_dist_irrk.my_slice]
 
     v_nonloc = v_nonloc.compress_q_dimension()
     hartree, fock = get_hartree_fock(u_loc, v_nonloc, full_q_list)
     logger.log_info("Calculated Hartree and Fock terms.")
-    v_nonloc.mat = mpi_distributor.scatter(v_nonloc.mat)
+    v_nonloc.mat = mpi_dist_irrk.scatter(v_nonloc.mat)
 
     giwk_full = giwk.get_g_full()
     del giwk
@@ -277,51 +264,45 @@ def calculate_self_energy_q(
     gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
     logger.log_info("Sum of chi_0^qv for the niv_core region done.")
 
-    vrg_dens_q, gchi_dens_q_sum = create_vertex_functions_q(
+    u_dens, kernel_dens = calculate_sigma_kernel_r_q(
         gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
     )
     del gamma_dens
-    logger.log_info("Three-leg vertex and physical susceptibility for the density channel calculated.")
-
-    vrg_magn_q, gchi_magn_q_sum = create_vertex_functions_q(
+    u_magn, kernel_magn = calculate_sigma_kernel_r_q(
         gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
     )
     del gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
-    logger.log_info("Three-leg vertex and physical susceptibility for the magnetic channel calculated.")
+    logger.log_info("Calculated channel-specific kernels for sigma.")
 
-    # we have to create a new distributor for the full Brillouin zone
-    mpi_distributor = MpiDistributor(config.lattice.q_grid.nk_tot, comm, "FBZ")
-    my_full_q_list = config.lattice.q_grid.get_q_list()[mpi_distributor.my_slice]
-
-    gchi0_q_core = gather_map_to_fbz_scatter(gchi0_q_core, mpi_distributor, comm)
-
-    kernel_dc = (gchi0_q_core @ (f_dens + 3 * f_magn)).sum_over_vn(config.sys.beta, axis=(-2,))
+    kernel_dc = calculate_sigma_dc_kernel(f_dens, f_magn, gchi0_q_core)
     del f_dens, f_magn, gchi0_q_core
     logger.log_info("Double-counting kernel calculated.")
 
+    # we have to create a new distributor for the full Brillouin zone
+    mpi_dist_fbz = MpiDistributor(config.lattice.q_grid.nk_tot, comm, "FBZ")
+    my_full_q_list = config.lattice.q_grid.get_q_list()[mpi_dist_fbz.my_slice]
+
     u_dc = u_loc.permute_orbitals("abcd->adcb")
-    sigma_dc = calculate_sde_r(u_dc, kernel_dc, giwk_full, my_full_q_list, mpi_distributor, comm)
+    kernel_dc = gather_from_irrk_map_to_fbz_scatter(kernel_dc, mpi_dist_irrk, mpi_dist_fbz, comm)
+    sigma_dc = calculate_u_kernel_g(u_dc, kernel_dc, giwk_full, my_full_q_list)
     del kernel_dc, u_dc
-    sigma_dc.mat = mpi_distributor.allreduce(sigma_dc.mat)
     logger.log_info("Double-counting correction to sigma^k calculated.")
 
-    v_nonloc = gather_map_to_fbz_scatter(v_nonloc, mpi_distributor, comm)
-
-    u_dens, kernel_dens = get_sigma_kernel_vrg_r_q(vrg_dens_q, gchi_dens_q_sum, u_loc, v_nonloc, mpi_distributor, comm)
-    del vrg_dens_q, gchi_dens_q_sum
-    logger.log_info("Kernel for sigma for the density channel calculated.")
-
-    sigma_dga = calculate_sde_r(u_dens, kernel_dens, giwk_full, my_full_q_list, mpi_distributor, comm)
+    u_dens = gather_from_irrk_map_to_fbz_scatter(u_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
+    kernel_dens = gather_from_irrk_map_to_fbz_scatter(kernel_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
+    sigma_dga = calculate_u_kernel_g(u_dens, kernel_dens, giwk_full, my_full_q_list)
     del u_dens, kernel_dens
     logger.log_info("Sigma for the density channel calculated.")
 
-    u_magn, kernel_magn = get_sigma_kernel_vrg_r_q(vrg_magn_q, gchi_magn_q_sum, u_loc, v_nonloc, mpi_distributor, comm)
-    del vrg_magn_q, gchi_magn_q_sum
-    logger.log_info("Kernel function for sigma for the magnetic channel calculated.")
-
-    sigma_dga += 3 * calculate_sde_r(u_magn, kernel_magn, giwk_full, my_full_q_list, mpi_distributor, comm)
+    u_magn = gather_from_irrk_map_to_fbz_scatter(u_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
+    kernel_magn = gather_from_irrk_map_to_fbz_scatter(kernel_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
+    sigma_dga += 3 * calculate_u_kernel_g(u_magn, kernel_magn, giwk_full, my_full_q_list)
     del u_magn, kernel_magn
     logger.log_info("Sigma for the magnetic channel calculated.")
 
-    sigma_dga.mat = mpi_distributor.allreduce(sigma_dga.mat)
-    return sigma_dga + hartree + fock - sigma_dc
+    sigma_dga.mat = mpi_dist_irrk.allreduce(sigma_dga.mat)
+    sigma_dc.mat = mpi_dist_irrk.allreduce(sigma_dc.mat)
+
+    sigma_dga = sigma_dga + hartree + fock + sigma_dc
+    logger.log_info("Full non-local self-energy calculated.")
+    return sigma_dga

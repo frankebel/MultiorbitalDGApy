@@ -13,20 +13,16 @@ from greens_function import GreensFunction
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
-comm = MPI.COMM_WORLD
-
-
-def is_root() -> bool:
-    return comm.rank == 0
-
 
 def execute_dga_routine():
+    comm = MPI.COMM_WORLD
+
     ConfigParser().parse_config(comm)
     logger = config.logger
     logger.log_info("Starting DGA routine.")
     logger.log_info(f"Running on {str(comm.size)} {"process" if comm.size == 1 else "processes"}.")
 
-    if is_root():
+    if comm.rank == 0:
         g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
     else:
         g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
@@ -43,11 +39,11 @@ def execute_dga_routine():
     logger.log_memory_usage("giwk & siwk", g_dmft.memory_usage_in_gb, 2)
     logger.log_memory_usage("g2_dens & g2_magn", g2_dens.memory_usage_in_gb, 2)
 
-    if config.output.save_quantities and is_root():
+    if config.output.save_quantities and comm.rank == 0:
         sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
         logger.log_info("Saved sigma_dmft as numpy file.")
 
-    if config.output.do_plotting and is_root():
+    if config.output.do_plotting and comm.rank == 0:
         for g2, name in [(g2_dens, "G2_dens"), (g2_magn, "G2_magn")]:
             for omega in [0, -10, 10]:
                 g2.plot(omega=omega, name=name, output_dir=config.output.output_path)
@@ -66,7 +62,7 @@ def execute_dga_routine():
     )
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
-    if config.output.save_quantities and is_root():
+    if config.output.save_quantities and comm.rank == 0:
         gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
         sigma_local.save(name="siw_sde_full", output_dir=config.output.output_path)
@@ -76,7 +72,7 @@ def execute_dga_routine():
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
         logger.log_info("Saved all relevant quantities as numpy files.")
 
-    if config.output.do_plotting and is_root():
+    if config.output.do_plotting and comm.rank == 0:
         gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
         gamma_dens_plot.plot(omega=0, name="Gamma_dens", output_dir=config.output.output_path)
         gamma_dens_plot.plot(omega=10, name="Gamma_dens", output_dir=config.output.output_path)
@@ -127,7 +123,7 @@ def execute_dga_routine():
 
     logger.log_info("Local DGA routine finished.")
 
-    del vrg_dens, vrg_magn, chi_dens, chi_magn, sigma_dmft, sigma_local
+    del vrg_dens, vrg_magn, chi_dens, chi_magn
 
     logger.log_info("Starting non-local ladder-DGA routine.")
     sigma_dga = nonlocal_sde.calculate_self_energy_q(
@@ -135,9 +131,16 @@ def execute_dga_routine():
     )
     logger.log_info("Non-local ladder-DGA routine finished.")
 
-    if is_root() and config.output.save_quantities:
+    # paul does this too
+    # sigma_dga = sigma_dga + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+
+    if comm.rank == 0 and config.output.save_quantities:
         sigma_dga.save(name="sigma_dga", output_dir=config.output.output_path)
         logger.log_info("Saved sigma_dga as numpy file.")
+
+    logger.log_info("DGA routine finished.")
+    logger.log_info("Exiting ...")
+    MPI.Finalize()
 
 
 if __name__ == "__main__":
