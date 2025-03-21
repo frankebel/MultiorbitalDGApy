@@ -131,8 +131,8 @@ def execute_dga_routine():
     )
     logger.log_info("Non-local ladder-DGA routine finished.")
 
-    # paul does this too
-    # sigma_dga = sigma_dga + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+    sigma_dga = sigma_dga + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+    sigma_dga = sigma_dga.pad_with_dmft_self_energy(sigma_dmft)
 
     if comm.rank == 0 and config.output.save_quantities:
         sigma_dga.save(name="sigma_dga", output_dir=config.output.output_path)

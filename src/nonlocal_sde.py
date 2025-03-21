@@ -46,17 +46,16 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
 
 def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
     """
-    Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v].
+    Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v], where only half the niv range is returned.
     """
-    return np.array(
-        MFHelper.wn_slices_gen(giwk.shift_k_by_q([-i for i in q]).mat, config.box.niv_core, config.box.niw_core)
-    ).reshape(
-        np.prod(config.lattice.nk),
+    shifted_mat = giwk.shift_k_by_q([-i for i in q]).mat
+    return MFHelper.wn_slices_gen(shifted_mat, config.box.niv_core, config.box.niw_core).reshape(
+        config.lattice.k_grid.nk_tot,
         config.sys.n_bands,
         config.sys.n_bands,
         2 * config.box.niw_core + 1,
         2 * config.box.niv_core,
-    )
+    )[..., config.box.niv_core : 2 * config.box.niv_core]
 
 
 def get_hartree_fock(
@@ -132,9 +131,9 @@ def create_generalized_chi_q_with_shell_correction(
 
 def calculate_sigma_dc_kernel(f_dens: LocalFourPoint, f_magn: LocalFourPoint, gchi0_q_core: FourPoint) -> FourPoint:
     """
-    Returns the double-counting kernel for the self-energy calculation.
+    Returns the double-counting kernel for the self-energy calculation for only half the niv range to save computation time.
     """
-    return (gchi0_q_core @ (f_dens + 3 * f_magn)).sum_over_vn(config.sys.beta, axis=(-2,))
+    return (gchi0_q_core @ (f_dens + 3 * f_magn)).sum_over_vn(config.sys.beta, axis=(-2,)).to_half_niv_range()
 
 
 def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
@@ -148,7 +147,7 @@ def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc
     kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
     if vrg_q_r.channel == SpinChannel.MAGN:
         kernel -= 2.0 / 3.0 * FourPoint.identity_like(kernel)
-    return u_r, kernel
+    return u_r, kernel.to_half_niv_range()
 
 
 def calculate_sigma_kernel_r_q(
@@ -194,11 +193,10 @@ def calculate_u_kernel_g(
             np.prod(config.lattice.nk),
             config.sys.n_bands,
             config.sys.n_bands,
-            2 * config.box.niv_core,
+            config.box.niv_core,
         ),
         dtype=kernel_r.mat.dtype,
     )
-
     for idx, q in enumerate(q_list):
         mat += np.einsum(
             "aibc,cbjdwv,kadwv->kijv",
@@ -208,7 +206,7 @@ def calculate_u_kernel_g(
         )
 
     mat = -0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot * mat
-    return SelfEnergy(mat, config.lattice.nk, has_compressed_momentum_dimension=True)
+    return SelfEnergy(mat, config.lattice.nk, False, True)
 
 
 def gather_from_irrk_map_to_fbz_scatter(obj, mpi_dist_irrk: MpiDistributor, mpi_dist_fbz, comm: MPI.Comm):
@@ -300,8 +298,8 @@ def calculate_self_energy_q(
     del u_magn, kernel_magn
     logger.log_info("Sigma for the magnetic channel calculated.")
 
-    sigma_dga.mat = mpi_dist_irrk.allreduce(sigma_dga.mat)
-    sigma_dc.mat = mpi_dist_irrk.allreduce(sigma_dc.mat)
+    sigma_dga.mat = mpi_dist_fbz.allreduce(sigma_dga.mat)
+    sigma_dc.mat = mpi_dist_fbz.allreduce(sigma_dc.mat)
 
     sigma_dga = sigma_dga + hartree + fock + sigma_dc
     logger.log_info("Full non-local self-energy calculated.")

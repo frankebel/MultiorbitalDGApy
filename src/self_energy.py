@@ -11,7 +11,7 @@ from local_n_point import LocalNPoint
 
 class SelfEnergy(LocalNPoint, IAmNonLocal):
     """
-    Represents the self-energy.
+    Represents the self-energy. Will automatically map to full niv range if full_niv_range is set to False.
     """
 
     def __init__(
@@ -26,6 +26,10 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         IAmNonLocal.__init__(self, mat, nk, has_compressed_momentum_dimension=has_compressed_momentum_dimension)
         # TODO: check if this is a reasonable value. I'd suggest it depends on the input data size.
         self._niv_core_min = 20
+
+        if not full_niv_range:
+            self.to_full_niv_range()
+
         self._smom0, self._smom1 = self._fit_smom()
         self._niv_core = self._estimate_niv_core() if estimate_niv_core else self.niv
 
@@ -168,3 +172,20 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         Subtracts two SelfEnergy objects.
         """
         return self.add(-other)
+
+    def pad_with_dmft_self_energy(self, other: "SelfEnergy") -> "SelfEnergy":
+        """
+        Pads the self-energy with the other self-energy up to niv.
+        """
+        if self.niv > other.niv:
+            raise ValueError("Can not pad with a self-energy that has less frequencies.")
+        niv_diff = other.niv - self.niv
+
+        self.compress_q_dimension()
+        other.compress_q_dimension()
+
+        other_mat = np.tile(other.mat, (self.nq_tot, 1, 1, 1))
+        result_mat = np.concatenate(
+            (other_mat[..., :niv_diff], self.mat, other_mat[..., niv_diff + 2 * self.niv :]), axis=-1
+        )
+        return SelfEnergy(result_mat, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
