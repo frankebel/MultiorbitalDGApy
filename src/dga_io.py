@@ -153,7 +153,7 @@ def set_hamiltonian(er_type: str, er_input: str | list, int_type: str, int_input
     elif er_type == "from_wannier90":
         if not isinstance(er_input, str):
             raise ValueError("Invalid input for wannier_hr.dat.")
-        ham = ham.read_er_w2k(er_input)
+        ham = ham.read_hr_w2k(er_input)
     elif er_type == "from_wannierHK":
         if not isinstance(er_input, str):
             raise ValueError("Invalid input for wannier.hk.")

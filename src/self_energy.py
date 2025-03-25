@@ -192,7 +192,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
             return self
 
         if n_fit > self.niv or n_fit < 0:
-            n_fit = niv_core + 40
+            n_fit = niv_core + 200
 
         self.compress_q_dimension().to_half_niv_range()
         vn_fit = MFHelper.vn(n_fit, return_only_positive=True)

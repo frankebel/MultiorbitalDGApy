@@ -123,7 +123,7 @@ class Hamiltonian:
         return self._add_interaction_term(interaction_elements)
 
     def kinetic_one_band_2d_t_tp_tpp(self, t: float, tp: float, tpp: float) -> "Hamiltonian":
-        """q
+        """
         Adds the kinetic terms for a one-band model in 2D with nearest, next-nearest and next-next-nearest neighbor hopping.
         """
         orbs = [1, 1]
@@ -144,7 +144,7 @@ class Hamiltonian:
 
         return self._add_kinetic_term(hopping_elements)
 
-    def read_er_w2k(self, filename: str = "./wannier_hr.dat") -> "Hamiltonian":
+    def read_hr_w2k(self, filename: str = "./wannier_hr.dat") -> "Hamiltonian":
         """
         Reads the 'wannier_hr.dat' file from a wien2k hr file and sets the real part of the kinetic hamiltonian.
         """
@@ -277,6 +277,29 @@ class Hamiltonian:
             )
             file.write(line + "\n")
 
+    def write_hk_w2k(self, filename: str, k_grid: bz.KGrid, ek: np.ndarray = None) -> None:
+        """
+        Write the k-space kinetic Hamiltonian in the format of w2k to a file.
+        """
+        if ek is None:
+            ek = self.get_ek(k_grid)
+
+        f = open(filename, "w", encoding="utf-8")
+        n_bands = ek.shape[-1]
+
+        ek = ek.reshape(k_grid.nk_tot, n_bands, n_bands)
+        kmesh = k_grid.kmesh_list
+
+        print(k_grid.nk_tot, n_bands, n_bands, file=f)
+        for ik in range(k_grid.nk_tot):
+            print(kmesh[0, ik], kmesh[1, ik], kmesh[2, ik], file=f)
+            ek_slice = np.copy(ek[ik, ...])
+            np.savetxt(
+                f, ek_slice.view(float), fmt="%.12f", delimiter=" ", newline="\n", header="", footer="", comments="#"
+            )
+
+        f.close()
+
     def read_umatrix(self, filename: str) -> "Hamiltonian":
         """
         Reads a file and creates the interaction matrix from it. The file should contain the number of bands in the first line and the number of r values in the second line.
@@ -333,6 +356,9 @@ class Hamiltonian:
         return LocalInteraction(self._ur_local)
 
     def get_vq(self, q_grid: bz.KGrid) -> "Interaction":
+        """
+        Returns the nonlocal interaction term in momentum space. The nonlocal interaction is momentum-dependent.
+        """
         uq = self._convham_4_orbs(q_grid.kmesh.reshape(3, -1))
         n_bands = uq.shape[-1]
         return Interaction(uq.reshape(*q_grid.nk + (n_bands,) * 4), SpinChannel.NONE, q_grid.nk)
@@ -484,12 +510,12 @@ class Hamiltonian:
     def _check_interaction_swapping_symmetry(self, uq_local: np.ndarray, uq_nonlocal: np.ndarray):
         """
         Checks the swapping symmetry on the local interaction matrix. This symmetry is defined as:
-        U_{lm'ml'} = U_{m'll'm} for the local part and V^{q}_{lmm'l'} = V^{-q}_{mll'm'} for the nonlocal part.
+        U_{lmm'l'} = U_{mll'm'} for the local part and V^{q}_{lmm'l'} = V^{-q}_{mll'm'} for the nonlocal part.
         """
         assert np.allclose(
             uq_local, np.einsum("abcd->badc", uq_local)
         ), "Swapping symmetry of the interaction is not satisfied!"
 
         assert np.allclose(
-            uq_nonlocal, np.einsum(":abcd->:bcda", np.flip(uq_nonlocal, axis=0))
+            uq_nonlocal, np.einsum("qabcd->qbadc", np.flip(uq_nonlocal, axis=0))
         ), "Swapping symmetry of the interaction is not satisfied!"

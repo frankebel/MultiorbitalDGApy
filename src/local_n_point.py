@@ -188,9 +188,7 @@ class LocalNPoint(IHaveMat):
         """
         Converts the object to the full bosonic frequency range in-place.
         """
-        if self.num_wn_dimensions == 0:
-            raise ValueError("Cannot convert to full bosonic frequency range if there are no bosonic frequencies.")
-        if self.full_niw_range:
+        if self.num_wn_dimensions == 0 or self.full_niw_range:
             return self
 
         niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
@@ -211,9 +209,7 @@ class LocalNPoint(IHaveMat):
         """
         Converts the object to the half bosonic frequency range in-place.
         """
-        if self.num_wn_dimensions == 0:
-            raise ValueError("Cannot convert to half bosonic frequency range if there are no bosonic frequencies.")
-        if not self.full_niw_range:
+        if self.num_wn_dimensions == 0 or not self.full_niw_range:
             return self
 
         axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
@@ -227,9 +223,7 @@ class LocalNPoint(IHaveMat):
         """
         Converts the object to the full fermionic frequency range in-place.
         """
-        if self.num_vn_dimensions == 0:
-            raise ValueError("Cannot convert to full fermionic frequency range if there are no fermionic frequencies.")
-        if self.full_niv_range:
+        if self.num_vn_dimensions == 0 or self.full_niv_range:
             return self
 
         self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-1)), self.mat), axis=-1)
@@ -244,9 +238,7 @@ class LocalNPoint(IHaveMat):
         """
         Converts the object to the half fermionic frequency range in-place.
         """
-        if self.num_vn_dimensions == 0:
-            raise ValueError("Cannot convert to half fermionic frequency range if there are no fermionic frequencies.")
-        if not self.full_niv_range:
+        if self.num_vn_dimensions == 0 or not self.full_niv_range:
             return self
 
         ind = np.arange(self.current_shape[-1] // 2, self.current_shape[-1])
