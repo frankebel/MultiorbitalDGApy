@@ -339,7 +339,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter instance,
         we require both objects to only have one niv dimension, such that
 
-        .. math:: A_{abcd}^v * B_{dcef}^{v'} = C_{abef}^{vv'}.
+        .. math:: A_{abcd}^v * B_{abcd}^{v'} = C_{abcd}^{vv'}.
         """
         if not isinstance(other, (int, float, complex, np.ndarray, LocalFourPoint)):
             raise ValueError("Multiplication only supported with numbers, numpy arrays or LocalFourPoint objects.")
@@ -354,7 +354,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         self.to_half_niw_range().to_half_niv_range()
         other = other.to_half_niw_range().to_half_niv_range()
-        result_mat = self.times("abcdwv,dcefwp->abefwvp", other)
+        result_mat = self.times("abcdwv,abcdwp->abcdwvp", other)
         self.to_full_niw_range().to_full_niv_range()
         other = other.to_full_niw_range().to_full_niv_range()
 

@@ -232,8 +232,10 @@ class LocalNPoint(IHaveMat):
         if self.full_niv_range:
             return self
 
-        axis = (-2, -1) if self.num_vn_dimensions == 2 else -1
-        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis)), self.mat), axis=axis)
+        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-1)), self.mat), axis=-1)
+        if self.num_vn_dimensions == 2:
+            self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-2)), self.mat), axis=-2)
+
         self.update_original_shape()
         self._full_niv_range = True
         return self
