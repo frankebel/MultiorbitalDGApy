@@ -73,6 +73,7 @@ class SelfConsistencyConfig:
         self.save_iter: bool = True
         self.epsilon: float = 1e-4
         self.mixing: float = 0.3
+        self.use_poly_fit = True
 
 
 class DmftConfig:
@@ -106,6 +107,18 @@ class SystemConfig:
         self.occ_dmft: np.ndarray = np.ndarray(0)
 
 
+class PolyFittingConfig:
+    """
+    Class to store the polynomial fitting parameters. The polynomial fitting is controlled by the order of the polynomial
+    and the number of matsubara frequencies used for the polynomial fit.
+    """
+
+    def __init__(self):
+        self.do_poly_fitting: bool = True
+        self.n_fit: int = 4
+        self.o_fit: int = 3
+
+
 class OutputConfig:
     """
     Class to store the output parameters. The output is controlled by the option to plot the quantities and to save the
@@ -127,4 +140,5 @@ lattice: LatticeConfig = LatticeConfig()
 dmft: DmftConfig = DmftConfig()
 sys: SystemConfig = SystemConfig()
 output: OutputConfig = OutputConfig()
+poly_fitting: PolyFittingConfig = PolyFittingConfig()
 self_consistency: SelfConsistencyConfig = SelfConsistencyConfig()

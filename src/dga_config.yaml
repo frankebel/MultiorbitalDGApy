@@ -1,36 +1,44 @@
 box_sizes:
-  niw_core: 10 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_core: 5 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niw_core: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_core: 50 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
   niv_shell: 0 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
   symmetries: "two_dimensional_square" # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
-  type: "from_wannierHK" # Specifies the hopping elements, either from a wannier90 file 'from_wannier90', from a hk file 'from_wannierHK' or from tight-binding parameters 't_tp_tpp'
-  hr_input: "/home/julpe/Documents/DATA/Multiorb-DATA/kanamori/wannier.hk" # full path to the wannier_hr.dat/wannier.hk file or list of tight-binding parameters [t, tp, tpp] (only for single-orbital)
-  interaction_type: "kanamori_from_dmft" # Type of interaction. Available: ['local_from_dmft', 'kanamori_from_dmft', 'kanamori', 'custom'].
+  type: "from_wannier90" # Specifies the hopping elements, either from a wannier90 file 'from_wannier90', from a hk file 'from_wannierHK' or from tight-binding parameters 't_tp_tpp'
+  hr_input: "/home/julpe/Documents/DATA/Singleorb-DATA/N085/wannier_hr.dat" # full path to the wannier_hr.dat/wannier.hk file or list of tight-binding parameters [t, tp, tpp] (only for single-orbital)
+  interaction_type: "local_from_dmft" # Type of interaction. Available: ['local_from_dmft', 'kanamori_from_dmft', 'kanamori', 'custom'].
   # If 'local_from_dmft' or if interaction_type is left empty, we use the single-band interaction from DMFT. If 'kanamori_from_dmft', the interaction is parsed from the DMFT
   # calculation. If 'kanamori', we expect the interaction input to be a list containing the number of bands and two to three kanamori parameters, [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   # (U' is also sometimes called V). If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
   # (similar to how a wannier_hr.dat file is structured, but with 4 orbital indices).
   interaction_input: [ 2, 2, 0.5 ] # full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
-  nk: [ 40, 40, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
+  # this parameter will only be used if interaction_type is either 'kanamori' or 'custom'
+  nk: [ 16, 16, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
 self_consistency:
-  max_iter: 20 # Maximum number of iterations
+  max_iter: 1 # Maximum number of iterations
   save_iter: True # If True, the code will save the self-consistency data for each iteration, making it possible to restart the calculation from this point
   epsilon: 1e-4 # Convergence criterion of the self-energy for each frequency
   mixing: 0.3 # Mixing parameter for the self-energy. If set to 1, the self-energy is fully updated in each iteration. We use linear mixing,
   # i.e. the new self-energy is a linear combination of the old and the new one. sigma_new = mixing * sigma_new + (1 - mixing) * sigma_old
+  use_poly_fit: True # If True, the code will use the polynomial fit of the self-energy for the next iteration with the settings specified below. Will
+  # not work if do_poly_fitting below is not set to True
 
 dmft_input:
   type: "w2dyn" # Input format. Available is 'w2dyn'
-  input_path: "/home/julpe/Documents/DATA/Multiorb-DATA/kanamori/" # Folder containing the input files. Default: current directory
+  input_path: "/home/julpe/Documents/DATA/Singleorb-DATA/N085/" # Folder containing the input files. Default: current directory
   fname_1p: "1p-data.hdf5" # Filename of the one-particle DMFT calculation; default: 1p_data.hdf5
   fname_2p: "g4iw_sym.hdf5" # Name of the two-particle DMFT calculation; default: g4iw_sym.hdf5
   do_sym_v_vp: True # If True, the code will symmetrize G2 in the v and vp indices
 
+poly_fitting:
+  do_poly_fitting: True # If True, the code will perform a polynomial fit of the non-local self-energy and the Green's function
+  n_fit: -1 # Number of Matsubara frequencies used for fit; default: -1 (niv_core + 40)
+  o_fit: 8 # Polynomial order used for the fit; default: 8
+
 output:
   output_path: "" # Path, where the DGA output folders are created. If not specified, the output is created in the input folder directory of the DMFT files
   do_plotting: False # If True, the code will plot the results into the output folder
-  save_quantities: False # If True, the code will save several quantities into the output folder
+  save_quantities: True # If True, the code will save several quantities into the output folder

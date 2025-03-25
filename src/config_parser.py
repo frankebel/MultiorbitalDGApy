@@ -53,6 +53,7 @@ class ConfigParser:
         config.dmft = self._build_dmft_config(conf_file)
         config.output = self._build_output_config(conf_file)
         config.self_consistency = self._build_self_consistency_config(conf_file)
+        config.poly_fitting = self._build_poly_fitting_config(conf_file)
         config.box = self._build_box_config(conf_file)
         config.lattice = self._build_lattice_config(conf_file)
         config.sys = self._build_system_config(conf_file)
@@ -142,7 +143,7 @@ class ConfigParser:
 
         return conf
 
-    def _build_self_consistency_config(self, conf_file):
+    def _build_self_consistency_config(self, conf_file) -> SelfConsistencyConfig:
         """
         Builds the self-consistency config from the config file. Mainly concerned with the self-consistency loop.
         """
@@ -153,6 +154,17 @@ class ConfigParser:
         conf.save_iter = self._try_parse(sc_section, "save_iter", True)
         conf.epsilon = self._try_parse(sc_section, "epsilon", 1e-4)
         conf.mixing = self._try_parse(sc_section, "mixing", 0.3)
+        conf.use_poly_fit = self._try_parse(sc_section, "use_poly_fit", True)
+
+        return conf
+
+    def _build_poly_fitting_config(self, conf_file) -> PolyFittingConfig:
+        conf = PolyFittingConfig()
+        poly_fitting_section = conf_file["poly_fitting"]
+
+        conf.do_poly_fitting = self._try_parse(poly_fitting_section, "do_poly_fitting", True)
+        conf.n_fit = self._try_parse(poly_fitting_section, "n_fit", 4)
+        conf.o_fit = self._try_parse(poly_fitting_section, "o_fit", 3)
 
         return conf
 

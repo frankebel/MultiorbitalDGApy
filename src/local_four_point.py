@@ -57,6 +57,20 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         return self.sub(other)
 
+    def __mul__(self, other) -> "LocalFourPoint":
+        """
+        Multiplication for LocalFourPoint objects. Allows for the multiplication with numbers, numpy arrays and
+        other LocalFourPoint objects, such that A^{v} * B^{v'} = C^{vv'}.
+        """
+        return self.mul(other)
+
+    def __rmul__(self, other) -> "LocalFourPoint":
+        """
+        Multiplication for LocalFourPoint objects. Allows for the multiplication with numbers, numpy arrays and
+        other LocalFourPoint objects, such that A^{v} * B^{v'} = C^{vv'}.
+        """
+        return self.mul(other)
+
     def __matmul__(self, other) -> "LocalFourPoint":
         """
         Matrix multiplication for LocalFourPoint objects. Allows for A @ B = C using compound indices.
@@ -318,6 +332,36 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             )
             .to_full_indices(shape)
             .to_full_niw_range()
+        )
+
+    def mul(self, other):
+        r"""
+        Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter instance,
+        we require both objects to only have one niv dimension, such that
+
+        .. math:: A_{abcd}^v * B_{dcef}^{v'} = C_{abef}^{vv'}.
+        """
+        if not isinstance(other, (int, float, complex, np.ndarray, LocalFourPoint)):
+            raise ValueError("Multiplication only supported with numbers, numpy arrays or LocalFourPoint objects.")
+
+        if not isinstance(other, LocalFourPoint):
+            copy = deepcopy(self)
+            copy.mat *= other
+            return copy
+
+        if self.num_vn_dimensions != 1 or other.num_vn_dimensions != 1:
+            raise ValueError("Both objects must have only one fermionic frequency dimension.")
+
+        self.to_half_niw_range().to_half_niv_range()
+        other = other.to_half_niw_range().to_half_niv_range()
+        result_mat = self.times("abcdwv,dcefwp->abefwvp", other)
+        self.to_full_niw_range().to_full_niv_range()
+        other = other.to_full_niw_range().to_full_niv_range()
+
+        return (
+            LocalFourPoint(result_mat, self.channel, 1, 2, False, False, self.frequency_notation)
+            .to_full_niw_range()
+            .to_full_niv_range()
         )
 
     def add(self, other):

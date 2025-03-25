@@ -289,43 +289,58 @@ def calculate_self_energy_q(
 
         u_dens = gather_from_irrk_map_to_fbz_scatter(u_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
         kernel_dens = gather_from_irrk_map_to_fbz_scatter(kernel_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
-        sigma_dga = calculate_u_kernel_g(u_dens, kernel_dens, giwk_full, my_full_q_list)
+        new_sigma = calculate_u_kernel_g(u_dens, kernel_dens, giwk_full, my_full_q_list)
         del u_dens, kernel_dens
         logger.log_info("Sigma for the density channel calculated.")
 
         u_magn = gather_from_irrk_map_to_fbz_scatter(u_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
         kernel_magn = gather_from_irrk_map_to_fbz_scatter(kernel_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
-        sigma_dga += 3 * calculate_u_kernel_g(u_magn, kernel_magn, giwk_full, my_full_q_list)
+        new_sigma += 3 * calculate_u_kernel_g(u_magn, kernel_magn, giwk_full, my_full_q_list)
         del u_magn, kernel_magn
         logger.log_info("Sigma for the magnetic channel calculated.")
 
-        sigma_dga.mat = mpi_dist_fbz.allreduce(sigma_dga.mat)
+        new_sigma.mat = mpi_dist_fbz.allreduce(new_sigma.mat)
         sigma_dc.mat = mpi_dist_fbz.allreduce(sigma_dc.mat)
 
-        sigma_dga = sigma_dga + hartree + fock + sigma_dc
+        new_sigma = new_sigma + hartree + fock + sigma_dc
         logger.log_info("Full non-local self-energy calculated.")
 
         old_mu = config.sys.mu
         config.sys.mu = update_mu(
-            config.sys.mu, config.sys.n, giwk_full.ek, sigma_dga.mat, config.sys.beta, sigma_dga.fit_smom()[0]
+            config.sys.mu, config.sys.n, giwk_full.ek, new_sigma.mat, config.sys.beta, new_sigma.fit_smom()[0]
         )
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
         if i == 0:
-            sigma_dga = sigma_dga + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
-        sigma_dga = sigma_dga.pad_with_dmft_self_energy(sigma_dmft)
-        sigma_dga = config.self_consistency.mixing * sigma_dga + (1 - config.self_consistency.mixing) * old_sigma
+            new_sigma = new_sigma + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+        new_sigma = new_sigma.pad_with_dmft_self_energy(sigma_dmft)
 
-        if config.self_consistency.save_iter:
-            sigma_dga.save(name=f"sigma_dga_{i}", output_dir=config.output.output_path)
+        if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
+            new_sigma = new_sigma.fit_polynomial(
+                config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core
+            )
 
-        giwk_full = GreensFunction.get_g_full(sigma_dga, config.sys.mu, giwk_full.ek)
+        new_sigma = config.self_consistency.mixing * new_sigma + (1 - config.self_consistency.mixing) * old_sigma
 
-        if np.allclose(old_sigma.mat, sigma_dga.mat, atol=config.self_consistency.epsilon):
-            logger.log_info("Self-consistency reached. Sigma converged.")
+        if config.self_consistency.save_iter and config.output.save_quantities and comm.rank == 0:
+            new_sigma.save(name=f"sigma_dga_{i+1}", output_dir=config.output.output_path)
 
-        old_sigma = sigma_dga
+        giwk_full = GreensFunction.get_g_full(new_sigma, config.sys.mu, giwk_full.ek)
+
+        if np.allclose(old_sigma.mat, new_sigma.mat, atol=config.self_consistency.epsilon):
+            logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
+
+        old_sigma = new_sigma
 
     mpi_dist_irrk.delete_file()
     mpi_dist_fbz.delete_file()
+
+    if config.poly_fitting.do_poly_fitting and not config.self_consistency.use_poly_fit:
+        old_sigma = old_sigma.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
+        logger.log_info(f"Fitted polynomial of degree {config.poly_fitting.o_fit} to sigma.")
+
+    if config.output.save_quantities and config.poly_fitting.do_poly_fitting and comm.rank == 0:
+        old_sigma.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
+        logger.log_info("Saved fitted sigma as numpy file.")
+
     return old_sigma

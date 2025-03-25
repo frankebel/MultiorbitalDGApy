@@ -81,7 +81,7 @@ class LocalNPoint(IHaveMat):
     def full_niw_range(self) -> bool:
         """
         Specifies whether the object is stored in the full bosonic frequency range or
-        only a subset of it (e.g. only w >= 0).
+        only a subset of it (only w >= 0).
         """
         return self._full_niw_range
 
@@ -89,7 +89,7 @@ class LocalNPoint(IHaveMat):
     def full_niv_range(self) -> bool:
         """
         Specifies whether the object is stored in the full fermionic frequency range or
-        only a subset of it (e.g. only w >= 0).
+        only a subset of it (only v > 0).
         """
         return self._full_niv_range
 

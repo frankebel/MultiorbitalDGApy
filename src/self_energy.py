@@ -169,7 +169,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
 
     def pad_with_dmft_self_energy(self, other: "SelfEnergy") -> "SelfEnergy":
         """
-        Pads the self-energy with the other self-energy up to niv.
+        Pads the self-energy with the other self-energy up to the DMFT self-energy niv.
         """
         if self.niv > other.niv:
             raise ValueError("Can not pad with a self-energy that has less frequencies.")
@@ -183,3 +183,27 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
             (other_mat[..., :niv_diff], self.mat, other_mat[..., niv_diff + 2 * self.niv :]), axis=-1
         )
         return SelfEnergy(result_mat, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
+
+    def fit_polynomial(self, n_fit: int = 4, degree: int = 3, niv_core: int = 0) -> "SelfEnergy":
+        """
+        Fits a polynomial of a given degree to the self-energy.
+        """
+        if n_fit == 0:
+            return self
+
+        if n_fit > self.niv or n_fit < 0:
+            n_fit = niv_core + 40
+
+        self.compress_q_dimension().to_half_niv_range()
+        vn_fit = MFHelper.vn(n_fit, return_only_positive=True)
+        vn_full = MFHelper.vn(self.niv, return_only_positive=True)
+        poly_mat = np.zeros_like(self.mat)
+        fit_mat = self.cut_niv(n_fit).mat
+
+        for k in range(self.nq_tot):
+            for o1 in range(self.n_bands):
+                for o2 in range(self.n_bands):
+                    poly = np.polyfit(vn_fit, fit_mat[k, o1, o2, ...], degree)
+                    poly_mat[k, o1, o2, :] = np.polyval(poly, vn_full)
+
+        return SelfEnergy(poly_mat, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
