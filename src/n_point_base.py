@@ -193,10 +193,10 @@ class IAmNonLocal(IHaveMat, ABC):
     need more than one momentum variable for one- and two-particle quantities.
     """
 
-    def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_momentum_dimension: bool = False):
+    def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_q_dimension: bool = False):
         super().__init__(mat)
         self._nq = nq
-        self._has_compressed_q_dimension = has_compressed_momentum_dimension
+        self._has_compressed_q_dimension = has_compressed_q_dimension
 
     @property
     def nq(self) -> tuple[int, int, int]:

@@ -111,10 +111,10 @@ class Interaction(LocalInteraction, IAmNonLocal):
         mat: np.ndarray,
         channel: SpinChannel = SpinChannel.NONE,
         nq: tuple[int, int, int] = (1, 1, 1),
-        has_compressed_momentum_dimension: bool = False,
+        has_compressed_q_dimension: bool = False,
     ):
         LocalInteraction.__init__(self, mat, channel)
-        IAmNonLocal.__init__(self, mat, nq, has_compressed_momentum_dimension)
+        IAmNonLocal.__init__(self, mat, nq, has_compressed_q_dimension)
 
     @property
     def n_bands(self) -> int:

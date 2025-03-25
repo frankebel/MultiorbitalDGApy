@@ -50,12 +50,18 @@ def load_from_w2dyn_file_and_update_config():
     if config.sys.n == 0:
         config.sys.n = 2 * np.sum(config.sys.occ_dmft)
 
-    giw_spin_mean = np.mean(file.get_giw(), axis=1)
-    g_dmft = GreensFunction(np.einsum("i...,ij->ij...", giw_spin_mean, np.eye(config.sys.n_bands)))
-    siw_spin_mean = np.mean(file.get_siw(), axis=1)
-    siw_spin_mean = np.einsum("i...,ij->ij...", siw_spin_mean, np.eye(config.sys.n_bands))[None, None, None, ...]
-    sigma_dmft = SelfEnergy(siw_spin_mean, estimate_niv_core=True)
-    del giw_spin_mean, siw_spin_mean
+    def extend_orbital(arr: np.ndarray) -> np.ndarray:
+        return np.einsum("i...,ij->ij...", arr, np.eye(config.sys.n_bands))
+
+    giw_spin_mean = np.mean(file.get_giw(), axis=1)  # [band,spin,niv]
+    g_dmft = GreensFunction(extend_orbital(giw_spin_mean))
+
+    siw_spin_mean = np.mean(file.get_siw(), axis=1)  # [band,spin,niv]
+    siw_spin_mean = extend_orbital(siw_spin_mean)[None, None, None, ...]
+    siw_dc_spin_mean = np.mean(file.get_dc(), axis=-1)  # [band,spin]
+    siw_dc_spin_mean = extend_orbital(siw_dc_spin_mean)[None, None, None, ..., None]
+    sigma_dmft = SelfEnergy(siw_spin_mean, estimate_niv_core=True) + siw_dc_spin_mean
+    del giw_spin_mean, siw_spin_mean, siw_dc_spin_mean
 
     file.close()
 

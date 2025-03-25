@@ -121,18 +121,14 @@ def execute_dga_routine():
         logger.log_info("Plotted local self-energies for comparison.")
         logger.log_info("Finished plotting.")
 
-    logger.log_info("Local DGA routine finished.")
-
     del vrg_dens, vrg_magn, chi_dens, chi_magn
+    logger.log_info("Local DGA routine finished.")
 
     logger.log_info("Starting non-local ladder-DGA routine.")
     sigma_dga = nonlocal_sde.calculate_self_energy_q(
-        comm, giwk, gamma_dens, gamma_magn, f_dens, f_magn, u_loc, v_nonloc
+        comm, giwk, gamma_dens, gamma_magn, f_dens, f_magn, u_loc, v_nonloc, sigma_dmft, sigma_local
     )
     logger.log_info("Non-local ladder-DGA routine finished.")
-
-    sigma_dga = sigma_dga + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
-    sigma_dga = sigma_dga.pad_with_dmft_self_energy(sigma_dmft)
 
     if comm.rank == 0 and config.output.save_quantities:
         sigma_dga.save(name="sigma_dga", output_dir=config.output.output_path)

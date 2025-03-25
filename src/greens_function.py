@@ -1,12 +1,69 @@
 from copy import deepcopy
 
 import numpy as np
+from scipy import optimize as opt
 
 import config
 from local_n_point import LocalNPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import IAmNonLocal
 from self_energy import SelfEnergy
+
+
+def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray) -> float:
+    """
+    Returns the total filling. Helper method for root finding of mu.
+    """
+    n_bands = sigma_mat.shape[-2]
+    eye_bands = np.eye(n_bands, n_bands)
+    iv = 1j * MFHelper.vn(sigma_mat.shape[-1] // 2, beta)
+    iv_bands = iv[None, None, :] * eye_bands[..., None]
+    mu_bands = mu * eye_bands[:, :, None]
+    hloc = np.mean(ek, axis=(0, 1, 2))
+
+    mat = iv_bands + mu_bands - hloc[..., None] - smom0[..., None]
+    g_model_mat = np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
+
+    mat = iv_bands[None, None, None, ...] + mu_bands[None, None, None, ...] - ek[..., None] - sigma_mat
+    g_full_mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
+    g_loc_mat = np.mean(g_full_mat, axis=(0, 1, 2))
+
+    eigenvals, eigenvecs = np.linalg.eig(beta * (hloc.real + smom0 - mu_bands))
+    rho_loc_diag = np.zeros((n_bands, n_bands), dtype=np.complex64)
+    for i in range(n_bands):
+        if eigenvals[i] > 0:
+            rho_loc_diag[i, i] = np.exp(-eigenvals[i]) / (1 + np.exp(-eigenvals[i]))
+        else:
+            rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
+
+    rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
+    occ = rho_loc + np.sum(g_loc_mat.real - g_model_mat.real, axis=-1) / beta
+    return 2.0 * np.trace(occ).real
+
+
+def root_fun(
+    mu: float, target_filling: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray
+) -> float:
+    return get_total_fill(mu, ek, sigma_mat, beta, smom0) - target_filling
+
+
+def update_mu(
+    mu0: float, target_filling: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray
+) -> float:
+    """
+    Updates the chemical potential to match the target filling.
+    """
+    mu = mu0
+    try:
+        mu = opt.newton(root_fun, mu, args=(target_filling, ek, sigma_mat, beta, smom0), tol=1e-6)
+    except RuntimeError:
+        config.logger.log_debug("Root finding for chemical potential failed, using old chemical potential.")
+
+    if np.abs(mu.imag) < 1e-8:
+        mu = mu.real
+    else:
+        raise ValueError("Chemical Potential must be real.")
+    return mu[0]
 
 
 class GreensFunction(LocalNPoint, IAmNonLocal):
@@ -21,9 +78,10 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         ek: np.ndarray = None,
         full_niv_range: bool = True,
         calc_filling: bool = True,
+        has_compressed_q_dimension: bool = False,
     ):
         LocalNPoint.__init__(self, mat, 2, 0, 1, full_niv_range=full_niv_range)
-        IAmNonLocal.__init__(self, mat, config.lattice.nk)
+        IAmNonLocal.__init__(self, mat, config.lattice.nk, has_compressed_q_dimension)
         self._sigma = sigma
         self._ek = ek
 
@@ -43,17 +101,48 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
 
     @property
     def n_bands(self) -> int:
+        """
+        Returns the number of bands.
+        """
         return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
-    def get_g_full(self) -> "GreensFunction":
+    @property
+    def ek(self) -> np.ndarray:
+        """
+        Returns the band dispersion.
+        """
+        return self._ek
+
+    def get_g_full_from_gloc(self) -> "GreensFunction":
+        """
+        Returns the full k-dependent Green's function.
+        """
         return GreensFunction(self._get_gfull_mat(), self._sigma, self._ek, True, False)
 
     @staticmethod
-    def create_g_loc(siw: SelfEnergy, ek: np.ndarray) -> "GreensFunction":
+    def get_g_full(siw: SelfEnergy, mu: float, ek: np.ndarray):
+        """
+        Returns the full k-dependent Green's function.
+        """
+        eye_bands = np.eye(siw.n_bands, siw.n_bands)
+        iv = 1j * MFHelper.vn(siw.niv, config.sys.beta)
+        iv_bands = iv[None, None, :] * eye_bands[..., None]
+        mu_bands = mu * eye_bands[:, :, None]
+        mat = (
+            iv_bands[None, None, None, ...]
+            + mu_bands[None, None, None, ...]
+            - ek[..., None]
+            - siw.decompress_q_dimension().mat
+        )
+        mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
+        return GreensFunction(mat, siw, ek, siw.full_niv_range, False, siw.has_compressed_q_dimension)
+
+    @staticmethod
+    def create_g_loc(siw: SelfEnergy, ek: np.ndarray, calc_filling: bool = True) -> "GreensFunction":
         """
         Returns a local Green's function object from a given self-energy and band dispersion.
         """
-        return GreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range)
+        return GreensFunction(np.empty_like(siw.mat), siw, ek, siw.full_niv_range, calc_filling)
 
     def permute_orbitals(self, permutation: str = "ab->ab"):
         """
@@ -79,32 +168,9 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
     def transpose_orbitals(self):
         r"""
         Transposes the orbitals of the Green's function object.
-        .. math:: G_{ab}^\nu -> G_{ba}^\nu
+        .. math:: G_{ab}^k -> G_{ba}^k
         """
         return self.permute_orbitals("ab->ba")
-
-    def _get_fill(self) -> tuple[float, np.ndarray]:
-        """
-        Returns the total filling and the filling of each band.
-        """
-        mat = self._get_gloc_mat()
-        g_model = self._get_g_model_mat()
-        hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
-        smom0, _ = self._sigma.smom
-        mu_bands: np.ndarray = config.sys.mu * np.eye(self.n_bands)
-
-        eigenvals, eigenvecs = np.linalg.eig(config.sys.beta * (hloc.real + smom0 - mu_bands))
-        rho_loc_diag = np.zeros((self.n_bands, self.n_bands), dtype=np.complex64)
-        for i in range(self.n_bands):
-            if eigenvals[i] > 0:
-                rho_loc_diag[i, i] = np.exp(-eigenvals[i]) / (1 + np.exp(-eigenvals[i]))
-            else:
-                rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
-
-        rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
-        occ = rho_loc + np.sum(mat.real - g_model.real, axis=-1) / config.sys.beta
-        n_el = 2.0 * np.trace(occ).real
-        return n_el, occ
 
     def _get_fill_nonlocal(self) -> tuple[float, np.ndarray, np.ndarray]:
         """

@@ -97,6 +97,10 @@ class W2dynFile:
     def _from_atom_config(self, key: str, atom: int = 1):
         return self._file[".config"].attrs[f"atoms.{atom:1}.{key}"]
 
+    def get_dc(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
+        """Extracts the DMFT double-counting correction as [band, spin]."""
+        return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/dc/value"][()]
+
 
 class W2dynG4iwFile:
     def __init__(self, fname: str):

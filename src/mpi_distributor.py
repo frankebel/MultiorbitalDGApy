@@ -133,6 +133,7 @@ class MpiDistributor:
         rank_shape = (self.my_size,) + rest_shape
         rank_data = np.empty(rank_shape, dtype=data_type)
         other_dims = np.prod(rank_data.shape[1:])
+        # displacements = np.insert(np.cumsum(self.sizes[:-1]), 0, 0)
         self.comm.Scatterv([full_data, self.sizes * other_dims], rank_data, root=root)
         return rank_data
 

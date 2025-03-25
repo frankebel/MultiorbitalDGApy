@@ -19,18 +19,18 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         mat: np.ndarray,
         nk: tuple[int, int, int] = (1, 1, 1),
         full_niv_range: bool = True,
-        has_compressed_momentum_dimension: bool = False,
+        has_compressed_q_dimension: bool = False,
         estimate_niv_core: bool = False,
     ):
         LocalNPoint.__init__(self, mat, 2, 0, 1, full_niv_range=full_niv_range)
-        IAmNonLocal.__init__(self, mat, nk, has_compressed_momentum_dimension=has_compressed_momentum_dimension)
+        IAmNonLocal.__init__(self, mat, nk, has_compressed_q_dimension=has_compressed_q_dimension)
         # TODO: check if this is a reasonable value. I'd suggest it depends on the input data size.
         self._niv_core_min = 20
 
         if not full_niv_range:
             self.to_full_niv_range()
 
-        self._smom0, self._smom1 = self._fit_smom()
+        self._smom0, self._smom1 = self.fit_smom()
         self._niv_core = self._estimate_niv_core() if estimate_niv_core else self.niv
 
     @property
@@ -47,7 +47,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         """
         return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
-    def _fit_smom(self):
+    def fit_smom(self):
         """
         Fits the first two local momenta of the self-energy.
         """
@@ -156,16 +156,10 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
             raise ValueError(f"Can not add {type(other)} to {type(self)}.")
 
         if isinstance(other, np.ndarray):
-            return SelfEnergy(
-                self.mat + other,
-                full_niv_range=self.full_niv_range,
-                has_compressed_momentum_dimension=self.has_compressed_q_dimension,
-            )
+            return SelfEnergy(self.mat + other, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
 
-        self._align_q_dimensions_for_operations(other)
-        return SelfEnergy(
-            self.mat + other.mat, full_niv_range=self.full_niv_range, has_compressed_momentum_dimension=True
-        )
+        other = self._align_q_dimensions_for_operations(other)
+        return SelfEnergy(self.mat + other.mat, self.nq, self.full_niv_range, True, False)
 
     def sub(self, other) -> "SelfEnergy":
         """

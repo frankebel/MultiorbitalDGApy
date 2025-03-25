@@ -18,7 +18,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         num_vn_dimensions: int = 2,
         full_niw_range: bool = True,
         full_niv_range: bool = True,
-        has_compressed_momentum_dimension: bool = False,
+        has_compressed_q_dimension: bool = False,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ):
         LocalFourPoint.__init__(
@@ -31,7 +31,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             full_niv_range,
             frequency_notation,
         )
-        IAmNonLocal.__init__(self, mat, nq, has_compressed_momentum_dimension)
+        IAmNonLocal.__init__(self, mat, nq, has_compressed_q_dimension)
 
     @property
     def n_bands(self) -> int:
@@ -428,7 +428,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         mat = np.tile(np.eye(compound_index_size)[None, None, ...], (nq_tot, 2 * niw + 1, 1, 1))
 
         result = FourPoint(
-            mat, nq=nq, num_vn_dimensions=num_vn_dimensions, has_compressed_momentum_dimension=True
+            mat, nq=nq, num_vn_dimensions=num_vn_dimensions, has_compressed_q_dimension=True
         ).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
             return result.take_vn_diagonal()
