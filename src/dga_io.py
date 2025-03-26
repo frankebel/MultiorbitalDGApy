@@ -84,12 +84,7 @@ def load_from_w2dyn_file_and_update_config():
         config.box.niv_shell,
     )
 
-    config.output.output_path = os.path.join(config.output.output_path, output_format)
-
-    if (
-        not config.self_consistency.save_iter
-    ):  # if we choose to save the self_energy for each iteration, we allow the exact same output folder to be used
-        config.output.output_path = uniquify_path(config.output.output_path)
+    config.output.output_path = uniquify_path(os.path.join(config.output.output_path, output_format))
 
     if not os.path.exists(config.output.output_path):
         os.makedirs(config.output.output_path)

@@ -280,7 +280,7 @@ def calculate_self_energy_q(
     giwk_full = giwk.get_g_full_from_gloc()
     del giwk
 
-    sigma_old, starting_iter = get_starting_sigma(config.output.output_path, sigma_dmft)
+    sigma_old, starting_iter = get_starting_sigma(config.self_consistency.previous_sc_path, sigma_dmft)
 
     for i in range(starting_iter, config.self_consistency.max_iter):
         logger.log_info("----------------------------------------")

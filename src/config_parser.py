@@ -155,6 +155,7 @@ class ConfigParser:
         conf.epsilon = self._try_parse(sc_section, "epsilon", 1e-4)
         conf.mixing = self._try_parse(sc_section, "mixing", 0.3)
         conf.use_poly_fit = self._try_parse(sc_section, "use_poly_fit", True)
+        conf.previous_sc_path = self._try_parse(sc_section, "previous_sc_path", "./")
 
         return conf
 

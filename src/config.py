@@ -74,6 +74,7 @@ class SelfConsistencyConfig:
         self.epsilon: float = 1e-4
         self.mixing: float = 0.3
         self.use_poly_fit = True
+        self.previous_sc_path: str = "/."
 
 
 class DmftConfig:
