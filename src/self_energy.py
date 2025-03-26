@@ -188,22 +188,24 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         """
         Fits a polynomial of a given degree to the self-energy.
         """
-        if n_fit == 0:
-            return self
+        copy = deepcopy(self)
 
-        if n_fit > self.niv or n_fit < 0:
+        if n_fit == 0:
+            return copy
+
+        if n_fit > copy.niv or n_fit < 0:
             n_fit = niv_core + 200
 
-        self.compress_q_dimension().to_half_niv_range()
+        copy.compress_q_dimension().to_half_niv_range()
         vn_fit = MFHelper.vn(n_fit, return_only_positive=True)
-        vn_full = MFHelper.vn(self.niv, return_only_positive=True)
-        poly_mat = np.zeros_like(self.mat)
-        fit_mat = self.cut_niv(n_fit).mat
+        vn_full = MFHelper.vn(copy.niv, return_only_positive=True)
+        poly_mat = np.zeros_like(copy.mat)
+        fit_mat = copy.cut_niv(n_fit).mat
 
-        for k in range(self.nq_tot):
-            for o1 in range(self.n_bands):
-                for o2 in range(self.n_bands):
+        for k in range(copy.nq_tot):
+            for o1 in range(copy.n_bands):
+                for o2 in range(copy.n_bands):
                     poly = np.polyfit(vn_fit, fit_mat[k, o1, o2, ...], degree)
                     poly_mat[k, o1, o2, :] = np.polyval(poly, vn_full)
 
-        return SelfEnergy(poly_mat, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
+        return SelfEnergy(poly_mat, copy.nq, copy.full_niv_range, copy.has_compressed_q_dimension, False)

@@ -219,6 +219,29 @@ def gather_from_irrk_map_to_fbz_scatter(obj, mpi_dist_irrk: MpiDistributor, mpi_
     return obj
 
 
+def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[SelfEnergy, int]:
+    """
+    If the output directory is specified to be the same directory as was used by a previous calculation, we try to
+    retrieve the last calculated self-energy as a starting point for the next calculation. If no sigma_dga_N.npy file
+    is found, we return the dmft self-energy as a starting point.
+    """
+    import glob
+    import os
+    import re
+
+    files = glob.glob(os.path.join(output_path, "sigma_dga_iteration_*.npy"))
+    if not files:
+        return default_sigma, 0
+
+    numbers = [int(match.group(1)) for f in files if (match := re.search(r"sigma_dga_(\d+)\.npy$", f))]
+    if not numbers:
+        return default_sigma, 0
+
+    max_number = max(numbers)
+    mat = np.load(os.path.join(output_path, f"sigma_dga_iteration_{max_number}.npy"))
+    return SelfEnergy(mat, config.lattice.nk, True, True, False), max_number
+
+
 def calculate_self_energy_q(
     comm: MPI.Comm,
     giwk: GreensFunction,
@@ -257,9 +280,9 @@ def calculate_self_energy_q(
     giwk_full = giwk.get_g_full_from_gloc()
     del giwk
 
-    old_sigma = sigma_dmft
+    sigma_old, starting_iter = get_starting_sigma(config.output.output_path, sigma_dmft)
 
-    for i in range(config.self_consistency.max_iter):
+    for i in range(starting_iter, config.self_consistency.max_iter):
         logger.log_info("----------------------------------------")
         logger.log_info(f"Starting iteration {i + 1}.")
         logger.log_info("----------------------------------------")
@@ -293,63 +316,66 @@ def calculate_self_energy_q(
 
         u_dens = gather_from_irrk_map_to_fbz_scatter(u_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
         kernel_dens = gather_from_irrk_map_to_fbz_scatter(kernel_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
-        new_sigma = calculate_u_kernel_g(u_dens, kernel_dens, giwk_full, my_full_q_list)
+        sigma_new = calculate_u_kernel_g(u_dens, kernel_dens, giwk_full, my_full_q_list)
         del u_dens, kernel_dens
         logger.log_info("Sigma for the density channel calculated.")
 
         u_magn = gather_from_irrk_map_to_fbz_scatter(u_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
         kernel_magn = gather_from_irrk_map_to_fbz_scatter(kernel_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
-        new_sigma += 3 * calculate_u_kernel_g(u_magn, kernel_magn, giwk_full, my_full_q_list)
+        sigma_new += 3 * calculate_u_kernel_g(u_magn, kernel_magn, giwk_full, my_full_q_list)
         del u_magn, kernel_magn
         logger.log_info("Sigma for the magnetic channel calculated.")
 
-        new_sigma.mat = mpi_dist_fbz.allreduce(new_sigma.mat)
+        sigma_new.mat = mpi_dist_fbz.allreduce(sigma_new.mat)
         sigma_dc.mat = mpi_dist_fbz.allreduce(sigma_dc.mat)
 
-        new_sigma = new_sigma + hartree + fock + sigma_dc
+        sigma_new = sigma_new + hartree + fock + sigma_dc
         logger.log_info("Full non-local self-energy calculated.")
 
         old_mu = config.sys.mu
         config.sys.mu = update_mu(
-            config.sys.mu, config.sys.n, giwk_full.ek, new_sigma.mat, config.sys.beta, new_sigma.fit_smom()[0]
+            config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
         )
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
         if i == 0:
-            new_sigma = new_sigma + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
-        new_sigma = new_sigma.pad_with_dmft_self_energy(sigma_dmft)
+            sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+        sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
 
         if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
-            new_sigma = new_sigma.fit_polynomial(
+            sigma_new = sigma_new.fit_polynomial(
                 config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core
             )
             logger.log_info(f"Fitted polynomial to sigma at iteration {i+1}.")
 
-        new_sigma = config.self_consistency.mixing * new_sigma + (1 - config.self_consistency.mixing) * old_sigma
+        sigma_new = config.self_consistency.mixing * sigma_new + (1 - config.self_consistency.mixing) * sigma_old
         logger.log_info(
             f"Sigma mixed with previous iteration using a mixing parameter of {config.self_consistency.mixing}."
         )
 
         if config.self_consistency.save_iter and config.output.save_quantities and comm.rank == 0:
-            new_sigma.save(name=f"sigma_dga_{i+1}", output_dir=config.output.output_path)
+            sigma_new.save(name=f"sigma_dga_iteration_{i+1}", output_dir=config.output.output_path)
             logger.log_info(f"Saved sigma for iteration {i+1} as numpy array.")
 
-        giwk_full = GreensFunction.get_g_full(new_sigma, config.sys.mu, giwk_full.ek)
+        giwk_full = GreensFunction.get_g_full(sigma_new, config.sys.mu, giwk_full.ek)
 
-        if np.allclose(old_sigma.mat, new_sigma.mat, atol=config.self_consistency.epsilon):
+        if np.allclose(sigma_old.mat, sigma_new.mat, atol=config.self_consistency.epsilon):
             logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
 
-        old_sigma = new_sigma
+        sigma_old = sigma_new
 
     mpi_dist_irrk.delete_file()
     mpi_dist_fbz.delete_file()
 
+    if config.output.save_quantities and comm.rank == 0:
+        sigma_old.save(name=f"sigma_dga", output_dir=config.output.output_path)
+        logger.log_info("Saved non-local ladder-DGA self-energy as numpy file.")
+
     if config.poly_fitting.do_poly_fitting and not config.self_consistency.use_poly_fit:
-        old_sigma = old_sigma.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
+        sigma_fit = sigma_old.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
+        sigma_fit.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
         logger.log_info(f"Fitted polynomial of degree {config.poly_fitting.o_fit} to sigma.")
+        logger.log_info("Saved fitted non-local ladder-DGA self-energy as numpy file.")
+        del sigma_fit
 
-    if config.output.save_quantities and config.poly_fitting.do_poly_fitting and comm.rank == 0:
-        old_sigma.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
-        logger.log_info("Saved fitted sigma as numpy file.")
-
-    return old_sigma
+    return sigma_old
