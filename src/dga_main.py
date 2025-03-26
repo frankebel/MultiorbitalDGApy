@@ -65,7 +65,7 @@ def execute_dga_routine():
     if config.output.save_quantities and comm.rank == 0:
         gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
-        sigma_local.save(name="siw_sde_full", output_dir=config.output.output_path)
+        sigma_local.save(name="siw_dga_local", output_dir=config.output.output_path)
         chi_dens.save(name="chi_dens", output_dir=config.output.output_path)
         chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)

@@ -24,9 +24,10 @@ def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float
     mat = iv_bands + mu_bands[..., None] - hloc[..., None] - smom0[..., None]
     g_model_mat = np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
 
-    mat = iv_bands[None, None, None, ...] + mu_bands[None, None, None, ..., None] - ek[..., None] - sigma_mat
-    g_full_mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
-    g_loc_mat = np.mean(g_full_mat, axis=(0, 1, 2))
+    ek = ek.reshape(np.prod(ek.shape[:3]), n_bands, n_bands)  # sigma will always enter with shape (k,o1,o2,v)
+    mat = iv_bands[None, ...] + mu_bands[None, ..., None] - ek[..., None] - sigma_mat
+    g_full_mat = np.linalg.inv(mat.transpose(0, 3, 1, 2)).transpose(0, 2, 3, 1)
+    g_loc_mat = np.mean(g_full_mat, axis=0)
 
     eigenvals, eigenvecs = np.linalg.eig(beta * (hloc.real + smom0 - mu_bands))
     rho_diag = np.where(eigenvals > 0, np.exp(-eigenvals) / (1 + np.exp(-eigenvals)), 1 / (1 + np.exp(eigenvals)))
