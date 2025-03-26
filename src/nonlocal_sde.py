@@ -246,7 +246,11 @@ def calculate_self_energy_q(
 
     # Hartree- and Fock-terms
     v_nonloc = v_nonloc.compress_q_dimension()
-    hartree, fock = get_hartree_fock(u_loc, v_nonloc, full_q_list)
+    if comm.rank == 0:
+        hartree, fock = get_hartree_fock(u_loc, v_nonloc, full_q_list)
+    else:
+        hartree, fock = None, None
+    hartree, fock = comm.bcast((hartree, fock), root=0)
     logger.log_info("Calculated Hartree and Fock terms.")
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
@@ -319,11 +323,16 @@ def calculate_self_energy_q(
             new_sigma = new_sigma.fit_polynomial(
                 config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core
             )
+            logger.log_info(f"Fitted polynomial to sigma at iteration {i+1}.")
 
         new_sigma = config.self_consistency.mixing * new_sigma + (1 - config.self_consistency.mixing) * old_sigma
+        logger.log_info(
+            f"Sigma mixed with previous iteration using a mixing parameter of {config.self_consistency.mixing}."
+        )
 
         if config.self_consistency.save_iter and config.output.save_quantities and comm.rank == 0:
             new_sigma.save(name=f"sigma_dga_{i+1}", output_dir=config.output.output_path)
+            logger.log_info(f"Saved sigma for iteration {i+1} as numpy array.")
 
         giwk_full = GreensFunction.get_g_full(new_sigma, config.sys.mu, giwk_full.ek)
 

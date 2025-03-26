@@ -18,25 +18,21 @@ def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float
     eye_bands = np.eye(n_bands, n_bands)
     iv = 1j * MFHelper.vn(sigma_mat.shape[-1] // 2, beta)
     iv_bands = iv[None, None, :] * eye_bands[..., None]
-    mu_bands = mu * eye_bands[:, :, None]
+    mu_bands = mu * eye_bands
     hloc = np.mean(ek, axis=(0, 1, 2))
 
-    mat = iv_bands + mu_bands - hloc[..., None] - smom0[..., None]
+    mat = iv_bands + mu_bands[..., None] - hloc[..., None] - smom0[..., None]
     g_model_mat = np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
 
-    mat = iv_bands[None, None, None, ...] + mu_bands[None, None, None, ...] - ek[..., None] - sigma_mat
+    mat = iv_bands[None, None, None, ...] + mu_bands[None, None, None, ..., None] - ek[..., None] - sigma_mat
     g_full_mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
     g_loc_mat = np.mean(g_full_mat, axis=(0, 1, 2))
 
     eigenvals, eigenvecs = np.linalg.eig(beta * (hloc.real + smom0 - mu_bands))
-    rho_loc_diag = np.zeros((n_bands, n_bands), dtype=np.complex64)
-    for i in range(n_bands):
-        if eigenvals[i] > 0:
-            rho_loc_diag[i, i] = np.exp(-eigenvals[i]) / (1 + np.exp(-eigenvals[i]))
-        else:
-            rho_loc_diag[i, i] = 1 / (1 + np.exp(eigenvals[i]))
+    rho_diag = np.where(eigenvals > 0, np.exp(-eigenvals) / (1 + np.exp(-eigenvals)), 1 / (1 + np.exp(eigenvals)))
+    rho_diag = np.einsum("...i,ij->...ij", rho_diag, np.eye(n_bands))
 
-    rho_loc = eigenvecs @ rho_loc_diag @ np.linalg.inv(eigenvecs)
+    rho_loc = eigenvecs @ rho_diag @ np.linalg.inv(eigenvecs)
     occ = rho_loc + np.sum(g_loc_mat.real - g_model_mat.real, axis=-1) / beta
     return 2.0 * np.trace(occ).real
 
@@ -44,6 +40,9 @@ def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float
 def root_fun(
     mu: float, target_filling: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray
 ) -> float:
+    """
+    Function to minimize in order to find a new mu via Newton's method.
+    """
     return get_total_fill(mu, ek, sigma_mat, beta, smom0) - target_filling
 
 
@@ -63,7 +62,7 @@ def update_mu(
         mu = mu.real
     else:
         raise ValueError("Chemical Potential must be real.")
-    return mu[0]
+    return mu
 
 
 class GreensFunction(LocalNPoint, IAmNonLocal):
