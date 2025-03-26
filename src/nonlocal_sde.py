@@ -233,13 +233,13 @@ def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[Sel
     if not files:
         return default_sigma, 0
 
-    numbers = [int(match.group(1)) for f in files if (match := re.search(r"sigma_dga_(\d+)\.npy$", f))]
-    if not numbers:
+    iterations = [int(match.group(1)) for f in files if (match := re.search(r"sigma_dga_(\d+)\.npy$", f))]
+    if not iterations:
         return default_sigma, 0
 
-    max_number = max(numbers)
-    mat = np.load(os.path.join(output_path, f"sigma_dga_iteration_{max_number}.npy"))
-    return SelfEnergy(mat, config.lattice.nk, True, True, False), max_number
+    max_iter = max(iterations)
+    mat = np.load(os.path.join(output_path, f"sigma_dga_iteration_{max_iter}.npy"))
+    return SelfEnergy(mat, config.lattice.nk, True, True, False), max_iter
 
 
 def calculate_self_energy_q(
@@ -277,9 +277,6 @@ def calculate_self_energy_q(
     logger.log_info("Calculated Hartree and Fock terms.")
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
-    giwk_full = giwk.get_g_full_from_gloc()
-    del giwk
-
     sigma_old, starting_iter = get_starting_sigma(config.self_consistency.previous_sc_path, sigma_dmft)
 
     for i in range(starting_iter, config.self_consistency.max_iter):
@@ -287,6 +284,7 @@ def calculate_self_energy_q(
         logger.log_info(f"Starting iteration {i + 1}.")
         logger.log_info("----------------------------------------")
 
+        giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
         gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
         gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
@@ -356,8 +354,6 @@ def calculate_self_energy_q(
         if config.self_consistency.save_iter and config.output.save_quantities and comm.rank == 0:
             sigma_new.save(name=f"sigma_dga_iteration_{i+1}", output_dir=config.output.output_path)
             logger.log_info(f"Saved sigma for iteration {i+1} as numpy array.")
-
-        giwk_full = GreensFunction.get_g_full(sigma_new, config.sys.mu, giwk_full.ek)
 
         if np.allclose(sigma_old.mat, sigma_new.mat, atol=config.self_consistency.epsilon):
             logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
