@@ -310,7 +310,8 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
     def matmul(self, other, left_hand_side: bool = True) -> "FourPoint":
         """
         Helper method that allows for matrix multiplication for (non-)local FourPoint objects. Depending on the
-        number of frequency and momentum dimensions, the objects have to be multiplied differently.
+        number of frequency and momentum dimensions, the objects have to be multiplied differently. If the objects
+        come in with only half of their niw range, they will be returned in half of their niw range to save memory.
         """
         if not isinstance(other, (FourPoint, LocalFourPoint, Interaction, LocalInteraction)):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
@@ -376,6 +377,9 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.frequency_notation,
             )
 
+        is_self_full_niw_range = self.full_niw_range
+        is_other_full_niw_range = other.full_niw_range
+
         self.to_half_niw_range().to_compound_indices()
         other = other.to_half_niw_range().to_compound_indices()
         # for __matmul__ self needs to be the LHS object, for __rmatmul__ self needs to be the RHS object
@@ -393,8 +397,12 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             else other_shape
         )
 
-        self.to_full_indices().to_full_niw_range()
-        other = other.to_full_indices().to_full_niw_range()
+        self.to_full_indices()
+        if is_self_full_niw_range:
+            self.to_full_niw_range()
+        other = other.to_full_indices()
+        if is_other_full_niw_range:
+            other = other.to_full_niw_range()
 
         return (
             FourPoint(

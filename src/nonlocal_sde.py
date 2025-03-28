@@ -95,7 +95,7 @@ def create_auxiliary_chi_q(
     return (
         (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
         - 1.0 / config.sys.beta**2 * (v_nonloc.as_channel(gamma_r.channel) + u_loc.as_channel(gamma_r.channel))
-    ).invert()
+    ).invert(False)
 
 
 def create_vrg_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
@@ -273,7 +273,7 @@ def calculate_self_energy_q(
         gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
         del gchi0_q
 
-        gchi0_q_core_inv = gchi0_q_core.invert().take_vn_diagonal()
+        gchi0_q_core_inv = gchi0_q_core.invert(False).take_vn_diagonal()
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
 
         u_dens, kernel_dens = calculate_sigma_kernel_r_q(
