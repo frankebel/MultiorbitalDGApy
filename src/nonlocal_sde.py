@@ -219,7 +219,7 @@ def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[Sel
     if not files:
         return default_sigma, 0
 
-    iterations = [int(match.group(1)) for f in files if (match := re.search(r"sigma_dga_(\d+)\.npy$", f))]
+    iterations = [int(match.group(1)) for f in files if (match := re.search(r"sigma_dga_iteration_(\d+)\.npy$", f))]
     if not iterations:
         return default_sigma, 0
 
@@ -261,6 +261,10 @@ def calculate_self_energy_q(
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
     sigma_old, starting_iter = get_starting_sigma(config.self_consistency.previous_sc_path, sigma_dmft)
+    if starting_iter > 0:
+        logger.log_info(
+            f"Using previous calculation and starting the self-consistency loop at iteration {starting_iter+1}."
+        )
 
     for i in range(starting_iter, starting_iter + config.self_consistency.max_iter):
         logger.log_info("----------------------------------------")
