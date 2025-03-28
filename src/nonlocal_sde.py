@@ -160,6 +160,7 @@ def calculate_sigma_kernel_r_q(
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
 
     vrg_q_r = create_vrg_q(gchi_aux_q_r, gchi0_q_core_inv)
+    gchi0_q_core_inv = gchi0_q_core_inv.take_vn_diagonal()
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
 
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
@@ -172,13 +173,11 @@ def calculate_sigma_kernel_r_q(
         f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
     )
 
-    u_r, kernel = calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
-    logger.log_info(f"Kernel ({kernel.channel.value}) for sigma calculated.")
-    return u_r, kernel
+    return calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_u_kernel_g(
-    u_r: LocalInteraction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray
+def calculate_sigma_from_kernel(
+    u_r: LocalInteraction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, q_weight_list: np.ndarray
 ) -> SelfEnergy:
     r"""
     Returns
@@ -194,7 +193,7 @@ def calculate_u_kernel_g(
         dtype=kernel_r.mat.dtype,
     )
     for idx, q in enumerate(q_list):
-        mat += np.einsum(
+        mat += q_weight_list[idx] * np.einsum(
             "aibc,cbjdwv,kadwv->kijv",
             u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx],
             kernel_r.mat[idx],
@@ -204,19 +203,6 @@ def calculate_u_kernel_g(
     prefactor = -0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot
     mat *= prefactor
     return SelfEnergy(mat, config.lattice.nk, False, True)
-
-
-def gather_from_irrk_map_to_fbz_scatter(obj, mpi_dist_irrk: MpiDistributor, mpi_dist_fbz, comm: MPI.Comm):
-    """
-    Gathers the objects from the irreducible Brillouin zone, maps it to the full Brillouin zone and then scatters
-    it across all MPI cores.
-    """
-    obj.mat = mpi_dist_irrk.gather(obj.mat, 0)
-    obj.update_original_shape()
-    if comm.rank == 0:
-        obj = obj.map_to_full_bz(config.lattice.q_grid.irrk_inv)
-    obj.mat = mpi_dist_fbz.scatter(obj.mat, 0)
-    return obj
 
 
 def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[SelfEnergy, int]:
@@ -262,10 +248,7 @@ def calculate_self_energy_q(
     mpi_dist_irrk = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_irr, comm=comm, name="Q")
     full_q_list = config.lattice.q_grid.get_q_list()
     my_irr_q_list = config.lattice.q_grid.get_irrq_list()[mpi_dist_irrk.my_slice]
-
-    # MPI distributor for the full BZ
-    mpi_dist_fbz = MpiDistributor(config.lattice.q_grid.nk_tot, comm, "FBZ")
-    my_full_q_list = config.lattice.q_grid.get_q_list()[mpi_dist_fbz.my_slice]
+    my_irrk_q_weights = config.lattice.q_grid.irrk_count[mpi_dist_irrk.my_slice]
 
     # Hartree- and Fock-terms
     v_nonloc = v_nonloc.compress_q_dimension()
@@ -279,7 +262,7 @@ def calculate_self_energy_q(
 
     sigma_old, starting_iter = get_starting_sigma(config.self_consistency.previous_sc_path, sigma_dmft)
 
-    for i in range(starting_iter, config.self_consistency.max_iter):
+    for i in range(starting_iter, starting_iter + config.self_consistency.max_iter):
         logger.log_info("----------------------------------------")
         logger.log_info(f"Starting iteration {i + 1}.")
         logger.log_info("----------------------------------------")
@@ -296,38 +279,34 @@ def calculate_self_energy_q(
         u_dens, kernel_dens = calculate_sigma_kernel_r_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
         )
+        logger.log_info(f"Kernel (dens) for sigma calculated.")
+
         u_magn, kernel_magn = calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
         )
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
-        logger.log_info("Calculated channel-specific kernels for sigma.")
+        logger.log_info(f"Kernel (magn) for sigma calculated.")
 
         kernel_dc = calculate_sigma_dc_kernel(f_dens, f_magn, gchi0_q_core)
         del gchi0_q_core
         logger.log_info("Double-counting kernel calculated.")
 
         u_dc = u_loc.permute_orbitals("abcd->adcb")
-        kernel_dc = gather_from_irrk_map_to_fbz_scatter(kernel_dc, mpi_dist_irrk, mpi_dist_fbz, comm)
-        sigma_dc = calculate_u_kernel_g(u_dc, kernel_dc, giwk_full, my_full_q_list)
+        sigma_new = calculate_sigma_from_kernel(u_dc, kernel_dc, giwk_full, my_irr_q_list, my_irrk_q_weights)
         del kernel_dc, u_dc
         logger.log_info("Double-counting correction to sigma^k calculated.")
 
-        u_dens = gather_from_irrk_map_to_fbz_scatter(u_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
-        kernel_dens = gather_from_irrk_map_to_fbz_scatter(kernel_dens, mpi_dist_irrk, mpi_dist_fbz, comm)
-        sigma_new = calculate_u_kernel_g(u_dens, kernel_dens, giwk_full, my_full_q_list)
+        sigma_new += calculate_sigma_from_kernel(u_dens, kernel_dens, giwk_full, my_irr_q_list, my_irrk_q_weights)
         del u_dens, kernel_dens
         logger.log_info("Sigma for the density channel calculated.")
 
-        u_magn = gather_from_irrk_map_to_fbz_scatter(u_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
-        kernel_magn = gather_from_irrk_map_to_fbz_scatter(kernel_magn, mpi_dist_irrk, mpi_dist_fbz, comm)
-        sigma_new += 3 * calculate_u_kernel_g(u_magn, kernel_magn, giwk_full, my_full_q_list)
+        sigma_new += 3 * calculate_sigma_from_kernel(u_magn, kernel_magn, giwk_full, my_irr_q_list, my_irrk_q_weights)
         del u_magn, kernel_magn
         logger.log_info("Sigma for the magnetic channel calculated.")
 
-        sigma_new.mat = mpi_dist_fbz.allreduce(sigma_new.mat)
-        sigma_dc.mat = mpi_dist_fbz.allreduce(sigma_dc.mat)
+        sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
 
-        sigma_new = sigma_new + hartree + fock + sigma_dc
+        sigma_new = sigma_new + hartree + fock
         logger.log_info("Full non-local self-energy calculated.")
 
         old_mu = config.sys.mu
@@ -357,11 +336,12 @@ def calculate_self_energy_q(
 
         if np.allclose(sigma_old.mat, sigma_new.mat, atol=config.self_consistency.epsilon):
             logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
+            sigma_old = sigma_new
+            break
 
         sigma_old = sigma_new
 
     mpi_dist_irrk.delete_file()
-    mpi_dist_fbz.delete_file()
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_old.save(name=f"sigma_dga", output_dir=config.output.output_path)

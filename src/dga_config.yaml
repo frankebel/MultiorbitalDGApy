@@ -1,6 +1,6 @@
 box_sizes:
-  niw_core: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_core: 50 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niw_core: 100 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_core: 60 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
   niv_shell: 0 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
@@ -18,13 +18,15 @@ lattice:
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
 self_consistency:
-  max_iter: 1 # Maximum number of iterations
+  max_iter: 15 # Maximum number of iterations
   save_iter: True # If True, the code will save the self-consistency data for each iteration, making it possible to restart the calculation from this point
   epsilon: 1e-4 # Convergence criterion of the self-energy for each frequency
-  mixing: 0.3 # Mixing parameter for the self-energy. If set to 1, the self-energy is fully updated in each iteration. We use linear mixing,
+  mixing: 0.2 # Mixing parameter for the self-energy. If set to 1, the self-energy is fully updated in each iteration. We use linear mixing,
   # i.e. the new self-energy is a linear combination of the old and the new one. sigma_new = mixing * sigma_new + (1 - mixing) * sigma_old
-  use_poly_fit: True # If True, the code will use the polynomial fit of the self-energy for the next iteration with the settings specified below. Will
+  use_poly_fit: False # If True, the code will use the polynomial fit of the self-energy for the next iteration with the settings specified below. Will
   # not work if do_poly_fitting below is not set to True
+  previous_sc_path: "" # Path to the previous self-consistency folder. If not specified, the code will start a new calculation from scratch. If specified,
+  # the code will start from the last iteration of the previous calculation and do max_iter steps on top
 
 dmft_input:
   type: "w2dyn" # Input format. Available is 'w2dyn'
