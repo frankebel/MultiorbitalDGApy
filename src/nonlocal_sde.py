@@ -84,14 +84,13 @@ def get_hartree_fock(
     return hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
 
 
-def create_auxiliary_chi_q(
+def create_auxiliary_chi_r_q(
     gamma_r: LocalFourPoint, gchi0_q_inv: FourPoint, u_loc: LocalInteraction, v_nonloc: Interaction
 ) -> FourPoint:
     r"""
     Returns the auxiliary susceptibility
-    .. math:: \chi^{*;qvv'}_{r;lmm'l'} = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{qvv'}-U_{r;lmm'l'}-V_{r;lmm'l'}^q)/\beta^2)^{-1}
+    .. math:: \chi^{*;qvv'}_{r;lmm'l'} = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{wvv'}-U_{r;lmm'l'}-V_{r;lmm'l'}^q)/\beta^2)^{-1}
 
-    .. math:: = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{wvv'}-U_{r;lmm'l'})/\beta^2)^{-1}.
     See Eq. (3.68) in Paul Worm's thesis.
     """
     return (
@@ -100,14 +99,16 @@ def create_auxiliary_chi_q(
     ).invert(False)
 
 
-def create_vrg_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
+def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
     r"""
     Returns the three-leg vertex
     .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
-    return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
+    vrg_r = config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
+    gchi0_q_inv = gchi0_q_inv.take_vn_diagonal()
+    return vrg_r
 
 
 def create_generalized_chi_q_with_shell_correction(
@@ -158,12 +159,13 @@ def calculate_sigma_kernel_r_q(
 ) -> tuple[Interaction, FourPoint]:
     logger = config.logger
 
-    gchi_aux_q_r = create_auxiliary_chi_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
+    gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
+    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r.memory_usage_in_gb, 1)
 
-    vrg_q_r = create_vrg_q(gchi_aux_q_r, gchi0_q_core_inv)
-    gchi0_q_core_inv = gchi0_q_core_inv.take_vn_diagonal()
+    vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_core_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
+    logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r.memory_usage_in_gb, 1)
 
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
     del gchi_aux_q_r
@@ -276,20 +278,11 @@ def calculate_self_energy_q(
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
         gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
         del gchi0_q
+        logger.log_memory_usage("Gchi0_q", gchi0_q_core.memory_usage_in_gb, 1)
 
         gchi0_q_core_inv = gchi0_q_core.invert(False).take_vn_diagonal()
+        logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv.memory_usage_in_gb, 1)
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
-
-        u_dens, kernel_dens = calculate_sigma_kernel_r_q(
-            gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
-        )
-        logger.log_info(f"Kernel (dens) for sigma calculated.")
-
-        u_magn, kernel_magn = calculate_sigma_kernel_r_q(
-            gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
-        )
-        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
-        logger.log_info(f"Kernel (magn) for sigma calculated.")
 
         f_1dens_3magn = LocalFourPoint.load(
             os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
@@ -297,11 +290,42 @@ def calculate_self_energy_q(
         kernel_dc = calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q_core)
         del gchi0_q_core, f_1dens_3magn
         logger.log_info("Double-counting kernel calculated.")
+        logger.log_memory_usage("Double-counting kernel", kernel_dc.memory_usage_in_gb, 1)
 
         u_dc = u_loc.permute_orbitals("abcd->adcb")
         sigma_new = calculate_sigma_from_kernel(u_dc, kernel_dc, giwk_full, my_irr_q_list, my_irrk_q_weights)
         del kernel_dc, u_dc
         logger.log_info("Double-counting correction to sigma^k calculated.")
+
+        # Here we have to handle the most memory-intensive objects, the auxiliary susceptibilities.
+        # Therefore, we split the calculation into groups of 6 processes to avoid memory issues. This is only necessary
+        # for the kernel calculation, since the other calculations are not as memory-intensive.
+        group_size = min(comm.size, 6)
+        sub_comm = comm.Split(comm.rank // group_size, comm.rank)
+
+        u_dens, kernel_dens, u_magn, kernel_magn = None, None, None, None
+        for k in range(sub_comm.size):
+            sub_comm.barrier()
+            if sub_comm.rank == k:
+                u_dens, kernel_dens = calculate_sigma_kernel_r_q(
+                    gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+                )
+            sub_comm.barrier()
+
+        logger.log_info(f"Kernel (dens) for sigma calculated.")
+        logger.log_memory_usage("Kernel (dens)", kernel_dens.memory_usage_in_gb, 1)
+
+        for k in range(sub_comm.size):
+            sub_comm.barrier()
+            if sub_comm.rank == k:
+                u_magn, kernel_magn = calculate_sigma_kernel_r_q(
+                    gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+                )
+            sub_comm.barrier()
+
+        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
+        logger.log_info(f"Kernel (magn) for sigma calculated.")
+        logger.log_memory_usage("Kernel (magn)", kernel_magn.memory_usage_in_gb, 1)
 
         sigma_new += calculate_sigma_from_kernel(u_dens, kernel_dens, giwk_full, my_irr_q_list, my_irrk_q_weights)
         del u_dens, kernel_dens
@@ -322,8 +346,8 @@ def calculate_self_energy_q(
         )
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
-        # check if we should do this every iteration
-        sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+        if i == 0:
+            sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
         sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
 
         if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
