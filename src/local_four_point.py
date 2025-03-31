@@ -536,6 +536,26 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
 
     @staticmethod
+    def load(
+        filename: str,
+        channel: SpinChannel = SpinChannel.NONE,
+        num_wn_dimensions: int = 1,
+        num_vn_dimensions: int = 2,
+        full_niw_range: bool = True,
+        full_niv_range: bool = True,
+        frequency_notation: FrequencyNotation = FrequencyNotation.PH,
+    ) -> "LocalFourPoint":
+        return LocalFourPoint(
+            np.load(filename, allow_pickle=False),
+            channel,
+            num_wn_dimensions,
+            num_vn_dimensions,
+            full_niw_range,
+            full_niv_range,
+            frequency_notation,
+        )
+
+    @staticmethod
     def from_constant(
         n_bands: int,
         niw: int,

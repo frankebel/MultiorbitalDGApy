@@ -421,6 +421,30 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         )
 
     @staticmethod
+    def load(
+        filename: str,
+        channel: SpinChannel = SpinChannel.NONE,
+        nq: tuple[int, int, int] = (1, 1, 1),
+        num_wn_dimensions: int = 1,
+        num_vn_dimensions: int = 2,
+        full_niw_range: bool = True,
+        full_niv_range: bool = True,
+        has_compressed_q_dimension: bool = False,
+        frequency_notation: FrequencyNotation = FrequencyNotation.PH,
+    ) -> "LocalFourPoint":
+        return FourPoint(
+            np.load(filename, allow_pickle=False),
+            channel,
+            nq,
+            num_wn_dimensions,
+            num_vn_dimensions,
+            full_niw_range,
+            full_niv_range,
+            has_compressed_q_dimension,
+            frequency_notation,
+        )
+
+    @staticmethod
     def identity(
         n_bands: int,
         niw: int,

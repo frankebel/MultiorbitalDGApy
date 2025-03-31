@@ -62,6 +62,9 @@ def execute_dga_routine():
     )
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
+    # This is saved since it is needed for the double-counting correction in the non-local routine
+    (f_dens + 3 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
+
     if config.output.save_quantities and comm.rank == 0:
         gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
@@ -70,6 +73,8 @@ def execute_dga_routine():
         chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
+        f_dens.save(name="f_dens", output_dir=config.output.output_path)
+        f_magn.save(name="f_magn", output_dir=config.output.output_path)
         logger.log_info("Saved all relevant quantities as numpy files.")
 
     if config.output.do_plotting and comm.rank == 0:
@@ -121,12 +126,12 @@ def execute_dga_routine():
         logger.log_info("Plotted local self-energies for comparison.")
         logger.log_info("Finished plotting.")
 
-    del vrg_dens, vrg_magn, chi_dens, chi_magn
+    del vrg_dens, vrg_magn, chi_dens, chi_magn, f_dens, f_magn
     logger.log_info("Local DGA routine finished.")
 
     logger.log_info("Starting non-local ladder-DGA routine.")
     sigma_dga = nonlocal_sde.calculate_self_energy_q(
-        comm, giwk, gamma_dens, gamma_magn, f_dens, f_magn, u_loc, v_nonloc, sigma_dmft, sigma_local
+        comm, giwk, gamma_dens, gamma_magn, u_loc, v_nonloc, sigma_dmft, sigma_local
     )
     logger.log_info("Non-local ladder-DGA routine finished.")
 

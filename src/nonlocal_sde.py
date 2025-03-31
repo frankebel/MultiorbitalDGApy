@@ -1,3 +1,5 @@
+import os
+
 import mpi4py.MPI as MPI
 
 import config
@@ -125,11 +127,11 @@ def create_generalized_chi_q_with_shell_correction(
     ).invert()
 
 
-def calculate_sigma_dc_kernel(f_dens: LocalFourPoint, f_magn: LocalFourPoint, gchi0_q_core: FourPoint) -> FourPoint:
+def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q_core: FourPoint) -> FourPoint:
     """
     Returns the double-counting kernel for the self-energy calculation for only half the niv range to save computation time.
     """
-    return (gchi0_q_core @ (f_dens + 3 * f_magn)).sum_over_vn(config.sys.beta, axis=(-2,)).to_half_niv_range()
+    return (gchi0_q_core @ f_1dens_3magn).sum_over_vn(config.sys.beta, axis=(-2,)).to_half_niv_range()
 
 
 def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
@@ -233,8 +235,6 @@ def calculate_self_energy_q(
     giwk: GreensFunction,
     gamma_dens: LocalFourPoint,
     gamma_magn: LocalFourPoint,
-    f_dens: LocalFourPoint,
-    f_magn: LocalFourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
     sigma_dmft: SelfEnergy,
@@ -291,8 +291,11 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info(f"Kernel (magn) for sigma calculated.")
 
-        kernel_dc = calculate_sigma_dc_kernel(f_dens, f_magn, gchi0_q_core)
-        del gchi0_q_core
+        f_1dens_3magn = LocalFourPoint.load(
+            os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
+        )
+        kernel_dc = calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q_core)
+        del gchi0_q_core, f_1dens_3magn
         logger.log_info("Double-counting kernel calculated.")
 
         u_dc = u_loc.permute_orbitals("abcd->adcb")
@@ -319,8 +322,8 @@ def calculate_self_energy_q(
         )
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
-        if i == 0:
-            sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+        # check if we should do this every iteration
+        sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
         sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
 
         if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
