@@ -58,7 +58,7 @@ class IHaveMat(ABC):
     """
 
     def __init__(self, mat: np.ndarray):
-        self._mat = mat.astype(np.complex64)
+        self.mat = mat
         self._original_shape = self.mat.shape
 
     @property
@@ -73,7 +73,7 @@ class IHaveMat(ABC):
         """
         Sets the underlying matrix.
         """
-        self._mat = value
+        self._mat = value.astype(np.complex64)
 
     @property
     def current_shape(self) -> tuple:
@@ -110,7 +110,8 @@ class IHaveMat(ABC):
         """
         Converts the matrix to real numbers. Returns it as complex type.
         """
-        self.mat = self.mat.real.astype(np.complex64)
+        dtype = self.mat.dtype
+        self.mat = self.mat.real.astype(dtype)
         return self
 
     def __mul__(self, other) -> "IHaveMat":

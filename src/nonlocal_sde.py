@@ -24,7 +24,7 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
 
     gchi0_q = np.zeros(
         (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * config.box.niv_full),
-        dtype=np.complex64,
+        dtype=giwk.mat.dtype,
     )
 
     g_left_mat = (

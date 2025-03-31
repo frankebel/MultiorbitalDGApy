@@ -571,7 +571,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         shape = (n_bands,) * 4 + (2 * niw + 1,) * num_wn_dimensions + (2 * niv,) * num_vn_dimensions
         return LocalFourPoint(
-            np.full(shape, value, dtype=np.complex64),
+            np.full(shape, value),
             channel,
             num_wn_dimensions,
             num_vn_dimensions,
