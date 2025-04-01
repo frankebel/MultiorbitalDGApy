@@ -59,7 +59,7 @@ def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
         config.sys.n_bands,
         2 * config.box.niw_core + 1,
         2 * config.box.niv_core,
-    )[..., config.box.niv_core : 2 * config.box.niv_core]
+    )
 
 
 def get_hartree_fock(
@@ -130,11 +130,18 @@ def create_generalized_chi_q_with_shell_correction(
     ).invert()
 
 
-def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q_core: FourPoint) -> FourPoint:
+def calculate_sigma_dc_kernel(
+    f_1dens_3magn: LocalFourPoint, gchi0_q_core: FourPoint, u_loc: LocalInteraction
+) -> FourPoint:
     """
     Returns the double-counting kernel for the self-energy calculation for only half the niv range to save computation time.
     """
-    return (gchi0_q_core @ f_1dens_3magn).sum_over_vn(config.sys.beta, axis=(-2,)).to_half_niv_range()
+    return (
+        1.0
+        / config.sys.beta
+        * u_loc.permute_orbitals("abcd->adcb")
+        @ (gchi0_q_core @ f_1dens_3magn).sum_over_vn(config.sys.beta, axis=(-2,)).cut_niv(config.box.niv_core)
+    )
 
 
 def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
@@ -145,10 +152,10 @@ def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc
     minus 2/3 times the identity if the channel is the magnetic channel (due to the extra u in Eq. (1.125)).
     """
     u_r = v_nonloc.as_channel(vrg_q_r.channel) + u_loc.as_channel(vrg_q_r.channel)
-    kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
+    kernel = vrg_q_r - u_r @ gchi_aux_q_r_sum @ vrg_q_r
     if vrg_q_r.channel == SpinChannel.MAGN:
         kernel -= 2.0 / 3.0
-    return u_r, kernel.to_half_niv_range()
+    return u_r @ kernel
 
 
 def calculate_sigma_kernel_r_q(
@@ -158,7 +165,7 @@ def calculate_sigma_kernel_r_q(
     gchi0_q_core_sum: FourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
-) -> tuple[Interaction, FourPoint]:
+) -> FourPoint:
     logger = config.logger
 
     gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
@@ -183,7 +190,7 @@ def calculate_sigma_kernel_r_q(
 
 
 def calculate_sigma_from_kernel(
-    u_r: LocalInteraction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, q_weights: np.ndarray
+    kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, q_weights: np.ndarray
 ) -> SelfEnergy:
     r"""
     Returns
@@ -194,22 +201,17 @@ def calculate_sigma_from_kernel(
             np.prod(config.lattice.nk),
             config.sys.n_bands,
             config.sys.n_bands,
-            config.box.niv_core,
+            2 * config.box.niv_core,
         ),
         dtype=kernel_r.mat.dtype,
     )
 
     for idx, q in enumerate(q_list):
-        mat += q_weights[idx] * np.einsum(
-            "aibc,cbjdwv,kadwv->kijv",
-            u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx],
-            kernel_r.mat[idx],
-            get_qk_single_q(giwk, q),
-            optimize=True,
-        )
-    prefactor = -0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot
+        g = get_qk_single_q(giwk, q)
+        mat += q_weights[idx] * np.einsum("aijdwv,kadwv->kijv", kernel_r.mat[idx], g, optimize=True)
+    prefactor = -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     mat *= prefactor
-    return SelfEnergy(mat, config.lattice.nk, False, True)
+    return SelfEnergy(mat, config.lattice.nk, True, True)
 
 
 def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[SelfEnergy, int]:
@@ -280,6 +282,13 @@ def calculate_self_energy_q(
         gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q.memory_usage_in_gb, 1)
 
+        f_1dens_3magn = LocalFourPoint.load(
+            os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
+        )
+        kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
+        del f_1dens_3magn
+        logger.log_info("Calculated double-counting kernel.")
+
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
         gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
         del gchi0_q
@@ -288,77 +297,23 @@ def calculate_self_energy_q(
         gchi0_q_core_inv = gchi0_q_core.invert(False).take_vn_diagonal()
         logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv.memory_usage_in_gb, 1)
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
+        del gchi0_q_core
 
-        f_1dens_3magn = LocalFourPoint.load(
-            os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
-        )
-        kernel_dc = calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q_core)
-        del gchi0_q_core, f_1dens_3magn
-        logger.log_info("Double-counting kernel calculated.")
-        logger.log_memory_usage("Double-counting kernel", kernel_dc.memory_usage_in_gb, 1)
-
-        u_dc = u_loc.permute_orbitals("abcd->adcb")
-        sigma_new = calculate_sigma_from_kernel(u_dc, kernel_dc, giwk_full, my_irr_q_list, my_irrk_q_weights)
-        del kernel_dc, u_dc
-        logger.log_info("Double-counting correction to sigma^k calculated.")
-
-        # Here we have to handle the most memory-intensive objects, the auxiliary susceptibilities.
-        # Therefore, we split the calculation into groups of 6 processes to avoid memory issues. This is only necessary
-        # for the kernel calculation, since the other calculations are not as memory-intensive.
-
-        """
-        probably not neccessary
-        
-        group_size = min(comm.size, 6)
-        sub_comm = comm.Split(comm.rank // group_size, comm.rank)
-
-        u_dens, kernel_dens, u_magn, kernel_magn = None, None, None, None
-        for k in range(sub_comm.size):
-            sub_comm.barrier()
-            if sub_comm.rank == k:
-                u_dens, kernel_dens = calculate_sigma_kernel_r_q(
-                    gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
-                )
-            sub_comm.barrier()
-        """
-
-        u_dens, kernel_dens = calculate_sigma_kernel_r_q(
+        kernel += calculate_sigma_kernel_r_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
         )
+        logger.log_info("Calculated kernel for density channel.")
 
-        logger.log_info(f"Kernel (dens) for sigma calculated.")
-        logger.log_memory_usage("Kernel (dens)", kernel_dens.memory_usage_in_gb, 1)
-
-        """
-        probably not neccessary
-        
-        for k in range(sub_comm.size):
-            sub_comm.barrier()
-            if sub_comm.rank == k:
-                u_magn, kernel_magn = calculate_sigma_kernel_r_q(
-                    gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
-                )
-            sub_comm.barrier()
-        """
-
-        u_magn, kernel_magn = calculate_sigma_kernel_r_q(
+        kernel += 3 * calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
         )
-
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
-        logger.log_info(f"Kernel (magn) for sigma calculated.")
-        logger.log_memory_usage("Kernel (magn)", kernel_magn.memory_usage_in_gb, 1)
+        logger.log_info("Calculated kernel for magnetic channel.")
 
-        sigma_new += calculate_sigma_from_kernel(u_dens, kernel_dens, giwk_full, my_irr_q_list, my_irrk_q_weights)
-        del u_dens, kernel_dens
-        logger.log_info("Sigma for the density channel calculated.")
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_irr_q_list, my_irrk_q_weights)
+        logger.log_info("Self-energy calculated from kernel.")
 
-        sigma_new += 3 * calculate_sigma_from_kernel(u_magn, kernel_magn, giwk_full, my_irr_q_list, my_irrk_q_weights)
-        del u_magn, kernel_magn
-        logger.log_info("Sigma for the magnetic channel calculated.")
-
-        # sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
-        comm.Allreduce(MPI.IN_PLACE, sigma_new.mat, op=MPI.SUM)
+        sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
         logger.log_memory_usage("Non-local sigma", sigma_new.memory_usage_in_gb, 1)
 
         sigma_new = sigma_new + hartree + fock

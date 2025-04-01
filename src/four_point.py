@@ -330,7 +330,11 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             einsum_str = einsum_str_map.get(self.num_vn_dimensions)
 
             return FourPoint(
-                np.einsum(einsum_str, self.mat, other.mat, optimize=True),
+                (
+                    np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+                    if left_hand_side
+                    else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
+                ),
                 self.channel,
                 self.nq,
                 self.num_wn_dimensions,

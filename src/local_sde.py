@@ -1,5 +1,3 @@
-import numpy as np
-
 import config
 from greens_function import GreensFunction
 from interaction import LocalInteraction
@@ -104,6 +102,17 @@ def create_generalized_chi_with_shell_correction(
     return ((gchi_aux_sum + gchi0_full_sum - gchi0_core_sum).invert() + u_loc.as_channel(gchi_aux_sum.channel)).invert()
 
 
+def create_full_vertex_from_gamma(gamma_r, gchi0, u_loc):
+    """
+    Returns the full vertex in the niv_full region. F = Gamma [1 + X_0 Gamma]^(-1)
+    """
+    gamma_urange = gamma_r.pad_with_u(u_loc.as_channel(gamma_r.channel), config.box.niv_full)
+    return (
+        gamma_urange
+        @ (LocalFourPoint.identity_like(gamma_urange) + 1.0 / config.sys.beta**2 * gchi0 @ gamma_urange).invert()
+    )
+
+
 def create_full_vertex(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the full vertex
@@ -146,9 +155,11 @@ def create_vertex_functions(
         logger.log_info(f"Local generalized susceptibility ({gchi_r.channel.value}) plotted.")
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
+    gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")
 
-    f_r = create_full_vertex(gchi_r, gchi0_inv_core)
+    # f_r = create_full_vertex(gchi_r, gchi0_inv_core)
+    f_r = create_full_vertex_from_gamma(gamma_r, gchi0, u_loc)
     logger.log_info(f"Local full vertex F^wvv' ({f_r.channel.value}) done.")
     del gchi_r
 
@@ -189,23 +200,6 @@ def get_loc_self_energy_vrg(
     return SelfEnergy((hartree_fock + sigma_sum)[None, None, None, ...])
 
 
-def create_dc_kernel(gamma_r: LocalFourPoint, gchi0: LocalFourPoint, u_loc: LocalInteraction) -> LocalFourPoint:
-    gamma_urange_mat = np.tile(
-        u_loc.as_channel(gamma_r.channel).mat[..., None, None, None],
-        (1, 1, 1, 1, 2 * gamma_r.niw + 1, 2 * config.box.niv_full, 2 * config.box.niv_full),
-    )
-    gamma_urange_mat[
-        ...,
-        config.box.niv_shell : config.box.niv_shell + 2 * gamma_r.niv,
-        config.box.niv_shell : config.box.niv_shell + 2 * gamma_r.niv,
-    ] = gamma_r.mat
-    gamma_urange = LocalFourPoint(gamma_urange_mat, gamma_r.channel)
-
-    return (
-        gamma_urange @ (config.sys.beta**2 * LocalFourPoint.identity_like(gamma_urange) + gamma_urange @ gchi0).invert()
-    ).cut_niv(config.box.niv_core)
-
-
 def perform_local_schwinger_dyson(
     g_loc: GreensFunction, g2_dens: LocalFourPoint, g2_magn: LocalFourPoint, u_loc: LocalInteraction
 ):
@@ -223,6 +217,10 @@ def perform_local_schwinger_dyson(
 
     sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
     config.logger.log_info("Self-energy Sigma^v done.")
+
+    # This is saved since it is needed for the double-counting correction in the non-local routine
+    # (2 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
+    (f_dens + 3 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
 
     return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
 

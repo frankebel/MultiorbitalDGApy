@@ -535,6 +535,25 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             ).permute_orbitals("abcd->cbad"),
         )
 
+    def pad_with_u(self, u: LocalInteraction, niv_pad: int):
+        """
+        Used to pad a LocalFourPoint object with a LocalInteraction object outside of the core frequency region.
+        If niv_pad is less or equal self.niv, no padding will be done.
+        """
+        copy = deepcopy(self)
+
+        if niv_pad <= copy.niv:
+            return copy
+
+        gamma_urange_mat = np.tile(
+            u.mat[..., None, None, None], (1, 1, 1, 1, 2 * copy.niw + 1, 2 * niv_pad, 2 * niv_pad)
+        )
+        niv_diff = niv_pad - copy.niv
+        gamma_urange_mat[..., niv_diff : niv_diff + 2 * copy.niv, niv_diff : niv_diff + 2 * copy.niv] = copy.mat
+        copy.mat = gamma_urange_mat
+        copy.update_original_shape()
+        return copy
+
     @staticmethod
     def load(
         filename: str,

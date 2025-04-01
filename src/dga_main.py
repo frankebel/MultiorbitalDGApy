@@ -62,9 +62,6 @@ def execute_dga_routine():
     )
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
-    # This is saved since it is needed for the double-counting correction in the non-local routine
-    (f_dens + 3 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
-
     if config.output.save_quantities and comm.rank == 0:
         gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
