@@ -385,12 +385,20 @@ def calculate_self_energy_q(
             sigma_new.save(name=f"sigma_dga_iteration_{i+1}", output_dir=config.output.output_path)
             logger.log_info(f"Saved sigma for iteration {i+1} as numpy array.")
 
-        if np.allclose(sigma_old.mat, sigma_new.mat, atol=config.self_consistency.epsilon):
-            logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
-            sigma_old = sigma_new
-            break
+        logger.log_info("Checking self-consistency convergence.")
+        if comm.rank == 0:
+            converged = np.allclose(
+                sigma_old[0, 0, 0].mat, sigma_new[0, 0, 0].mat, rtol=config.self_consistency.epsilon
+            )
+        else:
+            converged = False
+        converged = comm.bcast(converged)
 
         sigma_old = sigma_new
+        if converged:
+            logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
+            break
+        logger.log_info("Self-consistency not reached yet.")
 
     mpi_dist_irrk.delete_file()
 
