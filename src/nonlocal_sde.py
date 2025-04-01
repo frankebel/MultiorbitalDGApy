@@ -387,9 +387,7 @@ def calculate_self_energy_q(
 
         logger.log_info("Checking self-consistency convergence.")
         if comm.rank == 0:
-            converged = np.allclose(
-                sigma_old[0, 0, 0].mat, sigma_new[0, 0, 0].mat, rtol=config.self_consistency.epsilon
-            )
+            converged = np.allclose(sigma_old.mat[0], sigma_new.mat[0], atol=config.self_consistency.epsilon)
         else:
             converged = False
         converged = comm.bcast(converged)
