@@ -135,7 +135,7 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
             - siw.decompress_q_dimension().mat
         )
         mat = np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
-        return GreensFunction(mat, siw, ek, siw.full_niv_range, False, siw.has_compressed_q_dimension)
+        return GreensFunction(mat, siw, ek, siw.full_niv_range, False, False)
 
     @staticmethod
     def create_g_loc(siw: SelfEnergy, ek: np.ndarray, calc_filling: bool = True) -> "GreensFunction":
