@@ -286,6 +286,7 @@ def calculate_self_energy_q(
             os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
         )
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
+        gchi0_q = gchi0_q.take_vn_diagonal()
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
 
