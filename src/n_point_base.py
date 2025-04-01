@@ -104,7 +104,7 @@ class IHaveMat(ABC):
         """
         Returns the memory usage of the matrix in GigaBytes (GB).
         """
-        return self.mat.nbytes * 1e-9
+        return self.mat.nbytes / (1024**3)
 
     def to_real(self) -> "IHaveMat":
         """

@@ -61,7 +61,7 @@ def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
 
 
 def get_hartree_fock(
-    u_loc: LocalInteraction, v_nonloc: Interaction, full_q_list: np.ndarray
+    u_loc: LocalInteraction, v_nonloc: Interaction, q_list: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""
     Returns the Hartree-Fock term separately for the local and non-local interaction. Since we are always SU(2)-symmetric,
@@ -75,7 +75,7 @@ def get_hartree_fock(
     .. math:: \Sigma_{F}^k = - 1/N_q \sum_q (U_{adcb} + V^{q}_{adcb}) n^{k-q}_{dc}.
     """
     v_q0 = v_nonloc.find_q((0, 0, 0))
-    occ_qk = np.array([np.roll(config.sys.occ_k, [-i for i in q], axis=(0, 1, 2)) for q in full_q_list])  # [q,k,o1,o2]
+    occ_qk = np.array([np.roll(config.sys.occ_k, [-i for i in q], axis=(0, 1, 2)) for q in q_list])  # [q,k,o1,o2]
     nq_tot, nk_tot = np.prod(config.lattice.nq), np.prod(config.lattice.nk)
     occ_qk = occ_qk.reshape(nq_tot, nk_tot, config.sys.n_bands, config.sys.n_bands)
 
@@ -274,11 +274,14 @@ def calculate_self_energy_q(
         logger.log_info("----------------------------------------")
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
+        logger.log_memory_usage("giwk", giwk_full.memory_usage_in_gb, 1)
         gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
+        logger.log_memory_usage("Gchi0_q_full", gchi0_q.memory_usage_in_gb, 1)
+
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
         gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
         del gchi0_q
-        logger.log_memory_usage("Gchi0_q", gchi0_q_core.memory_usage_in_gb, 1)
+        logger.log_memory_usage("Gchi0_q_core", gchi0_q_core.memory_usage_in_gb, 1)
 
         gchi0_q_core_inv = gchi0_q_core.invert(False).take_vn_diagonal()
         logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv.memory_usage_in_gb, 1)
@@ -300,6 +303,10 @@ def calculate_self_energy_q(
         # Here we have to handle the most memory-intensive objects, the auxiliary susceptibilities.
         # Therefore, we split the calculation into groups of 6 processes to avoid memory issues. This is only necessary
         # for the kernel calculation, since the other calculations are not as memory-intensive.
+
+        """
+        probably not neccessary
+        
         group_size = min(comm.size, 6)
         sub_comm = comm.Split(comm.rank // group_size, comm.rank)
 
@@ -311,10 +318,18 @@ def calculate_self_energy_q(
                     gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
                 )
             sub_comm.barrier()
+        """
+
+        u_dens, kernel_dens = calculate_sigma_kernel_r_q(
+            gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+        )
 
         logger.log_info(f"Kernel (dens) for sigma calculated.")
         logger.log_memory_usage("Kernel (dens)", kernel_dens.memory_usage_in_gb, 1)
 
+        """
+        probably not neccessary
+        
         for k in range(sub_comm.size):
             sub_comm.barrier()
             if sub_comm.rank == k:
@@ -322,6 +337,11 @@ def calculate_self_energy_q(
                     gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
                 )
             sub_comm.barrier()
+        """
+
+        u_magn, kernel_magn = calculate_sigma_kernel_r_q(
+            gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+        )
 
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info(f"Kernel (magn) for sigma calculated.")
@@ -336,14 +356,17 @@ def calculate_self_energy_q(
         logger.log_info("Sigma for the magnetic channel calculated.")
 
         sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
+        logger.log_memory_usage("Non-local sigma", sigma_new.memory_usage_in_gb, 1)
 
         sigma_new = sigma_new + hartree + fock
         logger.log_info("Full non-local self-energy calculated.")
 
         old_mu = config.sys.mu
-        config.sys.mu = update_mu(
-            config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
-        )
+        if comm.rank == 0:
+            config.sys.mu = update_mu(
+                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
+            )
+        config.sys.mu = comm.bcast(config.sys.mu)
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
         if i == 0:

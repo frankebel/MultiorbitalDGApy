@@ -4,8 +4,6 @@ from datetime import datetime
 
 import mpi4py.MPI as MPI
 
-from n_point_base import IHaveMat
-
 
 class DgaLogger:
     def __init__(self, comm: MPI.Comm, output_path: str = "./", filename: str = "dga.log"):
