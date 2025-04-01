@@ -355,7 +355,8 @@ def calculate_self_energy_q(
         del u_magn, kernel_magn
         logger.log_info("Sigma for the magnetic channel calculated.")
 
-        sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
+        # sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
+        comm.Allreduce(MPI.IN_PLACE, sigma_new.mat, op=MPI.SUM)
         logger.log_memory_usage("Non-local sigma", sigma_new.memory_usage_in_gb, 1)
 
         sigma_new = sigma_new + hartree + fock
