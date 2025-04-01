@@ -181,7 +181,7 @@ def calculate_sigma_kernel_r_q(
 
 
 def calculate_sigma_from_kernel(
-    u_r: LocalInteraction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, q_weight_list: np.ndarray
+    u_r: LocalInteraction, kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, q_weights: np.ndarray
 ) -> SelfEnergy:
     r"""
     Returns
@@ -196,14 +196,10 @@ def calculate_sigma_from_kernel(
         ),
         dtype=kernel_r.mat.dtype,
     )
+
     for idx, q in enumerate(q_list):
-        mat += q_weight_list[idx] * np.einsum(
-            "aibc,cbjdwv,kadwv->kijv",
-            u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx],
-            kernel_r.mat[idx],
-            get_qk_single_q(giwk, q),
-            optimize=True,
-        )
+        u_mat = u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx]
+        mat += q_weights[idx] * np.einsum("aibc,cbjdwv,kadwv->kijv", u_mat, kernel_r.mat[idx], get_qk_single_q(giwk, q))
     prefactor = -0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot
     mat *= prefactor
     return SelfEnergy(mat, config.lattice.nk, False, True)
