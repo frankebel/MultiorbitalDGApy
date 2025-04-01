@@ -1,4 +1,6 @@
+import glob
 import os
+import re
 
 import mpi4py.MPI as MPI
 
@@ -198,8 +200,13 @@ def calculate_sigma_from_kernel(
     )
 
     for idx, q in enumerate(q_list):
-        u_mat = u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx]
-        mat += q_weights[idx] * np.einsum("aibc,cbjdwv,kadwv->kijv", u_mat, kernel_r.mat[idx], get_qk_single_q(giwk, q))
+        mat += q_weights[idx] * np.einsum(
+            "aibc,cbjdwv,kadwv->kijv",
+            u_r.mat if not isinstance(u_r, Interaction) else u_r.mat[idx],
+            kernel_r.mat[idx],
+            get_qk_single_q(giwk, q),
+            optimize=True,
+        )
     prefactor = -0.5 / config.sys.beta**2 / config.lattice.q_grid.nk_tot
     mat *= prefactor
     return SelfEnergy(mat, config.lattice.nk, False, True)
@@ -211,9 +218,8 @@ def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[Sel
     retrieve the last calculated self-energy as a starting point for the next calculation. If no sigma_dga_N.npy file
     is found, we return the dmft self-energy as a starting point.
     """
-    import glob
-    import os
-    import re
+    if output_path == "" or output_path is None or not os.path.exists(output_path):
+        return default_sigma, 0
 
     files = glob.glob(os.path.join(output_path, "sigma_dga_iteration_*.npy"))
     if not files:
