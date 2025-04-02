@@ -219,12 +219,15 @@ class IAmNonLocal(IHaveMat, ABC):
         Shifts the momentum by the given value. If the object enters with a compressed q dimension, we first decompress
         it and then compress it again after the shift.
         """
-        if self.has_compressed_q_dimension:
-            raise ValueError("Cannot shift momentum for compressed q dimension.")
-
         copy = deepcopy(self)
+
+        compressed = False
+        if copy.has_compressed_q_dimension:
+            copy = copy.decompress_q_dimension()
+            compressed = True
+
         copy.mat = np.roll(copy.mat, index, axis=(0, 1, 2))
-        return copy
+        return copy if not compressed else copy.compress_q_dimension()
 
     def compress_q_dimension(self):
         """

@@ -29,19 +29,26 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
         dtype=giwk.mat.dtype,
     )
 
-    g_left_mat = (
-        giwk.mat[:, :, :, :, None, None, :, giwk.niv + niv_asympt_range[None, :] + iws[:, None]]
-        * np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None, None]
-    )
+    # we do this to save memory and to avoid a full loop over all wn independently
+    batch_size = config.box.niw_core // 5
+    for batch_start in range(0, len(wn), batch_size):
+        batch_end = min(batch_start + batch_size, len(wn))
+        iws_batch = iws[batch_start:batch_end]
+        iws2_batch = iws2[batch_start:batch_end]
 
-    for idx, q in enumerate(q_list):
-        g_right_mat = (
-            giwk.shift_k_by_q([-i for i in q]).transpose_orbitals()[
-                :, :, :, None, :, :, None, giwk.niv + niv_asympt_range[None, :] + iws2[:, None]
-            ]
-            * np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None, None]
+        g_left_mat = (
+            giwk.mat[:, :, :, :, None, None, :, giwk.niv + niv_asympt_range[None, :] + iws_batch[:, None]]
+            * np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None, None]
         )
-        gchi0_q[idx] = np.sum(g_left_mat * g_right_mat, axis=(0, 1, 2))
+
+        for idx, q in enumerate(q_list):
+            g_right_mat = (
+                giwk.shift_k_by_q([-i for i in q]).transpose_orbitals()[
+                    :, :, :, None, :, :, None, giwk.niv + niv_asympt_range[None, :] + iws2_batch[:, None]
+                ]
+                * np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None, None]
+            )
+            gchi0_q[idx, ..., batch_start:batch_end, :] = np.sum(g_left_mat * g_right_mat, axis=(0, 1, 2))
 
     gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
 
