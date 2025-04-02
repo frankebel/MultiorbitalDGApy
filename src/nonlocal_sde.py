@@ -41,7 +41,9 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
             ]
             * np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None, None]
         )
-        gchi0_q[idx] = -config.sys.beta * np.mean(g_left_mat * g_right_mat, axis=(0, 1, 2))
+        gchi0_q[idx] = np.sum(g_left_mat * g_right_mat, axis=(0, 1, 2))
+
+    gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
 
     return FourPoint(
         gchi0_q, SpinChannel.NONE, config.lattice.nq, 1, 1, full_niw_range=False, has_compressed_q_dimension=True
@@ -150,7 +152,7 @@ def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc
     minus 2/3 times the identity if the channel is the magnetic channel (due to the extra u in Eq. (1.125)).
     """
     u_r = v_nonloc.as_channel(vrg_q_r.channel) + u_loc.as_channel(vrg_q_r.channel)
-    kernel = vrg_q_r - u_r @ gchi_aux_q_r_sum @ vrg_q_r
+    kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
     if vrg_q_r.channel == SpinChannel.MAGN:
         kernel -= 2.0 / 3.0
     return u_r @ kernel
