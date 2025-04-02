@@ -192,9 +192,10 @@ def get_loc_self_energy_vrg(
     """
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
     g_wv = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
-    inner_dens = vrg_dens - vrg_dens @ u_loc.as_channel(SpinChannel.DENS) @ gchi_dens_sum
-    inner_magn = vrg_magn - vrg_magn @ u_loc.as_channel(SpinChannel.MAGN) @ gchi_magn_sum
-    sigma_sum = -1.0 / config.sys.beta * u_loc.times("kjop,ilpowv,lkwv->ijv", 0.5 * (inner_dens - inner_magn), g_wv)
+    inner = vrg_dens - vrg_dens @ u_loc.as_channel(SpinChannel.DENS) @ gchi_dens_sum
+    inner -= vrg_magn - vrg_magn @ u_loc.as_channel(SpinChannel.MAGN) @ gchi_magn_sum
+    inner = 0.5 * inner.to_full_niw_range()
+    sigma_sum = -1.0 / config.sys.beta * u_loc.times("kjop,ilpowv,lkwv->ijv", inner, g_wv)
     hartree_fock = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
 
     return SelfEnergy((hartree_fock + sigma_sum)[None, None, None, ...])
@@ -219,8 +220,8 @@ def perform_local_schwinger_dyson(
     config.logger.log_info("Self-energy Sigma^v done.")
 
     # This is saved since it is needed for the double-counting correction in the non-local routine
-    # (2 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
-    (f_dens + 3 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
+    (2 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
+    # (f_dens + 3 * f_magn).to_half_niw_range().save(name="f_1dens_3magn", output_dir=config.output.output_path)
 
     return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
 

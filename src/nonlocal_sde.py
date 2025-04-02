@@ -98,7 +98,7 @@ def create_auxiliary_chi_r_q(
     return (
         (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
         - 1.0 / config.sys.beta**2 * (v_nonloc.as_channel(gamma_r.channel) + u_loc.as_channel(gamma_r.channel))
-    ).invert(False)
+    ).invert()
 
 
 def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
@@ -108,9 +108,7 @@ def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
-    vrg_r = config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
-    gchi0_q_inv = gchi0_q_inv.take_vn_diagonal()
-    return vrg_r
+    return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
 
 
 def create_generalized_chi_q_with_shell_correction(
@@ -205,6 +203,7 @@ def calculate_sigma_from_kernel(
         ),
         dtype=kernel_r.mat.dtype,
     )
+    kernel_r = kernel_r.to_full_niw_range()
 
     for idx, q in enumerate(q_list):
         g = get_qk_single_q(giwk, q)
@@ -286,7 +285,6 @@ def calculate_self_energy_q(
             os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
         )
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
-        gchi0_q = gchi0_q.take_vn_diagonal()
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
 
@@ -295,7 +293,7 @@ def calculate_self_energy_q(
         del gchi0_q
         logger.log_memory_usage("Gchi0_q_core", gchi0_q_core.memory_usage_in_gb, 1)
 
-        gchi0_q_core_inv = gchi0_q_core.invert(False).take_vn_diagonal()
+        gchi0_q_core_inv = gchi0_q_core.invert().take_vn_diagonal()
         logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv.memory_usage_in_gb, 1)
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core

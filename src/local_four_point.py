@@ -247,15 +247,13 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         return self
 
-    def invert(self, return_to_full_niw_range: bool = True):
+    def invert(self):
         """
-        Inverts the object by transforming it to compound indices. Returns the object in half of their niw range if
-        specified.
+        Inverts the object by transforming it to compound indices. Returns the object always in half of their niw range.
         """
         copy = deepcopy(self).to_half_niw_range().to_compound_indices()
         copy.mat = np.linalg.inv(copy.mat)
-        copy = copy.to_full_indices()
-        return copy.to_full_niw_range() if return_to_full_niw_range else copy
+        return copy.to_full_indices()
 
     def matmul(self, other, left_hand_side: bool = True) -> "LocalFourPoint":
         """
@@ -307,6 +305,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 full_niv_range=self.full_niv_range,
             )
 
+        self_full_niw_range = self.full_niw_range
+        other_full_niw_range = other.full_niw_range
+
         # we do not use np.einsum here because it is faster to use np.matmul with compound indices instead of np.einsum
         self.to_half_niw_range().to_compound_indices()
         other = other.to_half_niw_range().to_compound_indices()
@@ -319,21 +320,21 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             else other.original_shape
         )
 
-        self.to_full_indices().to_full_niw_range()
-        other = other.to_full_indices().to_full_niw_range()
+        self.to_full_indices()
+        if self_full_niw_range:
+            self.to_full_niw_range()
+        other = other.to_full_indices()
+        if other_full_niw_range:
+            other = other.to_full_niw_range()
 
-        return (
-            LocalFourPoint(
-                new_mat,
-                channel,
-                self.num_wn_dimensions,
-                max(self.num_vn_dimensions, other.num_vn_dimensions),
-                full_niw_range=False,
-                full_niv_range=self.full_niv_range,
-            )
-            .to_full_indices(shape)
-            .to_full_niw_range()
-        )
+        return LocalFourPoint(
+            new_mat,
+            channel,
+            self.num_wn_dimensions,
+            max(self.num_vn_dimensions, other.num_vn_dimensions),
+            full_niw_range=False,
+            full_niv_range=self.full_niv_range,
+        ).to_full_indices(shape)
 
     def mul(self, other):
         r"""
@@ -396,10 +397,14 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 self.frequency_notation,
             )
 
-        if self.niw != other.niw or self.n_bands != other.n_bands:
-            raise ValueError(f"Shapes {self.current_shape} and {other.current_shape} do not match!")
         if self.num_wn_dimensions != other.num_wn_dimensions:
             raise ValueError("Number of bosonic frequency dimensions do not match.")
+
+        self_full_niw_range = self.full_niw_range
+        other_full_niw_range = other.full_niw_range
+
+        self.to_half_niw_range()
+        other = other.to_half_niw_range()
 
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
@@ -413,7 +418,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 elif other.num_vn_dimensions == 0:
                     other_mat = np.expand_dims(other_mat, axis=-1 if self.num_vn_dimensions == 1 else (-1, -2))
 
-            return LocalFourPoint(
+            result = LocalFourPoint(
                 self_mat + other_mat,
                 self.channel,
                 max(self.num_wn_dimensions, other.num_wn_dimensions),
@@ -422,6 +427,13 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 self.full_niv_range,
                 self.frequency_notation,
             )
+
+            if self_full_niw_range:
+                self.to_full_niw_range()
+            if other_full_niw_range:
+                other = other.to_full_niw_range()
+
+            return result
 
         other, self_extended, other_extended = self._align_frequency_dimensions_for_operation(other)
 
@@ -434,6 +446,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.full_niv_range,
             self.frequency_notation,
         )
+
+        if self_full_niw_range:
+            self.to_full_niw_range()
+        if other_full_niw_range:
+            other = other.to_full_niw_range()
 
         other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
         return result
@@ -598,21 +615,27 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
 
     @staticmethod
-    def identity(n_bands: int, niw: int, niv: int, num_vn_dimensions: int = 2) -> "LocalFourPoint":
+    def identity(
+        n_bands: int, niw: int, niv: int, num_vn_dimensions: int = 2, full_niw_range: bool = False
+    ) -> "LocalFourPoint":
         if num_vn_dimensions not in (1, 2):
             raise ValueError("Invalid number of fermionic frequency dimensions.")
         full_shape = (n_bands,) * 4 + (2 * niw + 1,) + (2 * niv,) * num_vn_dimensions
         compound_index_size = 2 * niv * n_bands**2
         mat = np.tile(np.eye(compound_index_size)[None, ...], (2 * niw + 1, 1, 1))
 
-        result = LocalFourPoint(mat, num_vn_dimensions=num_vn_dimensions).to_full_indices(full_shape)
+        result = LocalFourPoint(
+            mat, num_vn_dimensions=num_vn_dimensions, full_niw_range=full_niw_range
+        ).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
             return result.take_vn_diagonal()
         return result
 
     @staticmethod
     def identity_like(other: "LocalFourPoint") -> "LocalFourPoint":
-        return LocalFourPoint.identity(other.n_bands, other.niw, other.niv, other.num_vn_dimensions)
+        return LocalFourPoint.identity(
+            other.n_bands, other.niw, other.niv, other.num_vn_dimensions, other.full_niw_range
+        )
 
     def plot(
         self,

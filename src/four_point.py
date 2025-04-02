@@ -255,6 +255,9 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.frequency_notation,
             )
 
+        self_full_niw_range = self.full_niw_range
+        other_full_niw_range = other.full_niw_range
+
         self.to_half_niw_range()
         other = other.to_half_niw_range()
 
@@ -269,16 +272,19 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.nq,
                 self.num_wn_dimensions,
                 max(self.num_vn_dimensions, other.num_vn_dimensions),
-                self.full_niw_range,
+                False,
                 self.full_niv_range,
                 self.has_compressed_q_dimension,
                 self.frequency_notation,
             )
 
-            self.to_full_niw_range()
-            other = other.to_full_niw_range()
+            if self_full_niw_range:
+                self.to_full_niw_range()
+            if other_full_niw_range:
+                other = other.to_full_niw_range()
+
             other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
-            return result.to_full_niw_range()
+            return result
 
         other = self._align_q_dimensions_for_operations(other)
         other, self_extended, other_extended = self._align_frequency_dimensions_for_operation(other)
@@ -289,16 +295,19 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.nq,
             self.num_wn_dimensions,
             self.num_vn_dimensions,
-            self.full_niw_range,
+            False,
             self.full_niv_range,
             self.has_compressed_q_dimension,
             self.frequency_notation,
         )
 
-        self.to_full_niw_range()
-        other = other.to_full_niw_range()
+        if self_full_niw_range:
+            self.to_full_niw_range()
+        if other_full_niw_range:
+            other = other.to_full_niw_range()
+
         other = self._revert_frequency_dimensions_after_operation(other, other_extended, self_extended)
-        return result.to_full_niw_range()
+        return result
 
     def sub(self, other) -> "FourPoint":
         """
@@ -383,6 +392,8 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         is_self_full_niw_range = self.full_niw_range
         is_other_full_niw_range = other.full_niw_range
+        self_extended = self.num_vn_dimensions == 1
+        other_extended = other.num_vn_dimensions == 1
 
         self.to_half_niw_range().to_compound_indices()
         other = other.to_half_niw_range().to_compound_indices()
@@ -400,29 +411,30 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             if self.num_vn_dimensions == max(self.num_vn_dimensions, other.num_vn_dimensions)
             else other_shape
         )
+        num_vn_dimensions = max(self.num_vn_dimensions, other.num_vn_dimensions)
 
         self.to_full_indices()
         if is_self_full_niw_range:
             self.to_full_niw_range()
+        if self_extended:
+            self.take_vn_diagonal()
         other = other.to_full_indices()
         if is_other_full_niw_range:
             other = other.to_full_niw_range()
+        if other_extended:
+            other = other.take_vn_diagonal()
 
-        return (
-            FourPoint(
-                new_mat,
-                channel,
-                self.nq,
-                self.num_wn_dimensions,
-                max(self.num_vn_dimensions, other.num_vn_dimensions),
-                False,
-                self.full_niv_range,
-                self.has_compressed_q_dimension,
-                self.frequency_notation,
-            )
-            .to_full_indices(shape)
-            .to_full_niw_range()
-        )
+        return FourPoint(
+            new_mat,
+            channel,
+            self.nq,
+            self.num_wn_dimensions,
+            num_vn_dimensions,
+            False,
+            self.full_niv_range,
+            self.has_compressed_q_dimension,
+            self.frequency_notation,
+        ).to_full_indices(shape)
 
     @staticmethod
     def load(
