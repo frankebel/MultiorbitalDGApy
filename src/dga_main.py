@@ -25,7 +25,7 @@ def execute_dga_routine():
     if comm.rank == 0:
         g_dmft, sigma_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
     else:
-        g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
+        g_dmft, sigma_dmft, g2_dens, g2_magn = (None,) * 4
 
     logger.log_info("Config init and folder setup done.")
     logger.log_info("Loaded data from w2dyn file.")
@@ -57,8 +57,15 @@ def execute_dga_routine():
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
 
-    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = (
-        local_sde.perform_local_schwinger_dyson(giwk, g2_dens, g2_magn, u_loc)
+    if comm.rank == 0:
+        gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = (
+            local_sde.perform_local_schwinger_dyson(giwk, g2_dens, g2_magn, u_loc)
+        )
+    else:
+        gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = (None,) * 9
+
+    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = comm.bcast(
+        (gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local)
     )
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
@@ -73,6 +80,8 @@ def execute_dga_routine():
         f_dens.save(name="f_dens", output_dir=config.output.output_path)
         f_magn.save(name="f_magn", output_dir=config.output.output_path)
         logger.log_info("Saved all relevant quantities as numpy files.")
+
+    del vrg_dens, vrg_magn, f_dens, f_magn
 
     if config.output.do_plotting and comm.rank == 0:
         gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
@@ -97,6 +106,7 @@ def execute_dga_routine():
             name="loc",
             output_dir=config.output.output_path,
         )
+        del chi_dens, chi_magn
         logger.log_info("Plotted checks of the susceptibility.")
 
         sigma_list = []
@@ -123,7 +133,6 @@ def execute_dga_routine():
         logger.log_info("Plotted local self-energies for comparison.")
         logger.log_info("Finished plotting.")
 
-    del vrg_dens, vrg_magn, chi_dens, chi_magn, f_dens, f_magn
     logger.log_info("Local DGA routine finished.")
 
     logger.log_info("Starting non-local ladder-DGA routine.")

@@ -181,12 +181,6 @@ class IHaveMat(ABC):
             contraction, self.mat, *[obj.mat if isinstance(obj, IHaveMat) else obj for obj in args], optimize=True
         )
 
-    def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
-        """
-        Saves the content of the matrix to a file.
-        """
-        np.save(os.path.join(output_dir, f"{name}.npy"), self.mat, allow_pickle=True)
-
 
 class IAmNonLocal(IHaveMat, ABC):
     """

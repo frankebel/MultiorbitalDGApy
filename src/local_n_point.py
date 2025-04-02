@@ -249,6 +249,15 @@ class LocalNPoint(IHaveMat):
         self._full_niv_range = False
         return self
 
+    def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
+        """
+        Saves the content of the matrix to a file.
+        """
+        copy = deepcopy(self)
+        copy = copy.to_full_niw_range().to_full_niv_range()
+        np.save(os.path.join(output_dir, f"{name}.npy"), copy.mat, allow_pickle=False)
+        del copy
+
     def _align_frequency_dimensions_for_operation(self, other: "LocalNPoint"):
         """
         Adapts the frequency dimensions of two LocalNPoint objects to fit each other for addition or multiplication.

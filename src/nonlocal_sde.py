@@ -283,9 +283,7 @@ def calculate_self_energy_q(
         gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q.memory_usage_in_gb, 1)
 
-        f_1dens_3magn = LocalFourPoint.load(
-            os.path.join(config.output.output_path, "f_1dens_3magn.npy"), full_niw_range=False
-        )
+        f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
