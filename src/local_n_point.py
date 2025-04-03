@@ -253,8 +253,7 @@ class LocalNPoint(IHaveMat):
         """
         Saves the content of the matrix to a file.
         """
-        copy = deepcopy(self)
-        copy = copy.to_full_niw_range().to_full_niv_range()
+        copy = deepcopy(self).to_full_niw_range().to_full_niv_range()
         np.save(os.path.join(output_dir, f"{name}.npy"), copy.mat, allow_pickle=False)
         del copy
 

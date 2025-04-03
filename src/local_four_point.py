@@ -256,7 +256,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         def invert_sub_matrix(matrix):
             return sp.linalg.inv(matrix, overwrite_a=True, check_finite=False)
 
-        copy = deepcopy(self).to_half_niw_range().to_compound_indices()
+        copy = deepcopy(self.to_half_niw_range()).to_compound_indices()
         copy.mat = np.vectorize(invert_sub_matrix, signature="(n,m)->(n,m)")(copy.mat)
         return copy.to_full_indices()
 
