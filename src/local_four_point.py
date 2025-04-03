@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
 
-from interaction import LocalInteraction
+from interaction import LocalInteraction, Interaction
 from local_n_point import LocalNPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import *
@@ -387,6 +387,16 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         if isinstance(other, LocalInteraction):
             other_mat = other.mat.reshape(other.mat.shape + (1,) * (self.num_wn_dimensions + self.num_vn_dimensions))
+            is_local = not isinstance(other, Interaction)
+
+            if not is_local:
+                # since we do not want to have a dependency on the FourPoint class, we simply return a numpy array
+                return (
+                    (self.mat[None, ...] + other_mat)
+                    if other.has_compressed_q_dimension
+                    else (self.mat[None, None, None, ...] + other_mat)
+                )
+
             return LocalFourPoint(
                 self.mat + other_mat,
                 self.channel,

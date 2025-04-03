@@ -27,14 +27,14 @@ def execute_dga_routine():
     else:
         g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
 
+    g_dmft, sigma_dmft, g2_dens, g2_magn = comm.bcast((g_dmft, sigma_dmft, g2_dens, g2_magn), root=0)
+
     logger.log_info("Config init and folder setup done.")
     logger.log_info("Loaded data from w2dyn file.")
 
     config.lattice, config.box, config.output, config.sys, config.self_consistency = comm.bcast(
         (config.lattice, config.box, config.output, config.sys, config.self_consistency), root=0
     )
-
-    g_dmft, sigma_dmft, g2_dens, g2_magn = comm.bcast((g_dmft, sigma_dmft, g2_dens, g2_magn), root=0)
 
     logger.log_memory_usage("giwk & siwk", g_dmft.memory_usage_in_gb, 2)
     logger.log_memory_usage("g2_dens & g2_magn", g2_dens.memory_usage_in_gb, 2)
@@ -141,9 +141,16 @@ def execute_dga_routine():
     )
     logger.log_info("Non-local ladder-DGA routine finished.")
 
-    if comm.rank == 0 and config.output.save_quantities:
-        sigma_dga.save(name="sigma_dga", output_dir=config.output.output_path)
-        logger.log_info("Saved sigma_dga as numpy file.")
+    if config.output.save_quantities and comm.rank == 0:
+        sigma_dga.save(name=f"sigma_dga", output_dir=config.output.output_path)
+        logger.log_info("Saved non-local ladder-DGA self-energy as numpy file.")
+
+    if config.poly_fitting.do_poly_fitting and not config.self_consistency.use_poly_fit:
+        sigma_fit = sigma_dga.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
+        sigma_fit.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
+        logger.log_info(f"Fitted polynomial of degree {config.poly_fitting.o_fit} to sigma.")
+        logger.log_info("Saved fitted non-local ladder-DGA self-energy as numpy file.")
+        del sigma_fit
 
     logger.log_info("DGA routine finished.")
     logger.log_info("Exiting ...")

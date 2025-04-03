@@ -15,7 +15,7 @@ from n_point_base import SpinChannel
 from self_energy import SelfEnergy
 
 
-def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
+def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_factor: int) -> FourPoint:
     """
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
@@ -30,7 +30,11 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
     )
 
     # we do this to save memory and to avoid a full loop over all wn independently
-    batch_size = config.box.niw_core // 5
+    # since we have to have the full bz for this, we do it in batches
+    # the batch size is determined by the largest object, which is gchi_aux. The factor "irrk_factor" is the difference
+    # in storage between an item in the full bz and the irr bz. This way the batch size is as large as it can be
+    # to not exceed memory, i.e. such that the objects are still a tiny bit smaller than gchi_aux
+    batch_size = config.box.niw_core // (irrk_factor + 1)
     for batch_start in range(0, len(wn), batch_size):
         batch_end = min(batch_start + batch_size, len(wn))
         iws_batch = iws[batch_start:batch_end]
@@ -108,6 +112,31 @@ def create_auxiliary_chi_r_q(
         (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
         - 1.0 / config.sys.beta**2 * (v_nonloc.as_channel(gamma_r.channel) + u_loc.as_channel(gamma_r.channel))
     ).invert()
+
+
+def create_auxiliary_chi_r_q_sum(
+    gamma_r: LocalFourPoint,
+    gchi0_q: FourPoint,
+    gchi0_q_inv: FourPoint,
+    u_loc: LocalInteraction,
+    v_nonloc: Interaction,
+    summands: int = -1,
+) -> FourPoint:
+    if summands <= 0:
+        return create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
+
+    factor = gamma_r - v_nonloc.as_channel(gamma_r.channel) - u_loc.as_channel(gamma_r.channel)
+    factor *= 1.0 / config.sys.beta**2
+    factor = (
+        FourPoint(factor, gamma_r.channel, config.lattice.nq, 1, 2, False, False, v_nonloc.has_compressed_q_dimension)
+        @ gchi0_q
+    )
+    bse_sum = gchi0_q
+    next_value = gchi0_q
+    for _ in range(summands - 1):
+        next_value = -factor @ next_value
+        bse_sum += next_value
+    return bse_sum
 
 
 def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
@@ -263,6 +292,7 @@ def calculate_self_energy_q(
     full_q_list = config.lattice.q_grid.get_q_list()
     my_irr_q_list = config.lattice.q_grid.get_irrq_list()[mpi_dist_irrk.my_slice]
     my_irrk_q_weights = config.lattice.q_grid.irrk_count[mpi_dist_irrk.my_slice]
+    irrk_factor = len(full_q_list) // len(config.lattice.q_grid.get_irrq_list())
 
     # Hartree- and Fock-terms
     v_nonloc = v_nonloc.compress_q_dimension()
@@ -287,7 +317,7 @@ def calculate_self_energy_q(
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
         logger.log_memory_usage("giwk", giwk_full.memory_usage_in_gb, 1)
-        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
+        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list, irrk_factor)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q.memory_usage_in_gb, 1)
 
         f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn.npy"))
@@ -366,16 +396,4 @@ def calculate_self_energy_q(
         logger.log_info("Self-consistency not reached yet.")
 
     mpi_dist_irrk.delete_file()
-
-    if config.output.save_quantities and comm.rank == 0:
-        sigma_old.save(name=f"sigma_dga", output_dir=config.output.output_path)
-        logger.log_info("Saved non-local ladder-DGA self-energy as numpy file.")
-
-    if config.poly_fitting.do_poly_fitting and not config.self_consistency.use_poly_fit:
-        sigma_fit = sigma_old.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
-        sigma_fit.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
-        logger.log_info(f"Fitted polynomial of degree {config.poly_fitting.o_fit} to sigma.")
-        logger.log_info("Saved fitted non-local ladder-DGA self-energy as numpy file.")
-        del sigma_fit
-
     return sigma_old
