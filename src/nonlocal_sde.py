@@ -3,6 +3,7 @@ import os
 import re
 
 import mpi4py.MPI as MPI
+import numpy as np
 
 import config
 from four_point import FourPoint
@@ -20,35 +21,34 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
     wn = MFHelper.wn(config.box.niw_core, return_only_positive=True)
-    iws, iws2 = np.array([MFHelper.get_frequency_shift(wn_i, FrequencyShift.MINUS) for wn_i in wn], dtype=int).T
-
-    niv_asympt_range = np.arange(-config.box.niv_full, config.box.niv_full)
+    niv_full = config.box.niv_full
+    niv_full_range = np.arange(-niv_full, niv_full)
 
     gchi0_q = np.zeros(
-        (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * config.box.niv_full),
+        (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * niv_full),
         dtype=giwk.mat.dtype,
     )
 
+    g_left_mat = (
+        giwk.mat[:, :, :, :, None, None, :, giwk.niv + niv_full_range[None, :]]
+        * np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None, None]
+    )
+
+    g_right = giwk.transpose_orbitals()
     # we do this to save memory and to avoid a full loop over all wn independently
     # since we have to have the full bz for this, we do it in batches
     # the batch size is determined by the largest object, which is gchi_aux. The factor "irrk_factor" is the difference
     # in storage between an item in the full bz and the irr bz. This way the batch size is as large as it can be
     # to not exceed memory, i.e. such that the objects are still a tiny bit smaller than gchi_aux
-    batch_size = config.box.niw_core // (irrk_factor + 1)
+    batch_size = max(1, config.box.niw_core // (2 * irrk_factor))
     for batch_start in range(0, len(wn), batch_size):
         batch_end = min(batch_start + batch_size, len(wn))
-        iws_batch = iws[batch_start:batch_end]
-        iws2_batch = iws2[batch_start:batch_end]
-
-        g_left_mat = (
-            giwk.mat[:, :, :, :, None, None, :, giwk.niv + niv_asympt_range[None, :] + iws_batch[:, None]]
-            * np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None, None]
-        )
+        wn_batch = wn[batch_start:batch_end]
 
         for idx, q in enumerate(q_list):
             g_right_mat = (
-                giwk.shift_k_by_q([-i for i in q]).transpose_orbitals()[
-                    :, :, :, None, :, :, None, giwk.niv + niv_asympt_range[None, :] + iws2_batch[:, None]
+                g_right.shift_k_by_q([-i for i in q]).mat[
+                    :, :, :, None, :, :, None, giwk.niv + niv_full_range[None, :] - wn_batch[:, None]
                 ]
                 * np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None, None]
             )
@@ -63,7 +63,7 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
 
 def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
     """
-    Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v], where only half the niv range is returned.
+    Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v].
     """
     shifted_mat = giwk.shift_k_by_q([-i for i in q]).mat
     return MFHelper.wn_slices_gen(shifted_mat, config.box.niv_core, config.box.niw_core).reshape(
@@ -225,9 +225,7 @@ def calculate_sigma_kernel_r_q(
     return calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_sigma_from_kernel(
-    kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, q_weights: np.ndarray
-) -> SelfEnergy:
+def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
@@ -245,7 +243,7 @@ def calculate_sigma_from_kernel(
 
     for idx, q in enumerate(q_list):
         g = get_qk_single_q(giwk, q)
-        mat += q_weights[idx] * np.einsum("aijdwv,kadwv->kijv", kernel_r.mat[idx], g, optimize=True)
+        mat += np.einsum("aijdwv,kadwv->kijv", kernel_r.mat[idx], g, optimize=True)
     prefactor = -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     mat *= prefactor
     return SelfEnergy(mat, config.lattice.nk, True, True)
@@ -290,9 +288,12 @@ def calculate_self_energy_q(
     # MPI distributor for the irreducible BZ
     mpi_dist_irrk = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_irr, comm=comm, name="Q")
     full_q_list = config.lattice.q_grid.get_q_list()
-    my_irr_q_list = config.lattice.q_grid.get_irrq_list()[mpi_dist_irrk.my_slice]
-    my_irrk_q_weights = config.lattice.q_grid.irrk_count[mpi_dist_irrk.my_slice]
-    irrk_factor = len(full_q_list) // len(config.lattice.q_grid.get_irrq_list())
+    irrk_q_list = config.lattice.q_grid.get_irrq_list()
+    my_irr_q_list = irrk_q_list[mpi_dist_irrk.my_slice]
+    irrk_factor = len(full_q_list) // len(irrk_q_list)
+
+    mpi_dist_fullbz = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_tot, comm=comm, name="FBZ")
+    my_full_q_list = full_q_list[mpi_dist_fullbz.my_slice]
 
     # Hartree- and Fock-terms
     v_nonloc = v_nonloc.compress_q_dimension()
@@ -346,7 +347,10 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
 
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_irr_q_list, my_irrk_q_weights)
+        kernel.mat = mpi_dist_irrk.gather(kernel.mat)
+        kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
+        kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
         logger.log_info("Self-energy calculated from kernel.")
 
         sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)

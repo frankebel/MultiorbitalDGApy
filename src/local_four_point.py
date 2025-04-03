@@ -1,3 +1,4 @@
+import scipy as sp
 from matplotlib import pyplot as plt
 
 from interaction import LocalInteraction, Interaction
@@ -251,8 +252,12 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         Inverts the object by transforming it to compound indices. Returns the object always in half of their niw range.
         """
+
+        def invert_sub_matrix(matrix):
+            return sp.linalg.inv(matrix, overwrite_a=True, check_finite=False)
+
         copy = deepcopy(self).to_half_niw_range().to_compound_indices()
-        copy.mat = np.linalg.inv(copy.mat)
+        copy.mat = np.vectorize(invert_sub_matrix, signature="(n,m)->(n,m)")(copy.mat)
         return copy.to_full_indices()
 
     def matmul(self, other, left_hand_side: bool = True) -> "LocalFourPoint":
