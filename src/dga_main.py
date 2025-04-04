@@ -27,7 +27,10 @@ def execute_dga_routine():
     else:
         g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
 
-    g_dmft, sigma_dmft, g2_dens, g2_magn = comm.bcast((g_dmft, sigma_dmft, g2_dens, g2_magn), root=0)
+    g_dmft = comm.bcast(g_dmft, root=0)
+    sigma_dmft = comm.bcast(sigma_dmft, root=0)
+    g2_dens = comm.bcast(g2_dens, root=0)
+    g2_magn = comm.bcast(g2_magn, root=0)
 
     logger.log_info("Config init and folder setup done.")
     logger.log_info("Loaded data from w2dyn file.")
@@ -64,9 +67,16 @@ def execute_dga_routine():
     else:
         gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = (None,) * 9
 
-    gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = comm.bcast(
-        (gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local)
-    )
+    gamma_dens = comm.bcast(gamma_dens, root=0)
+    gamma_magn = comm.bcast(gamma_magn, root=0)
+    chi_dens = comm.bcast(chi_dens, root=0)
+    chi_magn = comm.bcast(chi_magn, root=0)
+    vrg_dens = comm.bcast(vrg_dens, root=0)
+    vrg_magn = comm.bcast(vrg_magn, root=0)
+    f_dens = comm.bcast(f_dens, root=0)
+    f_magn = comm.bcast(f_magn, root=0)
+    sigma_local = comm.bcast(sigma_local, root=0)
+
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
     if config.output.save_quantities and comm.rank == 0:
