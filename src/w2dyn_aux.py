@@ -127,7 +127,7 @@ class W2dynG4iwFile:
             self._file[f"{channel_group_string}/00000/{first_index:05}/value"][()]
         )  # extract niv from the size of the array
 
-        g2 = np.zeros((n_bands,) * 4 + (niw_full,) + (niv_full,) * 2, dtype=np.complex128)
+        g2 = np.zeros((n_bands,) * 4 + (niw_full,) + 2 * (niv_full,), dtype=np.complex64)
         for wn in range(niw_full):
             wn_group_string = f"{channel_group_string}/{wn:05}"
             for ind in self._file[wn_group_string].keys():

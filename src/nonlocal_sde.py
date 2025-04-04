@@ -38,8 +38,8 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
     # since we have to have the full bz for this, we do it in batches
     # the batch size is determined by the largest object, which is gchi_aux. The factor "irrk_factor" is the difference
     # in storage between an item in the full bz and the irr bz. This way the batch size is as large as it can be
-    # to not exceed memory, i.e. such that the objects are still a tiny bit smaller than gchi_aux
-    batch_size = max(1, config.box.niw_core // (2 * irrk_factor))
+    # to not exceed memory, i.e. such that the objects are still smaller than gchi_aux
+    batch_size = max(1, config.box.niv_core // (2 * irrk_factor))
     for batch_start in range(0, len(wn), batch_size):
         batch_end = min(batch_start + batch_size, len(wn))
         wn_batch = wn[batch_start:batch_end]
@@ -152,7 +152,7 @@ def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
-    return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum).take_vn_diagonal()
+    return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum)
 
 
 def create_generalized_chi_q_with_shell_correction(
@@ -172,21 +172,18 @@ def create_generalized_chi_q_with_shell_correction(
     ).invert()
 
 
-def calculate_sigma_dc_kernel(
-    f_1dens_3magn: LocalFourPoint, gchi0_q_core: FourPoint, u_loc: LocalInteraction
-) -> FourPoint:
+def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q: FourPoint, u_loc: LocalInteraction) -> FourPoint:
     """
     Returns the double-counting kernel for the self-energy calculation for only half the niv range to save computation time.
     """
-    return (
-        1.0
-        / config.sys.beta
-        * u_loc.permute_orbitals("abcd->adcb")
-        @ (gchi0_q_core @ f_1dens_3magn).sum_over_vn(config.sys.beta, axis=(-2,)).cut_niv(config.box.niv_core)
+    kernel = 1.0 / config.sys.beta**2 * u_loc.permute_orbitals("abcd->adcb") @ gchi0_q
+    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_1dens_3magn.to_half_niw_range())
+    return FourPoint(kernel, SpinChannel.NONE, config.lattice.nq, 1, 1, gchi0_q.full_niw_range, True, True).cut_niv(
+        config.box.niv_core
     )
 
 
-def calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
+def calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
     r"""
     Returns the kernel for the self-energy calculation.
     .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
@@ -228,30 +225,26 @@ def calculate_sigma_kernel_r_q(
         f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
     )
 
-    return calculate_kernel_r_q_from_vrg_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
+    return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray) -> SelfEnergy:
+def calculate_sigma_from_kernel(
+    kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, irrk_factor
+) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
     """
     mat = np.zeros(
-        (
-            np.prod(config.lattice.nk),
-            config.sys.n_bands,
-            config.sys.n_bands,
-            2 * config.box.niv_core,
-        ),
+        (np.prod(config.lattice.nk), config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
         dtype=kernel_r.mat.dtype,
     )
     kernel_r = kernel_r.to_full_niw_range()
 
     for idx, q in enumerate(q_list):
         g = get_qk_single_q(giwk, q)
-        mat += np.einsum("aijdwv,kadwv->kijv", kernel_r.mat[idx], g, optimize=True)
-    prefactor = -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
-    mat *= prefactor
+        mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx], g, optimize=True)
+    mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
 
 
@@ -317,6 +310,9 @@ def calculate_self_energy_q(
             f"Using previous calculation and starting the self-consistency loop at iteration {starting_iter+1}."
         )
 
+    delta_sigma = sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+    mu_history = [config.sys.mu]
+
     for i in range(starting_iter, starting_iter + config.self_consistency.max_iter):
         logger.log_info("----------------------------------------")
         logger.log_info(f"Starting iteration {i + 1}.")
@@ -356,7 +352,8 @@ def calculate_self_energy_q(
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list, irrk_factor)
+        del kernel
         logger.log_info("Self-energy calculated from kernel.")
 
         sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
@@ -371,10 +368,12 @@ def calculate_self_energy_q(
                 config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
             )
         config.sys.mu = comm.bcast(config.sys.mu)
+        mu_history.append(config.sys.mu)
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
-        # this is done to minimize noise. We remove out some fluctuations from dmft and add the smooth dmft self-energy
-        sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+        # this is done to minimize noise. We remove some fluctuations from dmft that are included in the local self
+        # energy calculated in this code and add the smooth dmft self-energy
+        sigma_new += delta_sigma
         sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
 
         if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
@@ -407,4 +406,9 @@ def calculate_self_energy_q(
 
     mpi_dist_irrk.delete_file()
     mpi_dist_fullbz.delete_file()
+
+    if config.output.save_quantities:
+        np.save(os.path.join(config.output.output_path, "mu_history.npy"), mu_history)
+        logger.log_info("Saved mu history as numpy array.")
+
     return sigma_old

@@ -220,7 +220,6 @@ def perform_local_schwinger_dyson(
     config.logger.log_info("Self-energy Sigma^v done.")
 
     # This is saved since it is needed for the double-counting correction in the non-local routine
-    # (2 * f_magn).save(name="f_1dens_3magn", output_dir=config.output.output_path)
     (f_dens + 3 * f_magn).save(name="f_1dens_3magn", output_dir=config.output.output_path)
 
     return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma

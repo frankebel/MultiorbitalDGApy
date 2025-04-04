@@ -5,8 +5,8 @@ from n_point_base import *
 
 class FourPoint(LocalFourPoint, IAmNonLocal):
     """
-    This class is used to represent a local four-point object in a given channel with a given number of momentum, orbital, bosonic and
-    fermionic frequency dimensions that are be added to keep track of (re-)shaping.
+    This class is used to represent a non-local four-point object in a given channel with a given number of momentum,
+    orbital, bosonic and fermionic frequency dimensions that are be added to keep track of (re-)shaping.
     """
 
     def __init__(
@@ -365,14 +365,18 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             if not is_local:
                 other = other.compress_q_dimension()
 
-            # special case if one of two (Local)FourPoint object has no fermionic frequency dimensions
+            # special case if one of two (Local)FourPoint objects has no fermionic frequency dimensions
             # straightforward contraction is saving memory as we do not have to add fermionic frequency dimensions
             einsum_str = {
-                (0, 2): f"qabcdw,{q_prefix}dcefwvp->qabefwvp",
-                (0, 1): f"qabcdw,{q_prefix}dcefwv->qabefwv",
-                (0, 0): f"qabcdw,{q_prefix}dcefw->qabefw",
-                (1, 0): f"qabcdwv,{q_prefix}dcefw->qabefwv",
-                (2, 0): f"qabcdwvp,{q_prefix}dcefw->qabefwvp",
+                (0, 2): (
+                    f"qabcdw,{q_prefix}dcefwvp->qabefwvp" if left_hand_side else f"{q_prefix}abcdwvp,dcefw->qabefwvp"
+                ),
+                (0, 1): f"qabcdw,{q_prefix}dcefwv->qabefwv" if left_hand_side else f"{q_prefix}abcdwv,dcefw->qabefwv",
+                (0, 0): f"qabcdw,{q_prefix}dcefw->qabefw" if left_hand_side else f"{q_prefix}abcdw,dcefw->qabefw",
+                (1, 0): f"qabcdwv,{q_prefix}dcefw->qabefwv" if left_hand_side else f"{q_prefix}abcdw,dcefwv->qabefwv",
+                (2, 0): (
+                    f"qabcdwvp,{q_prefix}dcefw->qabefwvp" if left_hand_side else f"{q_prefix}abcdw,dcefwvp->qabefwvp"
+                ),
             }.get((self.num_vn_dimensions, other.num_vn_dimensions))
 
             return FourPoint(
@@ -387,10 +391,21 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.frequency_notation,
             )
 
+        if self.num_vn_dimensions == 1 or other.num_vn_dimensions == 1:
+            einsum_str_map = {
+                (1, 1): "qabcdwv,qdcefwv->qabefwv",
+                (1, 2): "qabcdwv,qdcefwvp->qabefwvp" if left_hand_side else "qabcdwvp,qdcefwv->qabefwvp",
+                (2, 1): "qabcdwvp,qdcefwv->qabefwvp" if left_hand_side else "qabcdwv,qdcefwvp->qabefwvp",
+            }
+            einsum_str = einsum_str_map.get((self.num_vn_dimensions, other.num_vn_dimensions))
+            new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+            max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
+            return FourPoint(
+                new_mat, channel, self.nq, self.num_wn_dimensions, max_vn_dim, False, self.full_niv_range, True
+            )
+
         is_self_full_niw_range = self.full_niw_range
         is_other_full_niw_range = other.full_niw_range
-        self_extended = self.num_vn_dimensions == 1
-        other_extended = other.num_vn_dimensions == 1
 
         self.to_half_niw_range().to_compound_indices()
         other = other.to_half_niw_range().to_compound_indices()
@@ -401,37 +416,24 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             else np.matmul(other.mat[None, ...] if is_local else other.mat, self.mat)
         )
 
-        other_shape = (self.nq_tot, *other.original_shape) if is_local else other.original_shape
-
-        shape = (
-            self.original_shape
-            if self.num_vn_dimensions == max(self.num_vn_dimensions, other.num_vn_dimensions)
-            else other_shape
-        )
-        num_vn_dimensions = max(self.num_vn_dimensions, other.num_vn_dimensions)
-
         self.to_full_indices()
         if is_self_full_niw_range:
             self.to_full_niw_range()
-        if self_extended:
-            self.take_vn_diagonal()
         other = other.to_full_indices()
         if is_other_full_niw_range:
             other = other.to_full_niw_range()
-        if other_extended:
-            other = other.take_vn_diagonal()
 
         return FourPoint(
             new_mat,
             channel,
             self.nq,
             self.num_wn_dimensions,
-            num_vn_dimensions,
+            2,
             False,
             self.full_niv_range,
             self.has_compressed_q_dimension,
             self.frequency_notation,
-        ).to_full_indices(shape)
+        ).to_full_indices(self.original_shape)
 
     @staticmethod
     def load(

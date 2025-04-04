@@ -159,7 +159,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
             return SelfEnergy(self.mat + other, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
 
         other = self._align_q_dimensions_for_operations(other)
-        return SelfEnergy(self.mat + other.mat, self.nq, self.full_niv_range, True, False)
+        return SelfEnergy(self.mat + other.mat, self.nq, self.full_niv_range, self.has_compressed_q_dimension, False)
 
     def sub(self, other) -> "SelfEnergy":
         """
