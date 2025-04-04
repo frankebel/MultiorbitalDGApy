@@ -373,8 +373,8 @@ def calculate_self_energy_q(
         config.sys.mu = comm.bcast(config.sys.mu)
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
 
-        if i == 0:
-            sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
+        # this is done to minimize noise. We remove out some fluctuations from dmft and add the smooth dmft self-energy
+        sigma_new = sigma_new + sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
         sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
 
         if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
@@ -406,4 +406,5 @@ def calculate_self_energy_q(
         logger.log_info("Self-consistency not reached yet.")
 
     mpi_dist_irrk.delete_file()
+    mpi_dist_fullbz.delete_file()
     return sigma_old
