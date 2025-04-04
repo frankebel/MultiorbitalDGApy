@@ -2,9 +2,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 import config
-
-from matsubara_frequencies import MFHelper
 from greens_function import GreensFunction
+from matsubara_frequencies import MFHelper
 
 
 def sigma_loc_checks(

@@ -3,8 +3,8 @@ import logging
 
 import pandas as pd
 
-from interaction import *
 import brillouin_zone as bz
+from interaction import *
 
 
 class HoppingElement:

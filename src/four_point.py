@@ -132,7 +132,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         if self.num_vn_dimensions == 0:  # [q, o1, o2, o3, o4, w]
             self.mat = self.mat.transpose(0, 5, 1, 2, 3, 4).reshape(
-                self.nq_tot, 2 * self.niw + 1, self.n_bands**2, self.n_bands**2, copy=False
+                self.nq_tot, 2 * self.niw + 1, self.n_bands**2, self.n_bands**2
             )  # reshaping to [q,w,o1,o2,o3,o4] and then collecting {o1,o2} and {o3,o4} into two indices
             return self
 
@@ -141,7 +141,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         # [q, o1, o2, o3, o4, w, v, vp]
         self.mat = self.mat.transpose(0, 5, 1, 2, 6, 3, 4, 7).reshape(
-            self.nq_tot, 2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv, copy=False
+            self.nq_tot, 2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
         )  # reshaping to [q,w,o1,o2,v,o3,o4,vp] and then collecting {o1,o2,v} and {o3,o4,vp} into two indices
 
         return self
@@ -174,16 +174,16 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         if self.num_vn_dimensions == 0:  # original was [q,o1,o2,o3,o4,w]
             self.mat = self.mat.reshape(
-                (self.nq_tot,) + (2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions, copy=False
+                (self.nq_tot,) + (2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions
             ).transpose(0, 2, 3, 4, 5, 1)
             self._has_compressed_momentum_dimension = True
             return self
 
         compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
-        self.mat = self.mat.reshape(
-            (self.nq_tot,) + (2 * self.niw + 1,) + compound_index_shape * 2, copy=False
-        ).transpose(0, 2, 3, 5, 6, 1, 4, 7)
+        self.mat = self.mat.reshape((self.nq_tot,) + (2 * self.niw + 1,) + compound_index_shape * 2).transpose(
+            0, 2, 3, 5, 6, 1, 4, 7
+        )
 
         if self.num_vn_dimensions == 1:  # original was [q,o1,o2,o3,o4,w,v]
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
@@ -239,9 +239,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.compress_q_dimension()
 
             other_mat = other.mat[None, ...] if not isinstance(other, Interaction) else other.mat
-            other_mat = other_mat.reshape(
-                other.mat.shape + (1,) * (self.num_wn_dimensions + self.num_vn_dimensions), copy=False
-            )
+            other_mat = other_mat.reshape(other.mat.shape + (1,) * (self.num_wn_dimensions + self.num_vn_dimensions))
             return FourPoint(
                 self.mat + other_mat,
                 self.channel,

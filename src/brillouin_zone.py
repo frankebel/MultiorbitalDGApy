@@ -1,13 +1,13 @@
 """
  Module to handle operations within the (irreduzible) Brilloun zone. Copied over from Paul Worm's code.
- Only edited the constant arrays and made enums out of them for type hinting.
+ Only modified the constant arrays and made enums out of them for type hinting.
 """
 
 import warnings
 from enum import Enum
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class KnownSymmetries(Enum):

@@ -3,7 +3,6 @@ import os
 import re
 
 import mpi4py.MPI as MPI
-import numpy as np
 
 import config
 from four_point import FourPoint
@@ -127,10 +126,17 @@ def create_auxiliary_chi_r_q_sum(
 
     factor = gamma_r - v_nonloc.as_channel(gamma_r.channel) - u_loc.as_channel(gamma_r.channel)
     factor *= 1.0 / config.sys.beta**2
-    factor = (
-        FourPoint(factor, gamma_r.channel, config.lattice.nq, 1, 2, False, False, v_nonloc.has_compressed_q_dimension)
-        @ gchi0_q
+    factor = FourPoint(
+        factor,
+        gamma_r.channel,
+        config.lattice.nq,
+        1,
+        2,
+        gamma_r.full_niw_range,
+        True,
+        v_nonloc.has_compressed_q_dimension,
     )
+    factor = factor @ gchi0_q
     bse_sum = gchi0_q
     next_value = gchi0_q
     for _ in range(summands - 1):

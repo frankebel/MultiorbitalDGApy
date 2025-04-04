@@ -1,8 +1,8 @@
 import numpy as np
 
 import brillouin_zone as bz
-from hamiltonian import Hamiltonian
 from dga_logger import DgaLogger
+from hamiltonian import Hamiltonian
 
 
 class InteractionConfig:

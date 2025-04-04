@@ -4,9 +4,9 @@ from copy import deepcopy
 import numpy as np
 
 import config
+from local_n_point import LocalNPoint
 from matsubara_frequencies import MFHelper
 from n_point_base import IAmNonLocal
-from local_n_point import LocalNPoint
 
 
 class SelfEnergy(LocalNPoint, IAmNonLocal):
