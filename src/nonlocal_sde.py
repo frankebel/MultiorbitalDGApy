@@ -204,16 +204,17 @@ def calculate_sigma_kernel_r_q(
     gchi0_q_core_sum: FourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
+    comm: MPI.Comm,
 ) -> FourPoint:
     logger = config.logger
 
     gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
-    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r.memory_usage_in_gb, 1)
+    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, comm.size)
 
     vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_core_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
-    logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r.memory_usage_in_gb, 1)
+    logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, comm.size)
 
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
     del gchi_aux_q_r
@@ -319,9 +320,9 @@ def calculate_self_energy_q(
         logger.log_info("----------------------------------------")
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
-        logger.log_memory_usage("giwk", giwk_full.memory_usage_in_gb, 1)
+        logger.log_memory_usage("giwk", giwk_full, comm.size)
         gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list, irrk_factor)
-        logger.log_memory_usage("Gchi0_q_full", gchi0_q.memory_usage_in_gb, 1)
+        logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
 
         f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
@@ -331,20 +332,20 @@ def calculate_self_energy_q(
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
         gchi0_q_core = gchi0_q.cut_niv(config.box.niv_core)
         del gchi0_q
-        logger.log_memory_usage("Gchi0_q_core", gchi0_q_core.memory_usage_in_gb, 1)
+        logger.log_memory_usage("Gchi0_q_core", gchi0_q_core, comm.size)
 
         gchi0_q_core_inv = gchi0_q_core.invert().take_vn_diagonal()
-        logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv.memory_usage_in_gb, 1)
+        logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv, comm.size)
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core
 
         kernel += calculate_sigma_kernel_r_q(
-            gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+            gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, comm
         )
         logger.log_info("Calculated kernel for density channel.")
 
         kernel += 3 * calculate_sigma_kernel_r_q(
-            gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+            gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, comm
         )
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
@@ -357,7 +358,7 @@ def calculate_self_energy_q(
         logger.log_info("Self-energy calculated from kernel.")
 
         sigma_new.mat = mpi_dist_irrk.allreduce(sigma_new.mat)
-        logger.log_memory_usage("Non-local sigma", sigma_new.memory_usage_in_gb, 1)
+        logger.log_memory_usage("Non-local sigma", sigma_new, comm.size)
 
         sigma_new = sigma_new + hartree + fock
         logger.log_info("Full non-local self-energy calculated.")

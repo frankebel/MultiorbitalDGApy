@@ -110,7 +110,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if power == 1:
             return self
         if power < 0:
-            return (~self) ** abs(power)
+            return self.invert() ** abs(power)
 
         result = identity
         base = deepcopy(self)
@@ -183,7 +183,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         if self.num_vn_dimensions != 2:
             raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
-        return self.sum_over_vn(beta, axis=(-1, -2)).sum_over_orbitals("abcd->ad")
+        return self.sum_over_all_vn(beta).sum_over_orbitals("abcd->ad")
 
     def to_compound_indices(self) -> "LocalFourPoint":
         r"""

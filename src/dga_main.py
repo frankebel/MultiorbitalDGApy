@@ -29,8 +29,6 @@ def execute_dga_routine():
 
     g_dmft = comm.bcast(g_dmft, root=0)
     sigma_dmft = comm.bcast(sigma_dmft, root=0)
-    g2_dens = comm.bcast(g2_dens, root=0)
-    g2_magn = comm.bcast(g2_magn, root=0)
 
     logger.log_info("Config init and folder setup done.")
     logger.log_info("Loaded data from w2dyn file.")
@@ -39,8 +37,8 @@ def execute_dga_routine():
         (config.lattice, config.box, config.output, config.sys, config.self_consistency), root=0
     )
 
-    logger.log_memory_usage("giwk & siwk", g_dmft.memory_usage_in_gb, 2)
-    logger.log_memory_usage("g2_dens & g2_magn", g2_dens.memory_usage_in_gb, 2)
+    logger.log_memory_usage("giwk & siwk", g_dmft, 2 * comm.size)
+    logger.log_memory_usage("g2_dens & g2_magn", g2_dens, 2)
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
@@ -66,15 +64,11 @@ def execute_dga_routine():
         )
     else:
         gamma_dens, gamma_magn, chi_dens, chi_magn, vrg_dens, vrg_magn, f_dens, f_magn, sigma_local = (None,) * 9
+    del g2_dens, g2_magn
 
+    # there is no need to broadcast the other quantities
     gamma_dens = comm.bcast(gamma_dens, root=0)
     gamma_magn = comm.bcast(gamma_magn, root=0)
-    chi_dens = comm.bcast(chi_dens, root=0)
-    chi_magn = comm.bcast(chi_magn, root=0)
-    vrg_dens = comm.bcast(vrg_dens, root=0)
-    vrg_magn = comm.bcast(vrg_magn, root=0)
-    f_dens = comm.bcast(f_dens, root=0)
-    f_magn = comm.bcast(f_magn, root=0)
     sigma_local = comm.bcast(sigma_local, root=0)
 
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
@@ -89,9 +83,8 @@ def execute_dga_routine():
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
         f_dens.save(name="f_dens", output_dir=config.output.output_path)
         f_magn.save(name="f_magn", output_dir=config.output.output_path)
+        del vrg_dens, vrg_magn, f_dens, f_magn
         logger.log_info("Saved all relevant quantities as numpy files.")
-
-    del vrg_dens, vrg_magn, f_dens, f_magn
 
     if config.output.do_plotting and comm.rank == 0:
         gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
