@@ -177,7 +177,7 @@ class IHaveMat(ABC):
         if not all(isinstance(obj, (IHaveMat, np.ndarray)) for obj in args):
             raise ValueError("Args has atleast one object with the wrong type. Allowed are [IHaveMat] or [np.ndarray].")
         return np.einsum(
-            contraction, self.mat, *[obj.mat if isinstance(obj, IHaveMat) else obj for obj in args], optimize=True
+            contraction, self.mat, *[obj.mat if isinstance(obj, IHaveMat) else obj for obj in args], optimize="optimal"
         )
 
 

@@ -3,7 +3,6 @@ import os
 import re
 
 import mpi4py.MPI as MPI
-import numpy as np
 
 import config
 from four_point import FourPoint
@@ -16,7 +15,7 @@ from n_point_base import SpinChannel
 from self_energy import SelfEnergy
 
 
-def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_factor: int) -> FourPoint:
+def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
     """
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
@@ -206,9 +205,7 @@ def calculate_sigma_kernel_r_q(
     return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_sigma_from_kernel(
-    kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, irrk_factor
-) -> SelfEnergy:
+def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
@@ -219,12 +216,12 @@ def calculate_sigma_from_kernel(
     )
     kernel_r = kernel_r.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
-    g = giwk.decompress_q_dimension().cut_niv(config.box.niv_core + config.box.niw_core)
+    giwk = giwk.cut_niv(config.box.niw_core + config.box.niv_core)
 
     for idx_w, wn_i in enumerate(wn):
         for idx_q, q in enumerate(q_list):
-            g_qk = g.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
-            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=True)
+            g_qk = giwk.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
+            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize="optimal")
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
@@ -271,7 +268,6 @@ def calculate_self_energy_q(
     full_q_list = config.lattice.q_grid.get_q_list()
     irrk_q_list = config.lattice.q_grid.get_irrq_list()
     my_irr_q_list = irrk_q_list[mpi_dist_irrk.my_slice]
-    irrk_factor = config.lattice.k_grid.nk_tot // len(irrk_q_list)
 
     mpi_dist_fullbz = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_tot, comm=comm, name="FBZ")
     my_full_q_list = full_q_list[mpi_dist_fullbz.my_slice]
@@ -302,8 +298,9 @@ def calculate_self_energy_q(
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
         logger.log_memory_usage("giwk", giwk_full, comm.size)
-        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list, irrk_factor)
+        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
+        giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
         f_1dens_3magn = LocalFourPoint.load(
             os.path.join(config.output.output_path, "f_1dens_3magn.npy")
@@ -336,7 +333,7 @@ def calculate_self_energy_q(
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list, irrk_factor)
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
 
@@ -346,6 +343,11 @@ def calculate_self_energy_q(
         sigma_new = sigma_new + hartree + fock
         logger.log_info("Full non-local self-energy calculated.")
 
+        # this is done to minimize noise. We remove some fluctuations from dmft that are included in the local self
+        # energy calculated in this code and add the smooth dmft self-energy
+        sigma_new += delta_sigma
+        sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
+
         old_mu = config.sys.mu
         if comm.rank == 0:
             config.sys.mu = update_mu(
@@ -354,11 +356,6 @@ def calculate_self_energy_q(
         config.sys.mu = comm.bcast(config.sys.mu)
         mu_history.append(config.sys.mu)
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")
-
-        # this is done to minimize noise. We remove some fluctuations from dmft that are included in the local self
-        # energy calculated in this code and add the smooth dmft self-energy
-        sigma_new += delta_sigma
-        sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
 
         if config.self_consistency.use_poly_fit and config.poly_fitting.do_poly_fitting:
             sigma_new = sigma_new.fit_polynomial(
