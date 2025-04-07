@@ -55,4 +55,6 @@ class DgaLogger:
     def log_memory_usage(self, obj_name: str, obj: IHaveMat, n_exists: int = 1):
         if obj is None:
             return
-        self.log_info(f"{obj_name} {"uses" if n_exists == 1 else "use"} (GB): {obj.memory_usage_in_gb * n_exists:.6f}")
+        self.log_info(
+            f"{obj_name} {"uses" if n_exists == self._comm.size else "use"} (GB): {obj.memory_usage_in_gb * n_exists:.6f}"
+        )

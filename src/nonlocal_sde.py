@@ -60,18 +60,15 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
     )
 
 
-def get_qk_single_q(giwk: GreensFunction, q: tuple) -> np.ndarray:
+def get_qk_single_q_batch_w(giwk: GreensFunction, q: tuple, wn_batch: np.ndarray) -> np.ndarray:
     """
     Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v].
     """
     shifted_mat = giwk.shift_k_by_q([-i for i in q]).mat
-    return MFHelper.wn_slices_gen(shifted_mat, config.box.niv_core, config.box.niw_core).reshape(
-        config.lattice.k_grid.nk_tot,
-        config.sys.n_bands,
-        config.sys.n_bands,
-        2 * config.box.niw_core + 1,
-        2 * config.box.niv_core,
-    )
+    niv = shifted_mat.shape[-1] // 2
+    niv_core_range = np.arange(-config.box.niv_core, config.box.niv_core)
+    shifted_mat = shifted_mat[..., niv + niv_core_range[None, :] - wn_batch[:, None]]
+    return shifted_mat.reshape(config.lattice.k_grid.nk_tot, *shifted_mat.shape[3:])  # [k,o1,o2,w,v]
 
 
 def get_hartree_fock(
@@ -177,7 +174,7 @@ def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q: FourPoint,
     Returns the double-counting kernel for the self-energy calculation for only half the niv range to save computation time.
     """
     kernel = 1.0 / config.sys.beta**2 * u_loc.permute_orbitals("abcd->adcb") @ gchi0_q
-    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_1dens_3magn.to_half_niw_range())
+    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_1dens_3magn)
     return FourPoint(kernel, SpinChannel.NONE, config.lattice.nq, 1, 1, gchi0_q.full_niw_range, True, True).cut_niv(
         config.box.niv_core
     )
@@ -241,10 +238,18 @@ def calculate_sigma_from_kernel(
         dtype=kernel_r.mat.dtype,
     )
     kernel_r = kernel_r.to_full_niw_range()
+    wn = MFHelper.wn(config.box.niw_core)
+    g = giwk.decompress_q_dimension().cut_niv(config.box.niv_core + config.box.niw_core)
 
-    for idx, q in enumerate(q_list):
-        g = get_qk_single_q(giwk, q)
-        mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx], g, optimize=True)
+    batch_size = max(1, len(wn) // (2 * irrk_factor + 1))
+    for batch_start in range(0, len(wn), batch_size):
+        batch_end = min(batch_start + batch_size, len(wn))
+        wn_batch = wn[batch_start:batch_end]
+
+        for idx, q in enumerate(q_list):
+            g_q_w = get_qk_single_q_batch_w(g, q, wn_batch)
+            mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx, ..., batch_start:batch_end, :], g_q_w, optimize=True)
+
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
 
@@ -290,7 +295,7 @@ def calculate_self_energy_q(
     full_q_list = config.lattice.q_grid.get_q_list()
     irrk_q_list = config.lattice.q_grid.get_irrq_list()
     my_irr_q_list = irrk_q_list[mpi_dist_irrk.my_slice]
-    irrk_factor = len(full_q_list) // len(irrk_q_list)
+    irrk_factor = config.lattice.k_grid.nk_tot // len(irrk_q_list)
 
     mpi_dist_fullbz = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_tot, comm=comm, name="FBZ")
     my_full_q_list = full_q_list[mpi_dist_fullbz.my_slice]
@@ -324,7 +329,9 @@ def calculate_self_energy_q(
         gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list, irrk_factor)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
 
-        f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn.npy"))
+        f_1dens_3magn = LocalFourPoint.load(
+            os.path.join(config.output.output_path, "f_1dens_3magn.npy")
+        ).to_half_niw_range()
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
