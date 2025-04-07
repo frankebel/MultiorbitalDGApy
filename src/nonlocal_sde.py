@@ -3,6 +3,7 @@ import os
 import re
 
 import mpi4py.MPI as MPI
+import numpy as np
 
 import config
 from four_point import FourPoint
@@ -32,6 +33,7 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
         giwk.mat[:, :, :, :, None, None, :, giwk.niv + niv_full_range[None, :]]
         * np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None, None]
     )
+    g_left_mat = g_left_mat.reshape(config.lattice.k_grid.nk_tot, *g_left_mat.shape[3:])
 
     g_right = giwk.transpose_orbitals()
     # we do this to save memory and to avoid a full loop over all wn independently
@@ -39,36 +41,23 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
     # the batch size is determined by the largest object, which is gchi_aux. The factor "irrk_factor" is the difference
     # in storage between an item in the full bz and the irr bz. This way the batch size is as large as it can be
     # to not exceed memory, i.e. such that the objects are still smaller than gchi_aux
-    batch_size = max(1, config.box.niv_core // (2 * irrk_factor))
+    batch_size = max(1, config.box.niv_core // (2 * irrk_factor + 1))
     for batch_start in range(0, len(wn), batch_size):
         batch_end = min(batch_start + batch_size, len(wn))
         wn_batch = wn[batch_start:batch_end]
 
         for idx, q in enumerate(q_list):
             g_right_mat = (
-                g_right.shift_k_by_q([-i for i in q]).mat[
-                    :, :, :, None, :, :, None, giwk.niv + niv_full_range[None, :] - wn_batch[:, None]
-                ]
-                * np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None, None]
+                g_right.get_g_qk_single_q(q, wn_batch, config.box.niv_full)[:, None, :, :, None, ...]
+                * np.eye(config.sys.n_bands)[None, :, None, None, :, None, None]
             )
-            gchi0_q[idx, ..., batch_start:batch_end, :] = np.sum(g_left_mat * g_right_mat, axis=(0, 1, 2))
+            gchi0_q[idx, ..., batch_start:batch_end, :] = np.sum(g_left_mat * g_right_mat, axis=0)
 
     gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
 
     return FourPoint(
         gchi0_q, SpinChannel.NONE, config.lattice.nq, 1, 1, full_niw_range=False, has_compressed_q_dimension=True
     )
-
-
-def get_qk_single_q_batch_w(giwk: GreensFunction, q: tuple, wn_batch: np.ndarray) -> np.ndarray:
-    """
-    Returns G_{ab}^{q-k} for a single q point, shape is [k,o1,o2,w,v].
-    """
-    shifted_mat = giwk.shift_k_by_q([-i for i in q]).mat
-    niv = shifted_mat.shape[-1] // 2
-    niv_core_range = np.arange(-config.box.niv_core, config.box.niv_core)
-    shifted_mat = shifted_mat[..., niv + niv_core_range[None, :] - wn_batch[:, None]]
-    return shifted_mat.reshape(config.lattice.k_grid.nk_tot, *shifted_mat.shape[3:])  # [k,o1,o2,w,v]
 
 
 def get_hartree_fock(
@@ -241,13 +230,13 @@ def calculate_sigma_from_kernel(
     wn = MFHelper.wn(config.box.niw_core)
     g = giwk.decompress_q_dimension().cut_niv(config.box.niv_core + config.box.niw_core)
 
-    batch_size = max(1, len(wn) // (2 * irrk_factor + 4))
+    batch_size = 1  # max(1, len(wn) // (3 * irrk_factor))
     for batch_start in range(0, len(wn), batch_size):
         batch_end = min(batch_start + batch_size, len(wn))
         wn_batch = wn[batch_start:batch_end]
 
         for idx, q in enumerate(q_list):
-            g_q_w = get_qk_single_q_batch_w(g, q, wn_batch)
+            g_q_w = g.get_g_qk_single_q(q, wn_batch, config.box.niv_core)
             mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx, ..., batch_start:batch_end, :], g_q_w, optimize=True)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot

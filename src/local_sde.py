@@ -191,7 +191,7 @@ def get_loc_self_energy_vrg(
     see Paul Worm's thesis, Eq. (3.70) and Anna Galler's Thesis, P. 76 ff.
     """
     # 1=i, 2=j, 3=k, 4=l, 7=o, 8=p
-    g_wv = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
+    g_wv = g_loc.get_g_wv(MFHelper.wn(config.box.niw_core), config.box.niv_core)
     inner = vrg_dens - vrg_dens @ u_loc.as_channel(SpinChannel.DENS) @ gchi_dens_sum
     inner -= vrg_magn - vrg_magn @ u_loc.as_channel(SpinChannel.MAGN) @ gchi_magn_sum
     inner = 0.5 * inner.to_full_niw_range()
@@ -235,8 +235,8 @@ def get_loc_self_energy_gamma_abinitio_dga(
     Returns the local self-energy with the three-leg gamma from AbinitioDGA
     .. math:: \Sigma_{ij}^{v} = -1/\beta \sum_w [ U_{iabc} * \gamma_{cbdj}^{wv} * G_{ad}^{w-v} ]
     """
-    g_1 = MFHelper.wn_slices_gen(g_loc.mat, config.box.niv_core, config.box.niw_core)
-    sigma = -1.0 / config.sys.beta * u_loc.times("iabc,cbdjwv,adwv->ijv", gamma_dens, g_1)
+    g_wv = g_loc.get_g_wv(MFHelper.wn(config.box.niw_core), config.box.niv_core)
+    sigma = -1.0 / config.sys.beta * u_loc.times("iabc,cbdjwv,adwv->ijv", gamma_dens, g_wv)
     hartree = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
     return SelfEnergy(sigma + hartree)
 

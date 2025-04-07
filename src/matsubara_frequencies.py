@@ -100,22 +100,3 @@ class MFHelper:
     def _get_frequencies_for_channel_conversion(niw: int, niv: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         wn, vn = MFHelper.wn(niw), MFHelper.vn(niv)
         return wn[:, None, None], vn[None, :, None], vn[None, None, :]
-
-    @staticmethod
-    def wn_slices_gen(mat: np.ndarray, niv_cut: int, niw: int) -> np.ndarray:
-        niv = mat.shape[-1] // 2
-        w = MFHelper.wn(niw)
-        return np.moveaxis(np.array([mat[..., niv - niv_cut - iwn : niv + niv_cut - iwn] for iwn in w]), 0, -2)
-
-    @staticmethod
-    def fermionic_full_niv_range(mat: np.ndarray, axis=(-1,)):
-        """Build full fermionic object from positive frequencies only along axis."""
-        return np.concatenate((np.conj(np.flip(mat, axis)), mat), axis=axis)
-
-    @staticmethod
-    def bosonic_full_niw_range(mat: np.ndarray, axis=(-1,), freq_axes=None):
-        """Build full Bosonic object from positive frequencies only along axis."""
-        ind = np.arange(1, np.shape(mat)[axis])
-        if freq_axes is None:
-            freq_axes = axis
-        return np.concatenate((np.conj(np.flip(np.take(mat, ind, axis=axis), freq_axes)), mat), axis=axis)
