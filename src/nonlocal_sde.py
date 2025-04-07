@@ -36,22 +36,13 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, irrk_fac
     g_left_mat = g_left_mat.reshape(config.lattice.k_grid.nk_tot, *g_left_mat.shape[3:])
 
     g_right = giwk.transpose_orbitals()
-    # we do this to save memory and to avoid a full loop over all wn independently
-    # since we have to have the full bz for this, we do it in batches
-    # the batch size is determined by the largest object, which is gchi_aux. The factor "irrk_factor" is the difference
-    # in storage between an item in the full bz and the irr bz. This way the batch size is as large as it can be
-    # to not exceed memory, i.e. such that the objects are still smaller than gchi_aux
-    batch_size = max(1, config.box.niv_core // (2 * irrk_factor + 1))
-    for batch_start in range(0, len(wn), batch_size):
-        batch_end = min(batch_start + batch_size, len(wn))
-        wn_batch = wn[batch_start:batch_end]
-
-        for idx, q in enumerate(q_list):
+    for idx_w, wn_i in enumerate(wn):
+        for idx_q, q in enumerate(q_list):
             g_right_mat = (
-                g_right.get_g_qk_single_q(q, wn_batch, config.box.niv_full)[:, None, :, :, None, ...]
+                g_right.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_full)[:, None, :, :, None, ...]
                 * np.eye(config.sys.n_bands)[None, :, None, None, :, None, None]
             )
-            gchi0_q[idx, ..., batch_start:batch_end, :] = np.sum(g_left_mat * g_right_mat, axis=0)
+            gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat, axis=0)
 
     gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
 
@@ -230,14 +221,10 @@ def calculate_sigma_from_kernel(
     wn = MFHelper.wn(config.box.niw_core)
     g = giwk.decompress_q_dimension().cut_niv(config.box.niv_core + config.box.niw_core)
 
-    batch_size = 1  # max(1, len(wn) // (3 * irrk_factor))
-    for batch_start in range(0, len(wn), batch_size):
-        batch_end = min(batch_start + batch_size, len(wn))
-        wn_batch = wn[batch_start:batch_end]
-
-        for idx, q in enumerate(q_list):
-            g_q_w = g.get_g_qk_single_q(q, wn_batch, config.box.niv_core)
-            mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx, ..., batch_start:batch_end, :], g_q_w, optimize=True)
+    for idx_w, wn_i in enumerate(wn):
+        for idx_q, q in enumerate(q_list):
+            g_qk = g.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
+            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=True)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
