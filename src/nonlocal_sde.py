@@ -241,7 +241,7 @@ def calculate_sigma_from_kernel(
     wn = MFHelper.wn(config.box.niw_core)
     g = giwk.decompress_q_dimension().cut_niv(config.box.niv_core + config.box.niw_core)
 
-    batch_size = max(1, len(wn) // (2 * irrk_factor + 1))
+    batch_size = max(1, len(wn) // (2 * irrk_factor + 4))
     for batch_start in range(0, len(wn), batch_size):
         batch_end = min(batch_start + batch_size, len(wn))
         wn_batch = wn[batch_start:batch_end]
