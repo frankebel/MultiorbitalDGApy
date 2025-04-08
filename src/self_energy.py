@@ -119,23 +119,6 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         )
         return copy
 
-    def extend_to_multi_orbital(self, padding_object: "SelfEnergy", n_bands: int) -> "SelfEnergy":
-        """
-        Mainly for testing. Extends the single-orbital object to a multi-orbital object, putting padding_object in the new bands.
-        """
-        if (
-            self.num_orbital_dimensions != padding_object.num_orbital_dimensions
-            or self.num_wn_dimensions != padding_object.num_wn_dimensions
-            or self.num_vn_dimensions != padding_object.num_vn_dimensions
-        ):
-            raise ValueError("Number of orbital, bosonic or fermionic frequency dimensions do not match.")
-
-        shape = (n_bands,) * self.num_orbital_dimensions + (1,) * (self.num_wn_dimensions + self.num_vn_dimensions)
-
-        new_mat = np.tile(padding_object.mat, shape)
-        new_mat[0, 0, ...] = self.mat[0, 0, ...]
-        return SelfEnergy(new_mat[None, None, None, ...])
-
     def __add__(self, other):
         """
         Adds two SelfEnergy objects.
@@ -167,18 +150,21 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         """
         return self.add(-other)
 
-    def pad_with_dmft_self_energy(self, other: "SelfEnergy") -> "SelfEnergy":
+    def concatenate_self_energies(self, other: "SelfEnergy") -> "SelfEnergy":
         """
-        Pads the self-energy with the other self-energy up to the DMFT self-energy niv.
+        Concats the self-energy with the other self-energy up to other.niv.
         """
         if self.niv > other.niv:
-            raise ValueError("Can not pad with a self-energy that has less frequencies.")
+            raise ValueError("Can not concatenate with a self-energy that has less frequencies.")
         niv_diff = other.niv - self.niv
 
         self.compress_q_dimension()
-        other.compress_q_dimension()
+        other = other.compress_q_dimension()
 
-        other_mat = np.tile(other.mat, (self.nq_tot, 1, 1, 1))
+        if other.nq_tot == 1:
+            other_mat = np.tile(other.mat, (self.nq_tot, 1, 1, 1))
+        else:
+            other_mat = other.mat
         result_mat = np.concatenate(
             (other_mat[..., :niv_diff], self.mat, other_mat[..., niv_diff + 2 * self.niv :]), axis=-1
         )

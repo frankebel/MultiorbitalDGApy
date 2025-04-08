@@ -61,17 +61,27 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         """
         return self.sub(other)
 
+    def __mul__(self, other) -> "FourPoint":
+        r"""
+        Allows for the multiplication with a number, a numpy array or a FourPoint object. In the latter case,
+        we require both objects to only have one niv dimension, such that
+
+        .. math:: A_{abcd}^{qv} * B_{dcef}^{qv'} = C_{abef}^{qvv'}.
+        Returns the object in the half niw range.
+        """
+        return self.mul(other)
+
     def __matmul__(self, other) -> "FourPoint":
         """
         Matrix multiplication for FourPoint objects. Allows for A @ B = C using compound indices.
         """
-        return self.matmul(other, True)
+        return self.matmul(other, left_hand_side=True)
 
     def __rmatmul__(self, other) -> "FourPoint":
         """
         Matrix multiplication for FourPoint objects. Allows for A @ B = C using compound indices.
         """
-        return self.matmul(other, False)
+        return self.matmul(other, left_hand_side=False)
 
     def __pow__(self, power, modulo=None) -> "FourPoint":
         """
@@ -313,6 +323,41 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         """
         return self.add(-other)
 
+    def mul(self, other):
+        r"""
+        Allows for the multiplication with a number, a numpy array or a FourPoint object. In the latter case,
+        we require both objects to only have one niv dimension, such that
+
+        .. math:: A_{abcd}^{qv} * B_{dcef}^{qv'} = C_{abef}^{qvv'}.
+        Returns the object in the half niw range.
+        """
+        if not isinstance(other, (int, float, complex, np.ndarray, LocalFourPoint)):
+            raise ValueError("Multiplication only supported with numbers, numpy arrays or FourPoint objects.")
+
+        if not isinstance(other, LocalFourPoint):
+            copy = deepcopy(self)
+            copy.mat *= other
+            return copy
+
+        if self.num_vn_dimensions != 1 or other.num_vn_dimensions != 1:
+            raise ValueError("Both objects must have only one fermionic frequency dimension.")
+
+        is_self_full_niw_range = self.full_niw_range
+        is_other_full_niw_range = other.full_niw_range
+
+        self.to_half_niw_range()
+        other = other.to_half_niw_range()
+        result_mat = self.times("qabcdwv,qdcefwp->qabefwvp", other)
+
+        if is_self_full_niw_range:
+            self.to_full_niw_range()
+        if is_other_full_niw_range:
+            other = other.to_full_niw_range()
+
+        return FourPoint(
+            result_mat, self.channel, self.nq, 1, 2, False, False, True, self.frequency_notation
+        ).to_full_niv_range()
+
     def matmul(self, other, left_hand_side: bool = True) -> "FourPoint":
         """
         Helper method that allows for matrix multiplication for (non-)local FourPoint objects. Depending on the
@@ -442,11 +487,11 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         nq: tuple[int, int, int] = (1, 1, 1),
         num_wn_dimensions: int = 1,
         num_vn_dimensions: int = 2,
-        full_niw_range: bool = True,
+        full_niw_range: bool = False,
         full_niv_range: bool = True,
         has_compressed_q_dimension: bool = False,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
-    ) -> "LocalFourPoint":
+    ) -> "FourPoint":
         return FourPoint(
             np.load(filename, allow_pickle=False),
             channel,

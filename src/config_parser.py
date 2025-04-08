@@ -53,6 +53,7 @@ class ConfigParser:
         config.dmft = self._build_dmft_config(conf_file)
         config.output = self._build_output_config(conf_file)
         config.self_consistency = self._build_self_consistency_config(conf_file)
+        config.eliashberg = self._build_eliashberg_config(conf_file)
         config.poly_fitting = self._build_poly_fitting_config(conf_file)
         config.box = self._build_box_config(conf_file)
         config.lattice = self._build_lattice_config(conf_file)
@@ -159,7 +160,25 @@ class ConfigParser:
 
         return conf
 
+    def _build_eliashberg_config(self, conf_file) -> EliashbergConfig:
+        """
+        Builds the Eliashberg config from the config file. Mainly concerned with the Eliashberg equation.
+        """
+        conf = EliashbergConfig()
+        eliashberg_section = conf_file["eliashberg"]
+
+        conf.perform_eliashberg = self._try_parse(eliashberg_section, "perform_eliashberg", False)
+        conf.save_pairing_vertex = self._try_parse(eliashberg_section, "save_pairing_vertex", True)
+        conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
+        conf.max_iter = self._try_parse(eliashberg_section, "max_iter", 3)
+        conf.subfolder_name = self._try_parse(eliashberg_section, "subfolder_name", "Eliashberg")
+
+        return conf
+
     def _build_poly_fitting_config(self, conf_file) -> PolyFittingConfig:
+        """
+        Builds the poly fitting config from the config file. Mainly concerned with the polynomial fitting of the self-energy.
+        """
         conf = PolyFittingConfig()
         poly_fitting_section = conf_file["poly_fitting"]
 

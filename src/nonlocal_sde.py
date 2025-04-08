@@ -150,7 +150,7 @@ def create_generalized_chi_q_with_shell_correction(
 
 def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q: FourPoint, u_loc: LocalInteraction) -> FourPoint:
     """
-    Returns the double-counting kernel for the self-energy calculation for only half the niv range to save computation time.
+    Returns the double-counting kernel for the self-energy calculation.
     """
     kernel = 1.0 / config.sys.beta**2 * u_loc.permute_orbitals("abcd->adcb") @ gchi0_q
     kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_1dens_3magn)
@@ -188,9 +188,21 @@ def calculate_sigma_kernel_r_q(
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
     logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, comm.size)
 
+    if config.eliashberg.perform_eliashberg:
+        gchi_aux_q_r.save(
+            name=f"gchi_aux_q_{gchi_aux_q_r.channel.value}_rank_{comm.rank}",
+            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+        )
+
     vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_core_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, comm.size)
+
+    if config.eliashberg.perform_eliashberg:
+        vrg_q_r.save(
+            name=f"vrg_q_{vrg_q_r.channel.value}_rank_{comm.rank}",
+            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+        )
 
     gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
     del gchi_aux_q_r
@@ -201,6 +213,15 @@ def calculate_sigma_kernel_r_q(
     logger.log_info(
         f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
     )
+    logger.log_memory_usage(
+        f"Summed auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value})", gchi_aux_q_r_sum, comm.size
+    )
+
+    if config.eliashberg.perform_eliashberg:
+        gchi_aux_q_r_sum.save(
+            name=f"gchi_aux_q_{gchi_aux_q_r_sum.channel.value}_sum_rank_{comm.rank}",
+            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+        )
 
     return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
@@ -216,12 +237,11 @@ def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_lis
     )
     kernel_r = kernel_r.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
-    giwk = giwk.cut_niv(config.box.niw_core + config.box.niv_core)
 
     for idx_w, wn_i in enumerate(wn):
         for idx_q, q in enumerate(q_list):
             g_qk = giwk.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
-            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize="optimal")
+            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=True)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
@@ -302,9 +322,7 @@ def calculate_self_energy_q(
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
-        f_1dens_3magn = LocalFourPoint.load(
-            os.path.join(config.output.output_path, "f_1dens_3magn.npy")
-        ).to_half_niw_range()
+        f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
@@ -316,6 +334,12 @@ def calculate_self_energy_q(
 
         gchi0_q_core_inv = gchi0_q_core.invert().take_vn_diagonal()
         logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv, comm.size)
+
+        gchi0_q_core_inv.save(
+            name=f"gchi0_q_inv_rank_{comm.rank}",
+            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+        )
+
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core
 
@@ -330,9 +354,13 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
 
+        giwk = giwk.cut_niv(config.box.niw_core + config.box.niv_core)
+
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
-        kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
+        if comm.rank == 0:
+            kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
+
         sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
@@ -346,7 +374,7 @@ def calculate_self_energy_q(
         # this is done to minimize noise. We remove some fluctuations from dmft that are included in the local self
         # energy calculated in this code and add the smooth dmft self-energy
         sigma_new += delta_sigma
-        sigma_new = sigma_new.pad_with_dmft_self_energy(sigma_dmft)
+        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)
 
         old_mu = config.sys.mu
         if comm.rank == 0:

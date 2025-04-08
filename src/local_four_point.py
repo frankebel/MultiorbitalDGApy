@@ -59,9 +59,12 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         return self.sub(other)
 
     def __mul__(self, other) -> "LocalFourPoint":
-        """
-        Multiplication for LocalFourPoint objects. Allows for the multiplication with numbers, numpy arrays and
-        other LocalFourPoint objects, such that A^{v} * B^{v'} = C^{vv'}.
+        r"""
+        Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter case,
+        we require both objects to only have one niv dimension, such that
+
+        .. math:: A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}.
+        Returns the object in the half niw range.
         """
         return self.mul(other)
 
@@ -343,10 +346,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def mul(self, other):
         r"""
-        Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter instance,
+        Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter case,
         we require both objects to only have one niv dimension, such that
 
-        .. math:: A_{abcd}^v * B_{abcd}^{v'} = C_{abcd}^{vv'}.
+        .. math:: A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}.
+        Returns the object in the half niw range.
         """
         if not isinstance(other, (int, float, complex, np.ndarray, LocalFourPoint)):
             raise ValueError("Multiplication only supported with numbers, numpy arrays or LocalFourPoint objects.")
@@ -361,15 +365,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         self.to_half_niw_range().to_half_niv_range()
         other = other.to_half_niw_range().to_half_niv_range()
-        result_mat = self.times("abcdwv,abcdwp->abcdwvp", other)
+        result_mat = self.times("abcdwv,dcefwp->abefwvp", other)
         self.to_full_niw_range().to_full_niv_range()
         other = other.to_full_niw_range().to_full_niv_range()
 
-        return (
-            LocalFourPoint(result_mat, self.channel, 1, 2, False, False, self.frequency_notation)
-            .to_full_niw_range()
-            .to_full_niv_range()
-        )
+        return LocalFourPoint(result_mat, self.channel, 1, 2, False, False, self.frequency_notation).to_full_niv_range()
 
     def add(self, other):
         """
@@ -592,7 +592,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         channel: SpinChannel = SpinChannel.NONE,
         num_wn_dimensions: int = 1,
         num_vn_dimensions: int = 2,
-        full_niw_range: bool = True,
+        full_niw_range: bool = False,
         full_niv_range: bool = True,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ) -> "LocalFourPoint":

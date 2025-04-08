@@ -5,6 +5,7 @@ from mpi4py import MPI
 
 import config
 import dga_io
+import eliashberg_iterator
 import local_sde
 import nonlocal_sde
 import plotting
@@ -155,7 +156,15 @@ def execute_dga_routine():
         logger.log_info("Saved fitted non-local ladder-DGA self-energy as numpy file.")
         del sigma_fit
 
+    del gamma_dens, gamma_magn, sigma_dmft, sigma_local
+
     logger.log_info("DGA routine finished.")
+
+    if config.eliashberg.perform_eliashberg:
+        logger.log_info("Starting with Eliashberg equation.")
+        giwk = GreensFunction.get_g_full(sigma_dga, config.sys.mu, ek)
+        lambda_sing, lambda_trip = eliashberg_iterator.solve(giwk, u_loc, v_nonloc, comm)
+
     logger.log_info("Exiting ...")
     MPI.Finalize()
 

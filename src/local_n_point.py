@@ -253,11 +253,9 @@ class LocalNPoint(IHaveMat):
 
     def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """
-        Saves the content of the matrix to a file.
+        Saves the content of the matrix to a file. Always saves it with half the niw range.
         """
-        copy = deepcopy(self).to_full_niw_range().to_full_niv_range()
-        np.save(os.path.join(output_dir, f"{name}.npy"), copy.mat, allow_pickle=False)
-        del copy
+        np.save(os.path.join(output_dir, f"{name}.npy"), self.to_half_niw_range().mat, allow_pickle=False)
 
     def _align_frequency_dimensions_for_operation(self, other: "LocalNPoint"):
         """

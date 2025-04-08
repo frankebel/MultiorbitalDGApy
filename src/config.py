@@ -77,6 +77,21 @@ class SelfConsistencyConfig:
         self.previous_sc_path: str = "/."
 
 
+class EliashbergConfig:
+    """
+    Class to store the configuration for the Eliashberg equation. It is defined by the option to perform the Eliashberg
+    equation, the maximum number of iterations, the option to save the pairing vertex and the convergence criterion
+    epsilon. The Eliashberg equation is solved after the self-consistency loop.
+    """
+
+    def __init__(self):
+        self.perform_eliashberg: bool = True
+        self.max_iter: int = 3
+        self.save_pairing_vertex: bool = True
+        self.epsilon: float = 1e-4
+        self.subfolder_name: str = "Eliashberg"
+
+
 class DmftConfig:
     """
     Class to store the DMFT parameters. The DMFT input is defined by the type of input, the input path, the filenames
@@ -143,3 +158,4 @@ sys: SystemConfig = SystemConfig()
 output: OutputConfig = OutputConfig()
 poly_fitting: PolyFittingConfig = PolyFittingConfig()
 self_consistency: SelfConsistencyConfig = SelfConsistencyConfig()
+eliashberg: EliashbergConfig = EliashbergConfig()
