@@ -310,7 +310,7 @@ def calculate_self_energy_q(
     wn_batch_size = max(
         1,
         (len(my_irr_q_list) * (2 * config.box.niw_core + 1) * (2 * config.box.niv_core) ** 2)
-        // (2 * config.lattice.k_grid.nk_tot * 2 * config.box.niv_full)
+        // (4 * config.lattice.k_grid.nk_tot * 2 * config.box.niv_full)
         - 2,
     )
     logger.log_info(f"Batch size for wn loop is set to {wn_batch_size}.")
