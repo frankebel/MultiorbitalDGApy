@@ -437,12 +437,11 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             )
 
         if self.num_vn_dimensions == 1 or other.num_vn_dimensions == 1:
-            einsum_str_map = {
+            einsum_str = {
                 (1, 1): "qabcdwv,qdcefwv->qabefwv",
-                (1, 2): "qabcdwv,qdcefwvp->qabefwvp" if left_hand_side else "qabcdwvp,qdcefwv->qabefwvp",
-                (2, 1): "qabcdwvp,qdcefwv->qabefwvp" if left_hand_side else "qabcdwv,qdcefwvp->qabefwvp",
-            }
-            einsum_str = einsum_str_map.get((self.num_vn_dimensions, other.num_vn_dimensions))
+                (1, 2): "qabcdwv,qdcefwvp->qabefwvp" if left_hand_side else "qabcdwvp,qdcefwp->qabefwvp",
+                (2, 1): "qabcdwvp,qdcefwp->qabefwvp" if left_hand_side else "qabcdwv,qdcefwvp->qabefwvp",
+            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
             new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True)
             max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
             return FourPoint(

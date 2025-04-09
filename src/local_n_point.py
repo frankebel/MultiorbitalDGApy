@@ -107,22 +107,16 @@ class LocalNPoint(IHaveMat):
 
         copy = deepcopy(self)
 
-        if copy.full_niw_range:
-            if copy.num_vn_dimensions == 2:
-                copy.mat = copy.mat[..., copy.niw - niw_cut : copy.niw + niw_cut + 1, :, :]
-            elif copy.num_vn_dimensions == 1:
-                copy.mat = copy.mat[..., copy.niw - niw_cut : copy.niw + niw_cut + 1, :]
-            elif copy.num_vn_dimensions == 0:
-                copy.mat = copy.mat[..., copy.niw - niw_cut : copy.niw + niw_cut + 1]
-        else:
-            if copy.num_vn_dimensions == 2:
-                copy.mat = copy.mat[..., :niw_cut, :, :]
-            elif copy.num_vn_dimensions == 1:
-                copy.mat = copy.mat[..., :niw_cut, :]
-            elif copy.num_vn_dimensions == 0:
-                copy.mat = copy.mat[..., :niw_cut]
+        niw_slice = slice(copy.niw - niw_cut, copy.niw + niw_cut + 1) if copy.full_niw_range else slice(0, niw_cut)
 
-        copy.original_shape = copy.mat.shape
+        if copy.num_vn_dimensions == 2:
+            copy.mat = copy.mat[..., niw_slice, :, :]
+        elif copy.num_vn_dimensions == 1:
+            copy.mat = copy.mat[..., niw_slice, :]
+        else:  # copy.num_vn_dimensions == 0
+            copy.mat = copy.mat[..., niw_slice]
+
+        copy.update_original_shape()
         return copy
 
     def cut_niv(self, niv_cut: int):
@@ -137,20 +131,14 @@ class LocalNPoint(IHaveMat):
 
         copy = deepcopy(self)
 
-        if copy.full_niv_range:
-            if copy.num_vn_dimensions == 2:
-                copy.mat = copy.mat[
-                    ..., copy.niv - niv_cut : copy.niv + niv_cut, copy.niv - niv_cut : copy.niv + niv_cut
-                ]
-            elif copy.num_vn_dimensions == 1:
-                copy.mat = copy.mat[..., copy.niv - niv_cut : copy.niv + niv_cut]
-        else:
-            if copy.num_vn_dimensions == 2:
-                copy.mat = copy.mat[..., :niv_cut, :niv_cut]
-            elif copy.num_vn_dimensions == 1:
-                copy.mat = copy.mat[..., :niv_cut]
+        niv_slice = slice(copy.niv - niv_cut, copy.niv + niv_cut) if copy.full_niv_range else slice(0, niv_cut)
 
-        copy.original_shape = copy.mat.shape
+        if copy.num_vn_dimensions == 2:
+            copy.mat = copy.mat[..., niv_slice, niv_slice]
+        elif copy.num_vn_dimensions == 1:
+            copy.mat = copy.mat[..., niv_slice]
+
+        copy.update_original_shape()
         return copy
 
     def cut_niw_and_niv(self, niw_cut: int, niv_cut: int):
@@ -255,7 +243,10 @@ class LocalNPoint(IHaveMat):
         """
         Saves the content of the matrix to a file. Always saves it with half the niw range.
         """
+        is_self_full_niw_range = self.full_niw_range
         np.save(os.path.join(output_dir, f"{name}.npy"), self.to_half_niw_range().mat, allow_pickle=False)
+        if is_self_full_niw_range:
+            self.to_full_niw_range()
 
     def _align_frequency_dimensions_for_operation(self, other: "LocalNPoint"):
         """

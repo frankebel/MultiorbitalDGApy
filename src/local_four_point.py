@@ -497,14 +497,13 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
 
     def change_frequency_notation_ph_to_pp(self) -> "LocalFourPoint":
-        """
-        Changes the frequency notation of the object from ph to pp and returns the object.
+        r"""
+        Changes the frequency notation of the object from ph to pp and returns the object. The frequency shifts are
+
+        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (w - v_1 - v_2, v_1, v_2).
         """
         if self.num_wn_dimensions + self.num_vn_dimensions != 3:
             raise ValueError("Only objects with three frequency dimensions are supported.")
-
-        if self.channel != SpinChannel.DENS and self.channel != SpinChannel.MAGN:
-            raise ValueError("Only density and magnetic objects are supported.")
 
         iw_pp, iv_pp, ivp_pp = MFHelper.get_frequencies_for_ph_to_pp_channel_conversion(self.niw, self.niv)
 

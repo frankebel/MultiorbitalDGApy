@@ -147,13 +147,13 @@ def execute_dga_routine():
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_dga.save(name=f"sigma_dga", output_dir=config.output.output_path)
-        logger.log_info("Saved non-local ladder-DGA self-energy as numpy file.")
+        logger.log_info("Saved non-local self energy as numpy file.")
 
     if config.poly_fitting.do_poly_fitting and not config.self_consistency.use_poly_fit:
         sigma_fit = sigma_dga.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
         sigma_fit.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
         logger.log_info(f"Fitted polynomial of degree {config.poly_fitting.o_fit} to sigma.")
-        logger.log_info("Saved fitted non-local ladder-DGA self-energy as numpy file.")
+        logger.log_info("Saved fitted non-local self energy as numpy file.")
         del sigma_fit
 
     del gamma_dens, gamma_magn, sigma_dmft, sigma_local

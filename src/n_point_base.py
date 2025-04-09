@@ -38,9 +38,18 @@ class IHaveChannel(ABC):
     def channel(self) -> SpinChannel:
         """
         Returns the channel reducibility (not the frequency notation) of the object.
-        For a set of available channels, see class Channel.
+        For a set of available channels, see class SpinChannel.
         """
         return self._channel
+
+    @channel.setter
+    def channel(self, value: SpinChannel) -> None:
+        """
+        Sets the channel reducibility of the object. For a set of available channels, see class SpinChannel.
+        """
+        if not isinstance(value, SpinChannel):
+            raise ValueError("Channel must be of type SpinChannel.")
+        self._channel = value
 
     @property
     def frequency_notation(self) -> FrequencyNotation:
@@ -49,6 +58,15 @@ class IHaveChannel(ABC):
         For a set of available notations, see class FrequencyNotation.
         """
         return self._frequency_notation
+
+    @frequency_notation.setter
+    def frequency_notation(self, value: FrequencyNotation) -> None:
+        """
+        Sets the frequency notation of the object. For a set of available notations, see class FrequencyNotation.
+        """
+        if not isinstance(value, FrequencyNotation):
+            raise ValueError("Frequency notation must be of type FrequencyNotation.")
+        self._frequency_notation = value
 
 
 class IHaveMat(ABC):
