@@ -303,14 +303,14 @@ def calculate_self_energy_q(
     # The batch size is determined by the largest object in the dga routine. This will be gchi_aux. Its size (excluding
     # orbital dimensions) is [nq_irr,niw^2,niv_core^2]. Here, we will batch over omega to speed up the process. The batch
     # size depends on the size of gchi_aux. We still want gchi_aux to be the largest object, i.e., we require
-    # [nq_irr_rank,niw,niv_core^2] >= [nk_full,niw_batch,niv_full]. This determines the batch size to be
-    # niw_batch <= nq_irr_rank * niw * niv_core^2 / (nk_full * niv_full). nq_irr_rank is nothing but len(q_list) and
-    # nk_full is the number of k-points in the full BZ, k_grid.nk_tot. We will lower the batch size by 2 to be on the
-    # safe side and to account for the presence of other objects.
+    # [nq_irr_rank,2*niw+1,(2*niv_core)^2] >= [nk_full,2*niw_batch+1,2*niv_full]. This determines the batch size to be
+    # niw_batch <= 0.5 * [ nq_irr_rank * (2*niw+1) * (2*niv_core)^2 / (nk_full * 2*niv_full) -1]. nq_irr_rank is
+    # nothing but len(my_irr_q_list) and nk_full is the number of k-points in the full BZ, k_grid.nk_tot.
+    # We will lower the batch size by 2 to be on the safe side and to account for the presence of other objects.
     wn_batch_size = max(
         1,
-        (config.box.niv_core**2 * config.box.niw_core * len(my_irr_q_list))
-        // (config.lattice.k_grid.nk_tot * config.box.niv_full)
+        (len(my_irr_q_list) * (2 * config.box.niw_core + 1) * (2 * config.box.niv_core) ** 2)
+        // (2 * config.lattice.k_grid.nk_tot * 2 * config.box.niv_full)
         - 2,
     )
 
