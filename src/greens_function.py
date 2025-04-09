@@ -179,16 +179,6 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         niv_cut_range = np.arange(-niv_cut, niv_cut)
         return self.mat[..., self.niv + niv_cut_range[None, :] - wn[:, None]]
 
-    def get_g_qk_single_q(self, q: tuple, wn: np.ndarray, niv_cut: int) -> np.ndarray:
-        """
-        Returns G_{ab}^{k-q} for a single q point, shape is [k,o1,o2,w,v].
-        """
-        shifted_mat = self.shift_k_by_q(q)
-        niv = shifted_mat.shape[-1] // 2
-        niv_cut_range = np.arange(-niv_cut, niv_cut)
-        shifted_mat = shifted_mat[..., niv + niv_cut_range[None, :] - wn[:, None]]
-        return shifted_mat.reshape(config.lattice.k_grid.nk_tot, *shifted_mat.shape[3:])
-
     def _get_fill_nonlocal(self) -> tuple[float, np.ndarray, np.ndarray]:
         """
         Returns the total filling, the k-mean of the occupation and the occupation.

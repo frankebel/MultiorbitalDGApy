@@ -225,27 +225,34 @@ def calculate_sigma_kernel_r_q(
     return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray) -> SelfEnergy:
+def calculate_sigma_from_kernel(
+    kernel: FourPoint, giwk: GreensFunction, full_q_list: np.ndarray, batch_size: int = 1
+) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
     """
     mat = np.zeros(
         (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
-        dtype=kernel_r.mat.dtype,
+        dtype=kernel.mat.dtype,
     )
 
-    kernel_r = kernel_r.to_full_niw_range()
+    kernel = kernel.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
     niv = giwk.mat.shape[-1] // 2
 
-    path = np.einsum_path("aijdv,xyzadv->xyzijv", kernel_r[0, ..., 0, :], mat, optimize=True)[1]
+    path = np.einsum_path("aijdwv,xyzadwv->xyzijv", kernel[0, ...], mat[..., None, :], optimize=True)[1]
 
-    for idx_q, q in enumerate(q_list):
+    niv_core_range = np.arange(-config.box.niv_core, config.box.niv_core)[None, :]
+
+    for idx_q, q in enumerate(full_q_list):
         shifted_mat = np.roll(giwk.mat, [-i for i in q], axis=(0, 1, 2))
-        for idx_w, wn_i in enumerate(wn):
-            g_qk = shifted_mat[..., niv - config.box.niv_core - wn_i : niv + config.box.niv_core - wn_i]
-            mat += np.einsum("aijdv,xyzadv->xyzijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=path)
+        for wn_start in range(0, len(wn), batch_size):
+            wn_end = min(wn_start + batch_size, len(wn))
+            wn_batch = wn[wn_start:wn_end, None]
+
+            g_qk = shifted_mat[..., niv + niv_core_range - wn_batch]
+            mat += np.einsum("aijdwv,xyzadwv->xyzijv", kernel[idx_q, ..., wn_start:wn_end, :], g_qk, optimize=path)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True).compress_q_dimension()
@@ -366,7 +373,15 @@ def calculate_self_energy_q(
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
 
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
+        nq_irr = len(my_irr_q_list)
+        nq_full = len(my_full_q_list)
+        nk_full = config.lattice.k_grid.nk_tot
+        batch_size = max(
+            1, (config.sys.n_bands**2 * (2 * kernel.niw + 1) * (nq_irr * 2 * kernel.niv - nq_full)) // nk_full - 2
+        )
+        logger.log_info(f"Batch size for sigma calculation: {batch_size}.")
+
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list, batch_size)
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
 
