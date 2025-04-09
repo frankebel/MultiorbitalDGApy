@@ -239,27 +239,10 @@ def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_lis
     kernel_r = kernel_r.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
 
-    # Here we define a batch size of the wn loop in both the gchi0 and self-energy calculations.
-    # The batch size is determined by the largest object in the dga routine. This will be gchi_aux. Its size (excluding
-    # orbital dimensions) is [nq_irr,niw^2,niv_core^2]. Here, we will batch over omega to speed up the process. The batch
-    # size depends on the size of gchi_aux. We still want gchi_aux to be the largest object, i.e., we require
-    # [nq_irr_rank,2*niw+1,(2*niv_core)^2] >= [nk_full,2*niw_batch+1,2*niv_full]. This determines the batch size to be
-    # niw_batch <= 0.5 * [ nq_irr_rank * (2*niw+1) * (2*niv_core)^2 / (nk_full * 2*niv_full) -1]. nq_irr_rank is
-    # nothing but len(my_irr_q_list) and nk_full is the number of k-points in the full BZ, k_grid.nk_tot.
-    # We will lower the batch size by 2 to be on the safe side and to account for the presence of other objects.
-    wn_batch_size = max(
-        1,
-        (len(q_list) * (2 * config.box.niw_core + 1) * (2 * config.box.niv_core) ** 2)
-        // (4 * config.lattice.k_grid.nk_tot * 2 * config.box.niv_full)
-        - 2,
-    )
-
-    for batch_start in range(0, len(wn), wn_batch_size):
-        batch_end = min(batch_start + wn_batch_size, len(wn))
-        wn_batch = wn[batch_start:batch_end]
+    for idx_w, wn_i in enumerate(wn):
         for idx_q, q in enumerate(q_list):
-            g_qk = giwk.get_g_qk_single_q(q, wn_batch, config.box.niv_core)
-            mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx_q, ..., batch_start:batch_end, :], g_qk, optimize=True)
+            g_qk = giwk.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
+            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=True)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
