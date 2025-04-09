@@ -20,29 +20,27 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourP
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
     wn = MFHelper.wn(config.box.niw_core, return_only_positive=True)
-    niv_full = config.box.niv_full
-    niv_full_range = np.arange(-niv_full, niv_full)
 
     gchi0_q = np.zeros(
-        (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * niv_full),
+        (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * config.box.niv_full),
         dtype=giwk.mat.dtype,
     )
 
+    eye_left = np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None]
+    eye_right = np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None]
+
     g_left_mat = (
-        giwk.mat[:, :, :, :, None, None, :, giwk.niv + niv_full_range[None, :]]
-        * np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None, None]
+        giwk.mat[:, :, :, :, None, None, :, giwk.niv - config.box.niv_full : giwk.niv + config.box.niv_full] * eye_left
     )
-    g_left_mat = g_left_mat.reshape(config.lattice.k_grid.nk_tot, *g_left_mat.shape[3:])
 
-    g_right = giwk.transpose_orbitals()
+    g_right = giwk.transpose_orbitals().mat
+    for idx_q, q in enumerate(q_list):
+        g_right_mat = np.roll(g_right, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :] * eye_right
 
-    for idx_w, wn_i in enumerate(wn):
-        for idx_q, q in enumerate(q_list):
-            g_right_mat = (
-                g_right.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_full)[:, None, :, :, None, ...]
-                * np.eye(config.sys.n_bands)[None, :, None, None, :, None, None]
-            )
-            gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat, axis=0)
+        for idx_w, wn_i in enumerate(wn):
+            start = giwk.niv - config.box.niv_full - wn_i
+            end = giwk.niv + config.box.niv_full - wn_i
+            gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat[..., start:end], axis=(0, 1, 2))
 
     gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
 
@@ -233,19 +231,24 @@ def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_lis
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
     """
     mat = np.zeros(
-        (np.prod(config.lattice.nk), config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
+        (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
         dtype=kernel_r.mat.dtype,
     )
+
     kernel_r = kernel_r.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
+    niv = giwk.mat.shape[-1] // 2
 
-    for idx_w, wn_i in enumerate(wn):
-        for idx_q, q in enumerate(q_list):
-            g_qk = giwk.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
-            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=True)
+    path = np.einsum_path("aijdv,xyzadv->xyzijv", kernel_r[0, ..., 0, :], mat, optimize=True)[1]
+
+    for idx_q, q in enumerate(q_list):
+        shifted_mat = np.roll(giwk.mat, [-i for i in q], axis=(0, 1, 2))
+        for idx_w, wn_i in enumerate(wn):
+            g_qk = shifted_mat[..., niv - config.box.niv_core - wn_i : niv + config.box.niv_core - wn_i]
+            mat += np.einsum("aijdv,xyzadv->xyzijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=path)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
-    return SelfEnergy(mat, config.lattice.nk, True, True)
+    return SelfEnergy(mat, config.lattice.nk, True).compress_q_dimension()
 
 
 def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[SelfEnergy, int]:
