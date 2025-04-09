@@ -313,6 +313,7 @@ def calculate_self_energy_q(
         // (2 * config.lattice.k_grid.nk_tot * 2 * config.box.niv_full)
         - 2,
     )
+    logger.log_info(f"Batch size for wn loop is set to {wn_batch_size}.")
 
     # Hartree- and Fock-terms
     v_nonloc = v_nonloc.compress_q_dimension()
