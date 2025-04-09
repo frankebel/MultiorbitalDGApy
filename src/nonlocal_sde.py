@@ -15,7 +15,7 @@ from n_point_base import SpinChannel
 from self_energy import SelfEnergy
 
 
-def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, wn_batch_size: int) -> FourPoint:
+def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
     """
     Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
     """
@@ -36,15 +36,13 @@ def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray, wn_batch
 
     g_right = giwk.transpose_orbitals()
 
-    for batch_start in range(0, len(wn), wn_batch_size):
-        batch_end = min(batch_start + wn_batch_size, len(wn))
-        wn_batch = wn[batch_start:batch_end]
+    for idx_w, wn_i in enumerate(wn):
         for idx_q, q in enumerate(q_list):
             g_right_mat = (
-                g_right.get_g_qk_single_q(q, wn_batch, config.box.niv_full)[:, None, :, :, None, ...]
+                g_right.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_full)[:, None, :, :, None, ...]
                 * np.eye(config.sys.n_bands)[None, :, None, None, :, None, None]
             )
-            gchi0_q[idx_q, ..., batch_start:batch_end, :] = np.sum(g_left_mat * g_right_mat, axis=0)
+            gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat, axis=0)
 
     gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
 
@@ -229,9 +227,7 @@ def calculate_sigma_kernel_r_q(
     return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_sigma_from_kernel(
-    kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray, wn_batch_size: int
-) -> SelfEnergy:
+def calculate_sigma_from_kernel(kernel_r: FourPoint, giwk: GreensFunction, q_list: np.ndarray) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
@@ -243,12 +239,10 @@ def calculate_sigma_from_kernel(
     kernel_r = kernel_r.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
 
-    for batch_start in range(0, len(wn), wn_batch_size):
-        batch_end = min(batch_start + wn_batch_size, len(wn))
-        wn_batch = wn[batch_start:batch_end]
+    for idx_w, wn_i in enumerate(wn):
         for idx_q, q in enumerate(q_list):
-            g_qk = giwk.get_g_qk_single_q(q, wn_batch, config.box.niv_core)
-            mat += np.einsum("aijdwv,kadwv->kijv", kernel_r[idx_q, ..., batch_start:batch_end, :], g_qk, optimize=True)
+            g_qk = giwk.get_g_qk_single_q(q, np.array([wn_i]), config.box.niv_core)
+            mat += np.einsum("aijdv,kadwv->kijv", kernel_r[idx_q, ..., idx_w, :], g_qk, optimize=True)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(mat, config.lattice.nk, True, True)
@@ -299,22 +293,6 @@ def calculate_self_energy_q(
     mpi_dist_fullbz = MpiDistributor.create_distributor(ntasks=config.lattice.q_grid.nk_tot, comm=comm, name="FBZ")
     my_full_q_list = full_q_list[mpi_dist_fullbz.my_slice]
 
-    # Here we define a batch size of the wn loop in both the gchi0 and self-energy calculations.
-    # The batch size is determined by the largest object in the dga routine. This will be gchi_aux. Its size (excluding
-    # orbital dimensions) is [nq_irr,niw^2,niv_core^2]. Here, we will batch over omega to speed up the process. The batch
-    # size depends on the size of gchi_aux. We still want gchi_aux to be the largest object, i.e., we require
-    # [nq_irr_rank,2*niw+1,(2*niv_core)^2] >= [nk_full,2*niw_batch+1,2*niv_full]. This determines the batch size to be
-    # niw_batch <= 0.5 * [ nq_irr_rank * (2*niw+1) * (2*niv_core)^2 / (nk_full * 2*niv_full) -1]. nq_irr_rank is
-    # nothing but len(my_irr_q_list) and nk_full is the number of k-points in the full BZ, k_grid.nk_tot.
-    # We will lower the batch size by 2 to be on the safe side and to account for the presence of other objects.
-    wn_batch_size = max(
-        1,
-        (len(my_irr_q_list) * (2 * config.box.niw_core + 1) * (2 * config.box.niv_core) ** 2)
-        // (4 * config.lattice.k_grid.nk_tot * 2 * config.box.niv_full)
-        - 2,
-    )
-    logger.log_info(f"Batch size for wn loop is set to {wn_batch_size}.")
-
     # Hartree- and Fock-terms
     v_nonloc = v_nonloc.compress_q_dimension()
     if comm.rank == 0:
@@ -342,7 +320,7 @@ def calculate_self_energy_q(
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
 
         logger.log_memory_usage("giwk", giwk_full, comm.size)
-        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list, wn_batch_size)
+        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
@@ -385,7 +363,7 @@ def calculate_self_energy_q(
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
 
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list, wn_batch_size)
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
 
