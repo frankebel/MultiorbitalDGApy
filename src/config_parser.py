@@ -38,6 +38,7 @@ class ConfigParser:
         config.current_rank = comm.rank
 
         self._build_config_from_file(self._config_file)
+        return self
 
     def save_config_file(self, path: str = "./", name: str = "dga_config.yaml") -> None:
         """

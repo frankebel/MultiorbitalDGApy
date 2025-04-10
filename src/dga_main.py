@@ -18,7 +18,8 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 def execute_dga_routine():
     comm = MPI.COMM_WORLD
 
-    ConfigParser().parse_config(comm)
+    config_parser = ConfigParser()
+    config_parser = config_parser.parse_config(comm)
     logger = config.logger
     logger.log_info("Starting DGA routine.")
     logger.log_info(f"Running on {str(comm.size)} {"process" if comm.size == 1 else "processes"}.")
@@ -28,18 +29,20 @@ def execute_dga_routine():
     else:
         g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
 
-    g_dmft = comm.bcast(g_dmft, root=0)
-    sigma_dmft = comm.bcast(sigma_dmft, root=0)
-
-    logger.log_info("Config init and folder setup done.")
-    logger.log_info("Loaded data from w2dyn file.")
-
     config.lattice, config.box, config.output, config.sys, config.self_consistency = comm.bcast(
         (config.lattice, config.box, config.output, config.sys, config.self_consistency), root=0
     )
 
+    config_parser.save_config_file(path=config.output.output_path, name="dga_config.yaml")
+
+    logger.log_info("Config init and folder setup done.")
+    logger.log_info("Loaded data from w2dyn file.")
+
+    g_dmft = comm.bcast(g_dmft, root=0)
+    sigma_dmft = comm.bcast(sigma_dmft, root=0)
+
     logger.log_memory_usage("giwk & siwk", g_dmft, 2 * comm.size)
-    logger.log_memory_usage("g2_dens & g2_magn", g2_dens, 2)
+    logger.log_memory_usage("g2_dens & g2_magn", g2_dens, 2 * comm.size)
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
