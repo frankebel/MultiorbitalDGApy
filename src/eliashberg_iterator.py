@@ -25,8 +25,11 @@ def delete_files(filepath: str, *args) -> None:
 
 
 def gather_save_scatter(f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDistributor) -> FourPoint:
+    if not config.output.save_quantities:
+        return f_q_r
+
     f_q_r.mat = mpi_dist_irrk.gather(f_q_r.mat)
-    if config.output.save_quantities and mpi_dist_irrk.my_rank == 0:
+    if mpi_dist_irrk.my_rank == 0:
         f_q_r.save(output_dir=file_path, name=f"f_{f_q_r.channel.value}_irrq")
         config.logger.log_info(
             f"Saved full {f_q_r.channel.value} vertex {"in pp notation " if f_q_r.frequency_notation == FrequencyNotation.PP else ""}(for the irreducible BZ) to file."
