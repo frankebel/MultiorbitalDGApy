@@ -75,6 +75,17 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         """
         return self.add(-other)
 
+    def pow(self, power) -> "LocalInteraction":
+        """
+        Exponentiation of LocalInteraction objects.
+        """
+        if power <= 0:
+            raise ValueError("Exponentiation of Interaction objects only supports positive powers greater than zero.")
+        result = deepcopy(self)
+        for _ in range(1, power):
+            result = LocalInteraction(result.times("abcd,dcef->abef", self), self.channel)
+        return result
+
     def __add__(self, other) -> "LocalInteraction":
         """
         Adds two local interactions.
@@ -98,6 +109,12 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         Subtracts two local interactions.
         """
         return self.sub(other)
+
+    def __pow__(self, power, modulo=None) -> "LocalInteraction":
+        """
+        Exponentiation of Interaction objects.
+        """
+        return self.pow(power)
 
 
 class Interaction(LocalInteraction, IAmNonLocal):
@@ -191,6 +208,18 @@ class Interaction(LocalInteraction, IAmNonLocal):
         """
         return self.add(-other)
 
+    def pow(self, power) -> "Interaction":
+        """
+        Exponentiation of Interaction objects.
+        """
+        if power <= 0:
+            raise ValueError("Exponentiation of Interaction objects only supports positive powers greater than zero.")
+        is_self_compressed = self.has_compressed_q_dimension
+        result = deepcopy(self).compress_q_dimension()
+        for _ in range(1, power):
+            result = Interaction(result.times("qabcd,qdcef->qabef", self), self.channel, self.nq, True)
+        return result if is_self_compressed else result.decompress_q_dimension()
+
     def __add__(self, other) -> "Interaction":
         """
         Adds two (non-)local interactions.
@@ -214,3 +243,9 @@ class Interaction(LocalInteraction, IAmNonLocal):
         Subtracts two (non-)local interactions.
         """
         return self.sub(other)
+
+    def __pow__(self, power, modulo=None) -> "Interaction":
+        """
+        Exponentiation of Interaction objects.
+        """
+        return self.pow(power)

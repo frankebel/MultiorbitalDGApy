@@ -87,8 +87,8 @@ class Hamiltonian:
 
     def single_band_interaction_as_multiband(self, u: float, n_bands: int = 1) -> "Hamiltonian":
         """
-        Mainly used for testing. Sets the local interaction term for a multi-band model from a floating point number.
-        The interaction matrix is going to be zero everywhere except for the [0,0,0,0] element, which is set to 'u'.
+        Sets the local interaction term for a multi-band model from a floating point number.
+        The interaction matrix is going to be zero everywhere except for the [n,n,n,n] element, which is set to 'u'.
         """
         interaction_elements = []
         for i, j, k, l in it.product(range(n_bands), repeat=4):

@@ -284,6 +284,7 @@ def calculate_self_energy_q(
     sigma_local: SelfEnergy,
 ) -> SelfEnergy:
     logger = config.logger
+
     logger.log_info("Starting with non-local DGA routine.")
     logger.log_info("Initializing MPI distributor.")
 
@@ -327,7 +328,7 @@ def calculate_self_energy_q(
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
-        f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn.npy"))
+        f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn_loc.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")

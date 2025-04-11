@@ -90,7 +90,7 @@ class IHaveMat(ABC):
         """
         Sets the underlying matrix.
         """
-        self._mat = value.astype(np.complex64)
+        self._mat = value.astype(np.complex128)
 
     @property
     def current_shape(self) -> tuple:
@@ -296,13 +296,16 @@ class IAmNonLocal(IHaveMat, ABC):
         result._nq = q
         return result
 
-    def map_to_full_bz(self, inverse_map: np.ndarray):
+    def map_to_full_bz(self, inverse_map: np.ndarray, nq: tuple = None):
         """
         Maps the object to the full Brillouin zone using the inverse of the irreducible k-point mesh in-place and
-        returns the original object.
+        returns the original object with a compressed momentum dimension.
         """
         if not self.has_compressed_q_dimension:
             raise ValueError("Mapping to full Brillouin zone only possible for compressed momentum dimension.")
+
+        if nq is not None:
+            self._nq = nq
 
         self.mat = self.mat[inverse_map, ...].reshape((np.prod(self.nq), *self.original_shape[1:]))
         self.update_original_shape()

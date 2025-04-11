@@ -98,9 +98,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Exponentiation for LocalFourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
         exponentiate the inverse of A |n| times, i.e., A ** (-n) = A^(-1) ** n.
         """
-        return self.power(power, LocalFourPoint.identity_like(self))
+        return self.pow(power, LocalFourPoint.identity_like(self))
 
-    def power(self, power: int, identity):
+    def pow(self, power: int, identity):
         """
         Exponentiation for LocalFourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
         exponentiate the inverse of A |n| times, i.e., A ** (-n) = A^(-1) ** n. Requires the input of the identity.

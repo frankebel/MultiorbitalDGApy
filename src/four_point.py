@@ -88,7 +88,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         Exponentiation for FourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
         exponentiate the inverse of A |n| times, i.e., A ** (-3) = A^(-1) ** 3.
         """
-        return self.power(power, FourPoint.identity_like(self))
+        return self.pow(power, FourPoint.identity_like(self))
 
     def sum_over_vn(self, beta: float, axis: tuple = (-1,)) -> "FourPoint":
         """
@@ -354,9 +354,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         if is_other_full_niw_range:
             other = other.to_full_niw_range()
 
-        return FourPoint(
-            result_mat, self.channel, self.nq, 1, 2, False, False, True, self.frequency_notation
-        ).to_full_niv_range()
+        return FourPoint(result_mat, self.channel, self.nq, 1, 2, False, True, True, self.frequency_notation)
 
     def matmul(self, other, left_hand_side: bool = True) -> "FourPoint":
         """
@@ -399,11 +397,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         is_local = not isinstance(other, FourPoint)
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
-        if (
-            self.num_wn_dimensions == 1
-            and other.num_wn_dimensions == 1
-            and (self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0)
-        ):
+        if self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0:
             q_prefix = "" if is_local else "q"
 
             self.compress_q_dimension()
@@ -488,7 +482,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         num_vn_dimensions: int = 2,
         full_niw_range: bool = False,
         full_niv_range: bool = True,
-        has_compressed_q_dimension: bool = False,
+        has_compressed_q_dimension: bool = True,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ) -> "FourPoint":
         return FourPoint(

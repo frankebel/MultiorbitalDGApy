@@ -239,6 +239,13 @@ class LocalNPoint(IHaveMat):
         self._full_niv_range = False
         return self
 
+    def flip_axis(self, axis: tuple):
+        """
+        Flips the matrix along the specified axis.
+        """
+        self.mat = np.flip(self.mat, axis=axis)
+        return self
+
     def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """
         Saves the content of the matrix to a file. Always saves it with half the niw range.

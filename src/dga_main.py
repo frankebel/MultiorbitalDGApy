@@ -18,8 +18,7 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 def execute_dga_routine():
     comm = MPI.COMM_WORLD
 
-    config_parser = ConfigParser()
-    config_parser = config_parser.parse_config(comm)
+    config_parser = ConfigParser().parse_config(comm)
     logger = config.logger
     logger.log_info("Starting DGA routine.")
     logger.log_info(f"Running on {str(comm.size)} {"process" if comm.size == 1 else "processes"}.")
@@ -85,8 +84,8 @@ def execute_dga_routine():
         chi_magn.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_dens.save(name="vrg_dens", output_dir=config.output.output_path)
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
-        f_dens.save(name="f_dens", output_dir=config.output.output_path)
-        f_magn.save(name="f_magn", output_dir=config.output.output_path)
+        f_dens.save(name="f_dens_loc", output_dir=config.output.output_path)
+        f_magn.save(name="f_magn_loc", output_dir=config.output.output_path)
         del vrg_dens, vrg_magn, f_dens, f_magn
         logger.log_info("Saved all relevant quantities as numpy files.")
 
