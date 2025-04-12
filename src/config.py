@@ -145,6 +145,7 @@ class OutputConfig:
         self.do_plotting: bool = True
         self.save_quantities: bool = True
         self.output_path: str = "./"
+        self.eliashberg_path: str = "./Eliashberg/"
 
 
 # instead of passing around the comm object to every function, we can use a global variable

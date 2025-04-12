@@ -87,10 +87,11 @@ def load_from_w2dyn_file_and_update_config():
     )
 
     config.output.output_path = uniquify_path(os.path.join(config.output.output_path, output_format))
+    config.output.eliashberg_path = os.path.join(config.output.output_path, config.eliashberg.subfolder_name)
 
     if not os.path.exists(config.output.output_path):
         os.makedirs(config.output.output_path)
-        os.makedirs(os.path.join(config.output.output_path, config.eliashberg.subfolder_name))
+        os.makedirs(config.output.eliashberg_path)
 
     g2_dens = update_g2_from_dmft(g2_dens)
     g2_magn = update_g2_from_dmft(g2_magn)

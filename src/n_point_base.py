@@ -245,6 +245,22 @@ class IAmNonLocal(IHaveMat, ABC):
             self.compress_q_dimension()
         return result
 
+    def shift_k_by_pi(self) -> np.ndarray:
+        r"""
+        Shifts the momentum by :math:`\pi` and returns a numpy array.
+        """
+        compress = False
+        if self.has_compressed_q_dimension:
+            compress = True
+            self.decompress_q_dimension()
+
+        shifts = np.array(self.current_shape[:3]) // 2
+        result = np.roll(self.mat, shift=shifts, axis=(0, 1, 2))
+
+        if compress:
+            self.compress_q_dimension()
+        return result
+
     def compress_q_dimension(self):
         """
         Converts the object from (qx,qy,qz,...) to (q,...) in-place, where len(q) = qx*qy*qz.
@@ -310,6 +326,30 @@ class IAmNonLocal(IHaveMat, ABC):
         self.mat = self.mat[inverse_map, ...].reshape((np.prod(self.nq), *self.original_shape[1:]))
         self.update_original_shape()
         return self
+
+    def fftn(self):
+        """
+        Performs a discrete forward Fourier transform over the momentum dimensions in-place and returns the original object.
+        """
+        compress = False
+        if self.has_compressed_q_dimension:
+            compress = True
+            self.decompress_q_dimension()
+
+        self.mat = np.fft.fftn(self.mat, axes=(0, 1, 2))
+        return self.compress_q_dimension() if compress else self
+
+    def ifftn(self):
+        """
+        Performs a discrete inverse Fourier transform over the momentum dimensions in-place and returns the original object.
+        """
+        compress = False
+        if self.has_compressed_q_dimension:
+            compress = True
+            self.decompress_q_dimension()
+
+        self.mat = np.fft.ifftn(self.mat, axes=(0, 1, 2))
+        return self.compress_q_dimension() if compress else self
 
     def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):
         """

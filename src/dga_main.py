@@ -1,11 +1,13 @@
 import itertools as it
 import logging
+import os
 
+import numpy as np
 from mpi4py import MPI
 
 import config
 import dga_io
-import eliashberg_iterator
+import eliashberg_solver
 import local_sde
 import nonlocal_sde
 import plotting
@@ -163,9 +165,16 @@ def execute_dga_routine():
     logger.log_info("DGA routine finished.")
 
     if config.eliashberg.perform_eliashberg:
+        if not np.allclose(config.lattice.q_grid.nk, config.lattice.k_grid.nk):
+            raise ValueError("Eliashberg equation can only be solved when nq = nk.")
         logger.log_info("Starting with Eliashberg equation.")
         giwk = GreensFunction.get_g_full(sigma_dga, config.sys.mu, ek)
-        lambda_sing, lambda_trip = eliashberg_iterator.solve(giwk, u_loc, v_nonloc, comm)
+        lam_sing, lam_trip, gap_sing, gap_trip = eliashberg_solver.solve(giwk, u_loc, v_nonloc, comm)
+
+        if config.output.save_quantities and comm.rank == 0:
+            gap_sing.save(name=f"gap_sing", output_dir=config.output.eliashberg_path)
+            gap_trip.save(name=f"gap_trip", output_dir=config.output.eliashberg_path)
+            logger.log_info("Saved singlet and triplet gap functions to files.")
 
     logger.log_info("Exiting ...")
     MPI.Finalize()
