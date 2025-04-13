@@ -110,14 +110,25 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.frequency_notation,
         )
 
-    def contract_legs(self, beta: float) -> "FourPoint":
+    def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad") -> "FourPoint":
         """
-        Sums over all fermionic frequency dimensions if the object has 2 fermionic frequency dimensions and sums over
-        the inner two orbitals.
+        Sums over the given orbitals.
         """
-        if self.num_vn_dimensions != 2:
-            raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
-        return self.sum_over_vn(beta, axis=(-1, -2)).sum_over_orbitals("abcd->ad")
+        split = orbital_contraction.split("->")
+        if len(split[0]) != 4 or len(split[1]) > len(split[0]):
+            raise ValueError("Invalid orbital contraction.")
+
+        permutation = (
+            f"i{split[0]}...->i{split[1]}..."
+            if self.has_compressed_q_dimension
+            else f"ijk{split[0]}...->ijk{split[1]}..."
+        )
+
+        self.mat = np.einsum(permutation, self.mat)
+        diff = len(split[0]) - len(split[1])
+        self.update_original_shape()
+        self._num_orbital_dimensions -= diff
+        return self
 
     def to_compound_indices(self) -> "FourPoint":
         r"""
@@ -323,7 +334,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         """
         return self.add(-other)
 
-    def mul(self, other):
+    def mul(self, other) -> "FourPoint":
         r"""
         Allows for the multiplication with a number, a numpy array or a FourPoint object. In the latter case,
         we require both objects to only have one niv dimension, such that
@@ -485,6 +496,9 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         has_compressed_q_dimension: bool = True,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ) -> "FourPoint":
+        """
+        Loads a FourPoint object from a file. The file must be of type '.npy'.
+        """
         return FourPoint(
             np.load(filename, allow_pickle=False),
             channel,
@@ -506,6 +520,9 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         nq: tuple[int, int, int] = (1, 1, 1),
         num_vn_dimensions: int = 2,
     ) -> "FourPoint":
+        """
+        Creates an identity (matrix in compound index notation is unity) for the FourPoint object.
+        """
         if num_vn_dimensions not in (1, 2):
             raise ValueError("Invalid number of fermionic frequency dimensions.")
         full_shape = (nq_tot,) + (n_bands,) * 4 + (2 * niw + 1,) + (2 * niv,) * num_vn_dimensions
@@ -521,4 +538,8 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
     @staticmethod
     def identity_like(other: "FourPoint") -> "FourPoint":
+        """
+        Creates an identity (matrix in compound index notation is unity) for the FourPoint object from the shape
+        of another FourPoint object.
+        """
         return FourPoint.identity(other.n_bands, other.niw, other.niv, other.nq_tot, other.nq, other.num_vn_dimensions)

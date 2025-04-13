@@ -34,31 +34,31 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
         IHaveChannel.__init__(self, channel, frequency_notation)
 
-    def __add__(self, other) -> "LocalFourPoint":
+    def __add__(self, other):
         """
         Addition for LocalFourPoint objects. Allows for A + B = C.
         """
         return self.add(other)
 
-    def __radd__(self, other) -> "LocalFourPoint":
+    def __radd__(self, other):
         """
         Addition for LocalFourPoint objects. Allows for A + B = C.
         """
         return self.add(other)
 
-    def __sub__(self, other) -> "LocalFourPoint":
+    def __sub__(self, other):
         """
         Subtraction for LocalFourPoint objects. Allows for A - B = C.
         """
         return self.sub(other)
 
-    def __rsub__(self, other) -> "LocalFourPoint":
+    def __rsub__(self, other):
         """
         Subtraction for LocalFourPoint objects. Allows for A - B = C.
         """
         return self.sub(other)
 
-    def __mul__(self, other) -> "LocalFourPoint":
+    def __mul__(self, other):
         r"""
         Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter case,
         we require both objects to only have one niv dimension, such that
@@ -87,7 +87,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         return self.matmul(other, left_hand_side=False)
 
-    def __invert__(self) -> "LocalFourPoint":
+    def __invert__(self):
         """
         Inverts the LocalFourPoint object by transforming it to compound indices.
         """
@@ -471,6 +471,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         return result
 
     def sub(self, other):
+        """
+        Helper method that allows for subtraction of local FourPoint objects.
+        Depending on the number of frequency and momentum dimensions, the objects have to be subtracted differently.
+        """
         return self.add(-other)
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalFourPoint":
@@ -568,7 +572,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """
-        Used to pad a LocalFourPoint object with a LocalInteraction object outside of the core frequency region.
+        Used to pad a LocalFourPoint object with a LocalInteraction object outside the core frequency region.
         If niv_pad is less or equal self.niv, no padding will be done.
         """
         copy = deepcopy(self)
@@ -595,6 +599,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         full_niv_range: bool = True,
         frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ) -> "LocalFourPoint":
+        """
+        Loads a LocalFourPoint object from a file. The file must be of type '.npy'.
+        """
         return LocalFourPoint(
             np.load(filename, allow_pickle=False),
             channel,
@@ -632,6 +639,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def identity(
         n_bands: int, niw: int, niv: int, num_vn_dimensions: int = 2, full_niw_range: bool = False
     ) -> "LocalFourPoint":
+        """
+        Creates an identity (matrix in compound index notation is unity) for the LocalFourPoint object.
+        """
         if num_vn_dimensions not in (1, 2):
             raise ValueError("Invalid number of fermionic frequency dimensions.")
         full_shape = (n_bands,) * 4 + (2 * niw + 1,) + (2 * niv,) * num_vn_dimensions
@@ -647,6 +657,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     @staticmethod
     def identity_like(other: "LocalFourPoint") -> "LocalFourPoint":
+        """
+        Creates an identity (matrix in compound index notation is unity) for the LocalFourPoint object from the shape
+        of another LocalFourPoint object.
+        """
         return LocalFourPoint.identity(
             other.n_bands, other.niw, other.niv, other.num_vn_dimensions, other.full_niw_range
         )

@@ -124,11 +124,13 @@ def create_full_vertex_q_r(
     return f_q_r
 
 
-def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> FourPoint:
+def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> LocalFourPoint | FourPoint:
     """
     Transform the vertex function from particle-hole notation to particle-particle notation. This is done by
     flipping the last Matsubara frequency in order to get v, -v' and then applying the necessary condition of w = v-v'.
     """
+    is_local = not isinstance(f_q_r, FourPoint)
+
     niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
     vn = MFHelper.vn(niv_pp)
     omega = vn[:, None] - vn[None, :]
@@ -138,7 +140,12 @@ def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> FourPoint:
     for idx, w in enumerate(MFHelper.wn(config.box.niw_core)):
         f_q_r_pp_mat[..., omega == w] = -f_q_r_flip[..., idx, omega == w]
 
-    config.logger.log_info(f"Calculated full {f_q_r_flip.channel.value} vertex in pp notation.")
+    config.logger.log_info(
+        f"Calculated full {f_q_r_flip.channel.value if f_q_r_flip.channel.value is not SpinChannel.NONE else "local UD"} "
+        f"vertex in pp notation."
+    )
+    if is_local:
+        return LocalFourPoint(f_q_r_pp_mat, f_q_r_flip.channel, 0, frequency_notation=FrequencyNotation.PP)
     return FourPoint(
         f_q_r_pp_mat, f_q_r_flip.channel, config.lattice.q_grid.nk, 0, 2, True, True, True, FrequencyNotation.PP
     )
