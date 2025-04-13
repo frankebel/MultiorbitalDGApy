@@ -65,7 +65,8 @@ class SelfConsistencyConfig:
     """
     Class to store the self-consistency parameters. The self-consistency loop is controlled by the maximum number of
     iterations, the convergence criterion epsilon, the mixing parameter and the option to save the quantities throughout
-    the self-consistency iteration.
+    the self-consistency iteration. If previous_sc_path is set, the self-consistency will be started from the previous
+    self-consistency iteration found in this path.
     """
 
     def __init__(self):
@@ -80,15 +81,12 @@ class SelfConsistencyConfig:
 class EliashbergConfig:
     """
     Class to store the configuration for the Eliashberg equation. It is defined by the option to perform the Eliashberg
-    equation, the maximum number of iterations, the option to save the pairing vertex and the convergence criterion
-    epsilon. The Eliashberg equation is solved after the self-consistency loop.
+    equation, the subfolder name and the option to save the pairing vertex.
     """
 
     def __init__(self):
         self.perform_eliashberg: bool = True
-        self.max_iter: int = 3
         self.save_pairing_vertex: bool = True
-        self.epsilon: float = 1e-4
         self.subfolder_name: str = "Eliashberg"
 
 
@@ -137,8 +135,9 @@ class PolyFittingConfig:
 
 class OutputConfig:
     """
-    Class to store the output parameters. The output is controlled by the option to plot the quantities and to save the
-    quantities. The output path is the path where the quantities are saved.
+    Class to store the output parameters. What is output is specified by the properties.
+    The output path is the path where some quantities are saved. If save_fq is set to True, the full ladder vertex
+    will be saved.
     """
 
     def __init__(self):
@@ -146,6 +145,7 @@ class OutputConfig:
         self.save_quantities: bool = True
         self.output_path: str = "./"
         self.eliashberg_path: str = "./Eliashberg/"
+        self.save_fq: bool = False
 
 
 # instead of passing around the comm object to every function, we can use a global variable

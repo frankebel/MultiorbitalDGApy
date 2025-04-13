@@ -29,12 +29,12 @@ def delete_files(filepath: str, *args) -> None:
 
 
 def gather_save_scatter(
-    f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDistributor, scatter: bool = True
+    f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDistributor, scatter: bool = True, save: bool = False
 ) -> FourPoint:
     """
-    Gather the full vertex function from all ranks, save it to file, and scatter it back to the original rank.
+    Gather the vertex function from all ranks, save it to file, and scatter it back to the original rank.
     """
-    if not config.output.save_quantities:
+    if not save:
         return f_q_r
 
     f_q_r.mat = mpi_dist_irrk.gather(f_q_r.mat)
@@ -131,7 +131,9 @@ def create_full_vertex_pp_q_r(
     Phys. Rev. B 99, 041115(R) (2019).
     """
     f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
-    f_q_r = gather_save_scatter(f_q_r, config.output.eliashberg_path, mpi_dist_irrk, scatter=True)
+    f_q_r = gather_save_scatter(
+        f_q_r, config.output.output_path, mpi_dist_irrk, scatter=True, save=config.output.save_fq
+    )
 
     niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
     vn = MFHelper.vn(niv_pp)
@@ -178,7 +180,7 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp_ifft: FourPoint) -
     gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True).fft()
 
     logger.log_info(f"Found the the {gamma_q_r_pp.channel.value}let gap function.")
-    logger.log_info(f"Eliashberg equation for ({gamma_q_r_pp.channel.value}) channel solved.")
+    logger.log_info(f"Eliashberg equation for {gamma_q_r_pp.channel.value}let channel solved.")
     return lam_r, gap_r
 
 
@@ -207,14 +209,26 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     f_sing_pp.channel = SpinChannel.SING
     logger.log_info("Created full singlet pairing vertex in pp notation.")
 
-    f_sing_pp = gather_save_scatter(f_sing_pp, config.output.eliashberg_path, mpi_dist_irrk, scatter=False)
+    f_sing_pp = gather_save_scatter(
+        f_sing_pp,
+        config.output.eliashberg_path,
+        mpi_dist_irrk,
+        scatter=False,
+        save=config.eliashberg.save_pairing_vertex,
+    )
 
     f_trip_pp = 0.5 * f_dens_pp + 0.5 * f_magn_pp
     f_trip_pp.channel = SpinChannel.TRIP
     del f_dens_pp, f_magn_pp
     logger.log_info("Created full triplet pairing vertex in pp notation.")
 
-    f_trip_pp = gather_save_scatter(f_trip_pp, config.output.eliashberg_path, mpi_dist_irrk, scatter=False)
+    f_trip_pp = gather_save_scatter(
+        f_trip_pp,
+        config.output.eliashberg_path,
+        mpi_dist_irrk,
+        scatter=False,
+        save=config.eliashberg.save_pairing_vertex,
+    )
 
     if comm.rank == 0:
         niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
