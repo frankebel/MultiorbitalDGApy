@@ -78,6 +78,12 @@ def execute_dga_routine():
 
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
+    if comm.rank == 0:
+        (f_dens + 3 * f_magn).save(name="f_1dens_3magn_loc", output_dir=config.output.output_path)
+        logger.log_info(
+            "Saved [f_dens_loc + 3 f_magn_loc] as numpy file, which is needed for the double-counting correction."
+        )
+
     if config.output.save_quantities and comm.rank == 0:
         gamma_dens.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_magn.save(name="Gamma_magn", output_dir=config.output.output_path)
@@ -88,8 +94,13 @@ def execute_dga_routine():
         vrg_magn.save(name="vrg_magn", output_dir=config.output.output_path)
         f_dens.save(name="f_dens_loc", output_dir=config.output.output_path)
         f_magn.save(name="f_magn_loc", output_dir=config.output.output_path)
-        del vrg_dens, vrg_magn, f_dens, f_magn
+        del vrg_dens, vrg_magn
         logger.log_info("Saved all relevant quantities as numpy files.")
+
+    if config.eliashberg.perform_eliashberg and comm.rank == 0:
+        (0.5 * f_dens - 0.5 * f_magn).save(name="f_ud_loc", output_dir=config.output.output_path)
+        del f_dens, f_magn
+        logger.log_info("Saved f_ud_loc as numpy file, which is needed for Gamma_pp.")
 
     if config.output.do_plotting and comm.rank == 0:
         gamma_dens_plot = gamma_dens.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))

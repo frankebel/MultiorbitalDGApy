@@ -217,10 +217,6 @@ def perform_local_schwinger_dyson(
     gamma_magn, gchi_magn_sum, vrg_magn, f_magn = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)
 
     sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
-    config.logger.log_info("Self-energy Sigma^v done.")
-
-    # This is saved since it is needed for the double-counting correction in the non-local routine
-    (f_dens + 3 * f_magn).save(name="f_1dens_3magn_loc", output_dir=config.output.output_path)
 
     return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
 
