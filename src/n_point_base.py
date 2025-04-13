@@ -327,7 +327,7 @@ class IAmNonLocal(IHaveMat, ABC):
         self.update_original_shape()
         return self
 
-    def fftn(self):
+    def fft(self):
         """
         Performs a discrete forward Fourier transform over the momentum dimensions in-place and returns the original object.
         """
@@ -336,10 +336,10 @@ class IAmNonLocal(IHaveMat, ABC):
             compress = True
             self.decompress_q_dimension()
 
-        self.mat = np.fft.fftn(self.mat, axes=(0, 1, 2))
+        np.fft.fftn(self.mat, axes=(0, 1, 2), out=self.mat)
         return self.compress_q_dimension() if compress else self
 
-    def ifftn(self):
+    def ifft(self):
         """
         Performs a discrete inverse Fourier transform over the momentum dimensions in-place and returns the original object.
         """
@@ -348,7 +348,7 @@ class IAmNonLocal(IHaveMat, ABC):
             compress = True
             self.decompress_q_dimension()
 
-        self.mat = np.fft.ifftn(self.mat, axes=(0, 1, 2))
+        np.fft.ifftn(self.mat, axes=(0, 1, 2), out=self.mat)
         return self.compress_q_dimension() if compress else self
 
     def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):

@@ -165,7 +165,7 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp_ifft: FourPoint) -
     logger.log_info(f"Mapped Gamma_pp ({gamma_q_r_pp.channel.value}let) to full BZ.")
 
     factor = -1 if gamma_q_r_pp.channel == SpinChannel.SING else 1
-    mat = factor * 0.5 / config.sys.beta * gamma_q_r_pp.ifftn().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp_ifft)
+    mat = factor * 0.5 / config.sys.beta * gamma_q_r_pp.ifft().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp_ifft)
     logger.log_info("Calculated the matrix for the eigenvalue problem.")
     eigvals, eigvecs = np.linalg.eig(mat)
     logger.log_info("Calculated the eigenvalues and eigenvectors of the matrix.")
@@ -175,9 +175,9 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp_ifft: FourPoint) -
 
     indices = np.argmax(eigvals.real, axis=-1)[..., None, None]
     gap_r = np.take_along_axis(eigvecs, indices, axis=-2).squeeze(-2)
-    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True).fftn()
+    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True).fft()
 
-    logger.log_info(f"Found the the {gamma_q_r_pp.channel.value}let gap function).")
+    logger.log_info(f"Found the the {gamma_q_r_pp.channel.value}let gap function.")
     logger.log_info(f"Eliashberg equation for ({gamma_q_r_pp.channel.value}) channel solved.")
     return lam_r, gap_r
 
@@ -218,7 +218,7 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
 
     if comm.rank == 0:
         niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
-        gchi0_q0_pp_ifft = create_gchi0_pp_w0(giwk, niv_pp).ifftn()
+        gchi0_q0_pp_ifft = create_gchi0_pp_w0(giwk, niv_pp).ifft()
         logger.log_info("Created the bare bubble susceptibility in pp notation and for w = 0.")
 
         lam_sing, gap_sing = solve_eliashberg_eig(f_sing_pp, gchi0_q0_pp_ifft)
