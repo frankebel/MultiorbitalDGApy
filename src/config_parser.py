@@ -171,6 +171,9 @@ class ConfigParser:
 
         conf.perform_eliashberg = self._try_parse(eliashberg_section, "perform_eliashberg", False)
         conf.save_pairing_vertex = self._try_parse(eliashberg_section, "save_pairing_vertex", True)
+        conf.n_eig = self._try_parse(eliashberg_section, "n_eig", 2)
+        conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
+        conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "d-wave")
         conf.subfolder_name = self._try_parse(eliashberg_section, "subfolder_name", "Eliashberg")
 
         return conf

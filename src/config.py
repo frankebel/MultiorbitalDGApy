@@ -87,6 +87,9 @@ class EliashbergConfig:
     def __init__(self):
         self.perform_eliashberg: bool = True
         self.save_pairing_vertex: bool = True
+        self.n_eig: int = 2
+        self.epsilon: float = 1e-4
+        self.symmetry: str = "d-wave"
         self.subfolder_name: str = "Eliashberg"
 
 

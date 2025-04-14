@@ -1,3 +1,6 @@
+import numpy as np
+
+from gap_function import GapFunction
 from interaction import Interaction, LocalInteraction
 from local_four_point import LocalFourPoint
 from n_point_base import *

@@ -594,7 +594,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def find_eigendecomposition(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Finds the eigendecomposition of the LocalFourPoint object (in compound indices!).
-        Returns the eigenvalues and eigenvectors. We can use eigh since due to time-reversal symmetry, we ecpect the matrices
+        Returns the eigenvalues and eigenvectors. We can use eigh since due to time-reversal symmetry, we expect the matrices
         in compound notation to be hermitean.
         """
         mat = deepcopy(self).to_full_niw_range().to_full_niv_range().to_compound_indices().mat

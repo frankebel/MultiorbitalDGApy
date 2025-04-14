@@ -183,15 +183,17 @@ def execute_dga_routine():
         lam_sing, lam_trip, gap_sing, gap_trip = eliashberg_solver.solve(giwk, u_loc, v_nonloc, comm)
 
         if config.output.save_quantities and comm.rank == 0:
-            gap_sing.save(name=f"gap_sing", output_dir=config.output.eliashberg_path)
-            gap_trip.save(name=f"gap_trip", output_dir=config.output.eliashberg_path)
+            for i in range(config.eliashberg.n_eig):
+                gap_sing[i].save(name=f"gap_sing_{i}", output_dir=config.output.eliashberg_path)
+                gap_trip[i].save(name=f"gap_trip_{i}", output_dir=config.output.eliashberg_path)
             logger.log_info("Saved singlet and triplet gap functions to files.")
 
-        # if config.output.do_plotting and comm.rank == 0:
-        kx, ky = config.lattice.k_grid.kx_shift, config.lattice.k_grid.ky_shift
-        gap_sing.plot(kx, ky, output_dir=config.output.eliashberg_path)
-        gap_trip.plot(kx, ky, output_dir=config.output.eliashberg_path)
-        logger.log_info("Plotted singlet and triplet gap functions.")
+        if config.output.do_plotting and comm.rank == 0:
+            kx, ky = config.lattice.k_grid.kx_shift, config.lattice.k_grid.ky_shift
+            for i in range(config.eliashberg.n_eig):
+                gap_sing[i].plot(kx, ky, name=f"{i}", output_dir=config.output.eliashberg_path)
+                gap_trip[i].plot(kx, ky, name=f"{i}", output_dir=config.output.eliashberg_path)
+            logger.log_info("Plotted singlet and triplet gap functions.")
 
     logger.log_info("Exiting ...")
     MPI.Finalize()

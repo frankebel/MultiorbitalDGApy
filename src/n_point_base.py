@@ -351,6 +351,19 @@ class IAmNonLocal(IHaveMat, ABC):
         np.fft.ifftn(self.mat, axes=(0, 1, 2), out=self.mat)
         return self.compress_q_dimension() if compress else self
 
+    def flip_momentum_axis(self):
+        """
+        Flips the momentum axis of the object and returns a copy.
+        """
+        copy = deepcopy(self)
+        compress = False
+        if copy.has_compressed_q_dimension:
+            compress = True
+            copy.decompress_q_dimension()
+
+        copy.mat = np.roll(np.flip(copy.mat, axis=(0, 1, 2)), shift=1, axis=(0, 1, 2))
+        return copy.compress_q_dimension() if compress else copy
+
     def _align_q_dimensions_for_operations(self, other: "IAmNonLocal"):
         """
         Adapts the frequency dimensions of two non-local objects to fit each other for addition or multiplication.

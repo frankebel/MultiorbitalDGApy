@@ -2,6 +2,8 @@ import os
 
 import mpi4py.MPI as MPI
 import numpy as np
+from numpy import ndarray
+from scipy.sparse.linalg import LinearOperator, eigsh
 
 import config
 from four_point import FourPoint
@@ -131,14 +133,14 @@ def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> LocalFourPoint | Four
     niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
     vn = MFHelper.vn(niv_pp)
     omega = vn[:, None] - vn[None, :]
-    f_q_r_flip = f_q_r.cut_niv(niv_pp).to_full_niw_range().flip_axis(-1)
+    f_q_r_flip = f_q_r.cut_niv(niv_pp).to_full_niw_range().flip_frequency_axis(-1)
     del f_q_r
     f_q_r_pp_mat = np.zeros((*f_q_r_flip.current_shape[:-3], 2 * niv_pp, 2 * niv_pp), dtype=f_q_r_flip.mat.dtype)
     for idx, w in enumerate(MFHelper.wn(config.box.niw_core)):
         f_q_r_pp_mat[..., omega == w] = -f_q_r_flip[..., idx, omega == w]
 
     config.logger.log_info(
-        f"Calculated full {f_q_r_flip.channel.value if f_q_r_flip.channel.value is not SpinChannel.NONE else "local UD"} "
+        f"Calculated full {f_q_r_flip.channel.value if f_q_r_flip.channel is not SpinChannel.NONE else "local UD"} "
         f"vertex in pp notation."
     )
     if is_local:
@@ -151,6 +153,10 @@ def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> LocalFourPoint | Four
 def calculate_full_vertex_pp_w0(
     u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, mpi_dist_irrk: MpiDistributor
 ):
+    """
+    Calculates the full vertex function in PH notation and transforms it to PP notation.
+    For the calculation of F, see Eq. (3.140) and Eq. (3.141) in my thesis.
+    """
     group_size = max(mpi_dist_irrk.comm.size // 3, 1)
     color = mpi_dist_irrk.comm.rank // group_size
     sub_comm = mpi_dist_irrk.comm.Split(color, mpi_dist_irrk.comm.rank)
@@ -168,6 +174,92 @@ def calculate_full_vertex_pp_w0(
     return transform_vertex_ph_to_pp_w0(f_q_r)
 
 
+def get_initial_gap_function(shape: tuple, channel: SpinChannel):
+    if channel != SpinChannel.SING and channel != SpinChannel.TRIP:
+        raise ValueError("Channel must be either SING or TRIP.")
+
+    gap0 = np.zeros(shape, dtype=np.complex64)
+    niv = shape[-1] // 2
+
+    def d_wave(k_grid):
+        return -np.cos(k_grid[0])[:, None, None] + np.cos(k_grid[1])[None, :, None]
+
+    def p_wave_x(k_grid):
+        return np.sin(k_grid[0])[:, None, None]
+
+    def p_wave_y(k_grid):
+        return np.sin(k_grid[1])[None, :, None]
+
+    if config.eliashberg.symmetry == "d-wave":
+        gap0[..., niv:] = np.repeat(d_wave(config.lattice.k_grid.grid)[:, :, :, None, None, None], niv, axis=-1)
+    elif config.eliashberg.symmetry == "p-wave-x":
+        gap0[..., niv:] = np.repeat(p_wave_x(config.lattice.k_grid.grid)[:, :, :, None, None, None], niv, axis=-1)
+    elif config.eliashberg.symmetry == "p-wave-y":
+        gap0[..., niv:] = np.repeat(p_wave_y(config.lattice.k_grid.grid)[:, :, :, None, None, None], niv, axis=-1)
+    else:
+        gap0 = np.random.random_sample(shape)
+
+    v_sym = ""
+    if config.eliashberg.symmetry == "d-wave":
+        v_sym = "even" if channel == SpinChannel.SING else "odd"
+    elif config.eliashberg.symmetry == "p-wave-x" or config.eliashberg.symmetry == "p-wave-y":
+        v_sym = "odd" if channel == SpinChannel.SING else "even"
+
+    if v_sym == "even":
+        gap0[..., :niv] = gap0[..., niv:]
+    elif v_sym == "odd":
+        gap0[..., :niv] = -gap0[..., niv:]
+    else:
+        gap0 = np.random.random_sample(shape)
+
+    return gap0
+
+
+def solve_eliashberg_poweriter(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tuple[list, list[GapFunction]]:
+    """
+    Solve the Eliashberg equation for the superconducting eigenvalue and gap function using the power iteration method.
+    """
+    gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(
+        config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk
+    ).decompress_q_dimension()
+
+    gamma_x = gamma_q_r_pp.fft() if gamma_q_r_pp.channel == SpinChannel.SING else -gamma_q_r_pp.fft()
+    gamma_x_flipped = gamma_x.flip_momentum_axis().flip_frequency_axis(-1)
+
+    gap_shape = gamma_q_r_pp.nq + 2 * (gamma_q_r_pp.n_bands,) + (2 * gamma_q_r_pp.niv,)
+    gchi0_q0_pp = gchi0_q0_pp.decompress_q_dimension()
+
+    sign = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
+
+    gap0 = get_initial_gap_function(gap_shape, gamma_q_r_pp.channel)
+
+    einsum_str1 = "xyzabcdv,xyzdcv->xyzabv"
+    path1 = np.einsum_path(einsum_str1, gchi0_q0_pp.mat, gap0, optimize=True)[1]
+    einsum_str2 = "xyzabcdvp,xyzdcp->xyzabv"
+    path2 = np.einsum_path(einsum_str2, gamma_x.mat, gap0, optimize=True)[1]
+
+    def mv(gap: np.ndarray):
+        gap_gg = gap.reshape(gap_shape)
+        gap_gg = np.fft.fftn(np.einsum(einsum_str1, gchi0_q0_pp.mat, gap_gg, optimize=path1))
+        gap_gg_flipped = np.roll(np.flip(gap_gg, axis=(0, 1, 2)), shift=1, axis=(0, 1, 2))
+        gap_new = np.einsum(einsum_str2, gamma_x.mat, gap_gg, optimize=path2)
+        gap_new += sign * np.einsum(einsum_str2, gamma_x_flipped.mat, gap_gg_flipped, optimize=path2)
+        gap_new *= 0.5 / config.lattice.q_grid.nk_tot / config.sys.beta
+        return np.fft.ifftn(gap_new).flatten()
+
+    mat = LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv, dtype=np.complex64)
+    lambdas, gaps = eigsh(mat, k=config.eliashberg.n_eig, which="LA", sigma=1, tol=config.eliashberg.epsilon, v0=gap0)
+    idx = np.abs(lambdas - 1).argsort()
+    lambdas = lambdas[idx]
+    gaps = gaps[:, idx]
+
+    gap_functions = []
+    for i in range(config.eliashberg.n_eig):
+        gap_functions.append(GapFunction(gaps[..., i], gamma_q_r_pp.channel, gamma_q_r_pp.nq))
+
+    return lambdas, gap_functions
+
+
 def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tuple[float, GapFunction]:
     r"""
     Solve the Eliashberg equation for the superconducting eigenvalue and gap function. For this we have to solve the
@@ -183,9 +275,14 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tup
     gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk)
     logger.log_info(f"Mapped Gamma_pp ({gamma_q_r_pp.channel.value}let) to full BZ.")
 
-    factor = -1 if gamma_q_r_pp.channel == SpinChannel.SING else 1
-    obj = factor * 0.5 / config.sys.beta * gamma_q_r_pp.ifft().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.ifft())
-    obj = FourPoint(obj, gamma_q_r_pp.channel, config.lattice.nk, 0, 2, has_compressed_q_dimension=True)
+    factor = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
+    gamma = gamma_q_r_pp.ifft().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.ifft())
+    gamma += factor * gamma_q_r_pp.flip_momentum_axis().ifft().flip_frequency_axis(-1).times(
+        "kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.flip_momentum_axis().ifft()
+    )
+    gamma *= 0.5 / config.sys.beta
+
+    obj = FourPoint(gamma, gamma_q_r_pp.channel, config.lattice.nk, 0, 2, has_compressed_q_dimension=True)
     logger.log_info("Calculated the matrix for the eigenvalue problem.")
     eigvals, eigvecs = obj.find_eigendecomposition()
     logger.log_info("Calculated the eigenvalues and eigenvectors of the matrix.")
@@ -196,7 +293,7 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tup
     indices = np.argmax(eigvals.real, axis=-1)[..., None, None]
     gap_r = np.take_along_axis(eigvecs, indices, axis=-2).squeeze(-2)
     gap_r = gap_r.reshape(config.lattice.k_grid.nk_tot, config.sys.n_bands, config.sys.n_bands, 2 * gamma_q_r_pp.niv)
-    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True, True).fft()
+    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True, True).ifft()
 
     logger.log_info(f"Found the the {gamma_q_r_pp.channel.value}let gap function.")
     logger.log_info(f"Eliashberg equation for {gamma_q_r_pp.channel.value}let channel solved.")
@@ -246,19 +343,19 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
         logger.log_info("Created the bare bubble susceptibility in pp notation and for w = 0.")
 
         f_ud_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_ud_loc.npy"))
-        logger.log_info("Loaded the local full UD verted from file.")
+        logger.log_info("Loaded the local full UD vertex from file.")
         f_ud_loc = transform_vertex_ph_to_pp_w0(f_ud_loc)
-        gamma_sing_pp -= f_ud_loc
-        gamma_trip_pp -= f_ud_loc
+        # gamma_sing_pp -= f_ud_loc
+        # gamma_trip_pp -= f_ud_loc
 
-        lam_sing, gap_sing = solve_eliashberg_eig(gamma_sing_pp, gchi0_q0_pp)
-        lam_trip, gap_trip = solve_eliashberg_eig(gamma_trip_pp, gchi0_q0_pp)
+        lambdas_sing, gaps_sing = solve_eliashberg_poweriter(gamma_sing_pp, gchi0_q0_pp)
+        lambdas_trip, gaps_trip = solve_eliashberg_poweriter(gamma_trip_pp, gchi0_q0_pp)
     else:
-        lam_sing, lam_trip, gap_sing, gap_trip = (None,) * 4
+        lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
 
-    lam_sing = comm.bcast(lam_sing, root=0)
-    lam_trip = comm.bcast(lam_trip, root=0)
-    gap_sing = comm.bcast(gap_sing, root=0)
-    gap_trip = comm.bcast(gap_trip, root=0)
+    lambdas_sing = comm.bcast(lambdas_sing, root=0)
+    lambdas_trip = comm.bcast(lambdas_trip, root=0)
+    gaps_sing = comm.bcast(gaps_sing, root=0)
+    gaps_trip = comm.bcast(gaps_trip, root=0)
 
-    return lam_sing, lam_trip, gap_sing, gap_trip
+    return lambdas_sing, lambdas_trip, gaps_sing, gaps_trip

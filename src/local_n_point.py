@@ -239,7 +239,7 @@ class LocalNPoint(IHaveMat):
         self._full_niv_range = False
         return self
 
-    def flip_axis(self, axis: tuple):
+    def flip_frequency_axis(self, axis: tuple):
         """
         Flips the matrix along the specified axis.
         """
