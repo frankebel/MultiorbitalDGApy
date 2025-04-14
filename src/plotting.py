@@ -6,6 +6,31 @@ from greens_function import GreensFunction
 from matsubara_frequencies import MFHelper
 
 
+def add_afzb(ax=None, kx=None, ky=None, lw=1.0, marker=""):
+    """
+    Add visual lines to mark the antiferromagnetic zone-boundary to existing axis.
+    """
+    if np.any(kx < 0):
+        ax.plot(np.linspace(-np.pi, 0, 101), np.linspace(0, np.pi, 101), "--k", lw=lw, marker=marker)
+        ax.plot(np.linspace(-np.pi, 0, 101), np.linspace(0, -np.pi, 101), "--k", lw=lw, marker=marker)
+        ax.plot(np.linspace(0, np.pi, 101), np.linspace(-np.pi, 0, 101), "--k", lw=lw, marker=marker)
+        ax.plot(np.linspace(0, np.pi, 101), np.linspace(np.pi, 0, 101), "--k", lw=lw, marker=marker)
+        ax.plot(kx, 0 * kx, "-k", lw=lw, marker=marker)
+        ax.plot(0 * ky, ky, "-k", lw=lw, marker=marker)
+    else:
+        ax.plot(np.linspace(0, np.pi, 101), np.linspace(np.pi, 2 * np.pi, 101), "--k", lw=lw, marker=marker)
+        ax.plot(np.linspace(np.pi, 0, 101), np.linspace(0, np.pi, 101), "--k", lw=lw, marker=marker)
+        ax.plot(np.linspace(np.pi, 2 * np.pi, 101), np.linspace(0, np.pi, 101), "--k", lw=lw, marker=marker)
+        ax.plot(np.linspace(np.pi, 2 * np.pi, 101), np.linspace(np.pi * 2, np.pi, 101), "--k", lw=lw, marker=marker)
+        ax.plot(kx, np.pi * np.ones_like(kx), "-k", lw=lw, marker=marker)
+        ax.plot(np.pi * np.ones_like(ky), ky, "-k", lw=lw, marker=marker)
+
+    ax.set_xlim(kx[0], kx[-1])
+    ax.set_ylim(ky[0], ky[-1])
+    ax.set_xlabel("$k_x$")
+    ax.set_ylabel("$k_y$")
+
+
 def sigma_loc_checks(
     siw_arr: list[np.ndarray],
     labels: list[str],

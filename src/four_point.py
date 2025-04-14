@@ -143,13 +143,20 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         if len(self.current_shape) == 4:  # [q, w, x1, x2]
             return self
 
-        if self.num_wn_dimensions != 1:
-            raise ValueError("Converting to compound indices only supported for one w dimension.")
-
         if not self.has_compressed_q_dimension:
             self.compress_q_dimension()
 
         self.update_original_shape()
+
+        if (
+            self.num_wn_dimensions == 0  # [q, o1, o2, o3, o4, v, vp]
+        ):  # we assume that the object has 2 fermionic frequency dimensions, as is the case for pairing objects.
+            if self.num_vn_dimensions != 2:
+                raise ValueError(
+                    "Object must have 2 fermionic frequency dimensions if it does not have any w dimension."
+                )
+            self.mat = self.mat.reshape(self.nq_tot, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv)
+            return self
 
         if self.num_vn_dimensions == 0:  # [q, o1, o2, o3, o4, w]
             self.mat = self.mat.transpose(0, 5, 1, 2, 3, 4).reshape(

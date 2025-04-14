@@ -187,6 +187,12 @@ def execute_dga_routine():
             gap_trip.save(name=f"gap_trip", output_dir=config.output.eliashberg_path)
             logger.log_info("Saved singlet and triplet gap functions to files.")
 
+        # if config.output.do_plotting and comm.rank == 0:
+        kx, ky = config.lattice.k_grid.kx_shift, config.lattice.k_grid.ky_shift
+        gap_sing.plot(kx, ky, output_dir=config.output.eliashberg_path)
+        gap_trip.plot(kx, ky, output_dir=config.output.eliashberg_path)
+        logger.log_info("Plotted singlet and triplet gap functions.")
+
     logger.log_info("Exiting ...")
     MPI.Finalize()
 

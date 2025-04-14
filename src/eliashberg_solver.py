@@ -148,16 +148,23 @@ def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> LocalFourPoint | Four
     )
 
 
-def create_full_vertex_pp_q_r(
+def calculate_full_vertex_pp_w0(
     u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, mpi_dist_irrk: MpiDistributor
-) -> FourPoint:
-    """
-    Calculate the full vertex in pp notation. For details, see the supplementary information of
-    Phys. Rev. B 99, 041115(R) (2019).
-    """
-    f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
+):
+    group_size = max(mpi_dist_irrk.comm.size // 3, 1)
+    color = mpi_dist_irrk.comm.rank // group_size
+    sub_comm = mpi_dist_irrk.comm.Split(color, mpi_dist_irrk.comm.rank)
+
+    f_q_r = None
+    for i in range(sub_comm.size):
+        if sub_comm.rank == i:
+            f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
+        sub_comm.Barrier()
+    sub_comm.Free()
+
     if config.output.save_fq:
         f_q_r = gather_save_scatter(f_q_r, config.output.output_path, mpi_dist_irrk)
+
     return transform_vertex_ph_to_pp_w0(f_q_r)
 
 
@@ -177,9 +184,10 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tup
     logger.log_info(f"Mapped Gamma_pp ({gamma_q_r_pp.channel.value}let) to full BZ.")
 
     factor = -1 if gamma_q_r_pp.channel == SpinChannel.SING else 1
-    mat = factor * 0.5 / config.sys.beta * gamma_q_r_pp.ifft().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.ifft())
+    obj = factor * 0.5 / config.sys.beta * gamma_q_r_pp.ifft().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.ifft())
+    obj = FourPoint(obj, gamma_q_r_pp.channel, config.lattice.nk, 0, 2, has_compressed_q_dimension=True)
     logger.log_info("Calculated the matrix for the eigenvalue problem.")
-    eigvals, eigvecs = np.linalg.eig(mat)
+    eigvals, eigvecs = obj.find_eigendecomposition()
     logger.log_info("Calculated the eigenvalues and eigenvectors of the matrix.")
 
     lam_r = eigvals.real.max()
@@ -187,7 +195,8 @@ def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tup
 
     indices = np.argmax(eigvals.real, axis=-1)[..., None, None]
     gap_r = np.take_along_axis(eigvecs, indices, axis=-2).squeeze(-2)
-    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True).fft()
+    gap_r = gap_r.reshape(config.lattice.k_grid.nk_tot, config.sys.n_bands, config.sys.n_bands, 2 * gamma_q_r_pp.niv)
+    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True, True).fft()
 
     logger.log_info(f"Found the the {gamma_q_r_pp.channel.value}let gap function.")
     logger.log_info(f"Eliashberg equation for {gamma_q_r_pp.channel.value}let channel solved.")
@@ -206,19 +215,9 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
 
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
-    group_size = max(comm.size // 3, 1)
-    color = comm.rank // group_size
-    sub_comm = comm.Split(color, comm.rank)
-
-    f_dens_pp = f_magn_pp = None
-    for i in range(sub_comm.size):
-        if sub_comm.rank == i:
-            f_dens_pp = create_full_vertex_pp_q_r(u_loc, v_nonloc, SpinChannel.DENS, mpi_dist_irrk)
-            f_magn_pp = create_full_vertex_pp_q_r(u_loc, v_nonloc, SpinChannel.MAGN, mpi_dist_irrk)
-        sub_comm.Barrier()
-
-    logger.log_info("Created full density and magnetic pairing vertex in pp notation.")
-    sub_comm.Free()
+    f_dens_pp = calculate_full_vertex_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, mpi_dist_irrk)
+    f_magn_pp = calculate_full_vertex_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, mpi_dist_irrk)
+    logger.log_info("Created full density and magnetic vertex in pp notation.")
 
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     mpi_dist_irrk.delete_file()
@@ -238,7 +237,7 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     if config.eliashberg.save_pairing_vertex:
         gamma_trip_pp = gather_save_scatter(gamma_trip_pp, config.output.eliashberg_path, mpi_dist_irrk)
 
-    gamma_sing_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
+    gamma_sing_pp.mat = mpi_dist_irrk.gather(gamma_sing_pp.mat)
     gamma_trip_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
 
     if comm.rank == 0:

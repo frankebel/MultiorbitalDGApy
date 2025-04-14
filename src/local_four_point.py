@@ -1,3 +1,5 @@
+import os
+
 import scipy as sp
 from matplotlib import pyplot as plt
 
@@ -589,6 +591,16 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.update_original_shape()
         return copy
 
+    def find_eigendecomposition(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Finds the eigendecomposition of the LocalFourPoint object (in compound indices!).
+        Returns the eigenvalues and eigenvectors. We can use eigh since due to time-reversal symmetry, we ecpect the matrices
+        in compound notation to be hermitean.
+        """
+        mat = deepcopy(self).to_full_niw_range().to_full_niv_range().to_compound_indices().mat
+        eigvals, eigvecs = np.linalg.eigh(mat)
+        return eigvals, eigvecs
+
     @staticmethod
     def load(
         filename: str,
@@ -681,7 +693,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if np.abs(omega) > self.niw:
             raise ValueError(f"Omega {omega} out of range.")
         if len(orbs) != 4:
-            raise ValueError("'orbs' needs to be an array of size 4.")
+            raise ValueError("'orbs' needs to be of size 4.")
 
         fig, axes = plt.subplots(ncols=2, figsize=(7, 3), dpi=251)
         axes = axes.flatten()
@@ -702,7 +714,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         fig.colorbar(im2, ax=(axes[1]), aspect=15, fraction=0.08, location="right", pad=0.05)
         plt.tight_layout()
         if do_save:
-            plt.savefig(output_dir + "/" + name + f"_w{omega}" + ".png")
+            plt.savefig(os.path.join(output_dir, f"{name}_w{omega}.png"))
         if show:
             plt.show()
         else:
