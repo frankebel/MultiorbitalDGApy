@@ -29,25 +29,22 @@ def delete_files(filepath: str, *args) -> None:
                 config.logger.log_info(f"Error deleting file: {name}.")
 
 
-def gather_save_scatter(
-    f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDistributor, scatter: bool = True, save: bool = False
-) -> FourPoint:
+def gather_save_scatter(f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDistributor) -> FourPoint:
     """
-    Gather the vertex function from all ranks, save it to file, and scatter it back to the original rank.
+    Gather the vertex function from all ranks, save it to file, and scatter it back to the original ranks.
     """
-    if not save:
-        return f_q_r
-
     f_q_r.mat = mpi_dist_irrk.gather(f_q_r.mat)
+
     if mpi_dist_irrk.my_rank == 0:
         f_q_r.save(output_dir=file_path, name=f"f_{f_q_r.channel.value}_irrq")
-        config.logger.log_info(
-            f"Saved full {f_q_r.channel.value} vertex "
-            f"{"in pp notation " if f_q_r.frequency_notation == FrequencyNotation.PP else ""}"
-            f"(for the irreducible BZ) to file."
-        )
-    if scatter:
-        f_q_r.mat = mpi_dist_irrk.scatter(f_q_r.mat)
+
+    config.logger.log_info(
+        f"Saved full {f_q_r.channel.value} vertex "
+        f"{"in pp notation " if f_q_r.frequency_notation == FrequencyNotation.PP else ""}"
+        f"(for the irreducible BZ) to file."
+    )
+
+    f_q_r.mat = mpi_dist_irrk.scatter(f_q_r.mat)
     return f_q_r
 
 
@@ -159,9 +156,8 @@ def create_full_vertex_pp_q_r(
     Phys. Rev. B 99, 041115(R) (2019).
     """
     f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
-    f_q_r = gather_save_scatter(
-        f_q_r, config.output.output_path, mpi_dist_irrk, scatter=True, save=config.output.save_fq
-    )
+    if config.output.save_fq:
+        f_q_r = gather_save_scatter(f_q_r, config.output.output_path, mpi_dist_irrk)
     return transform_vertex_ph_to_pp_w0(f_q_r)
 
 
@@ -231,26 +227,19 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     gamma_sing_pp.channel = SpinChannel.SING
     logger.log_info("Created full singlet pairing vertex in pp notation.")
 
-    gamma_sing_pp = gather_save_scatter(
-        gamma_sing_pp,
-        config.output.eliashberg_path,
-        mpi_dist_irrk,
-        scatter=False,
-        save=config.eliashberg.save_pairing_vertex,
-    )
+    if config.eliashberg.save_pairing_vertex:
+        gamma_sing_pp = gather_save_scatter(gamma_sing_pp, config.output.eliashberg_path, mpi_dist_irrk)
 
     gamma_trip_pp = 0.5 * f_dens_pp + 0.5 * f_magn_pp
     gamma_trip_pp.channel = SpinChannel.TRIP
     del f_dens_pp, f_magn_pp
     logger.log_info("Created full triplet pairing vertex in pp notation.")
 
-    gamma_trip_pp = gather_save_scatter(
-        gamma_trip_pp,
-        config.output.eliashberg_path,
-        mpi_dist_irrk,
-        scatter=False,
-        save=config.eliashberg.save_pairing_vertex,
-    )
+    if config.eliashberg.save_pairing_vertex:
+        gamma_trip_pp = gather_save_scatter(gamma_trip_pp, config.output.eliashberg_path, mpi_dist_irrk)
+
+    gamma_sing_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
+    gamma_trip_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
 
     if comm.rank == 0:
         niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
