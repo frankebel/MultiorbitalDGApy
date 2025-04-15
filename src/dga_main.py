@@ -183,14 +183,21 @@ def execute_dga_routine():
         lam_sing, lam_trip, gap_sing, gap_trip = eliashberg_solver.solve(giwk, u_loc, v_nonloc, comm)
 
         if config.output.save_quantities and comm.rank == 0:
-            for i in range(config.eliashberg.n_eig):
+            np.savetxt(
+                os.path.join(config.output.eliashberg_path, "eigenvalues.txt"),
+                [lam_sing.real, lam_trip.real],
+                delimiter=",",
+                fmt="%.9f",
+            )
+
+            for i in range(len(gap_sing)):
                 gap_sing[i].save(name=f"gap_sing_{i}", output_dir=config.output.eliashberg_path)
                 gap_trip[i].save(name=f"gap_trip_{i}", output_dir=config.output.eliashberg_path)
             logger.log_info("Saved singlet and triplet gap functions to files.")
 
         if config.output.do_plotting and comm.rank == 0:
             kx, ky = config.lattice.k_grid.kx_shift, config.lattice.k_grid.ky_shift
-            for i in range(config.eliashberg.n_eig):
+            for i in range(len(gap_sing)):
                 gap_sing[i].plot(kx, ky, name=f"{i}", output_dir=config.output.eliashberg_path)
                 gap_trip[i].plot(kx, ky, name=f"{i}", output_dir=config.output.eliashberg_path)
             logger.log_info("Plotted singlet and triplet gap functions.")

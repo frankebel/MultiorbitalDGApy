@@ -2,8 +2,7 @@ import os
 
 import mpi4py.MPI as MPI
 import numpy as np
-from numpy import ndarray
-from scipy.sparse.linalg import LinearOperator, eigsh
+import scipy as sp
 
 import config
 from four_point import FourPoint
@@ -53,7 +52,8 @@ def gather_save_scatter(f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDist
 def create_gchi0_pp_w0(giwk: GreensFunction, niv_pp: int) -> FourPoint:
     r"""
     Returns the particle-particle bare bubble susceptibility from the Green's function. Returns the object with :math:`\omega = 0`.
-    We have :math:`\chi_{0;abcd}^{\vec{k}(\omega=0)\nu} = -\beta * G_{ad}^k * G_{cb}^{-k}` with :math:`G_{cb}^{-k} = G_{bc}^{*k}`.
+    We have :math:`\chi_{0;abcd}^{\vec{k}(\omega=0)\nu} = G_{ad}^k * G_{cb}^{-k}` with :math:`G_{cb}^{-k} = G_{bc}^{*k}`. Attention:
+    no factor of :math:`-\beta` is included here!
     """
     g = giwk.cut_niv(niv_pp).compress_q_dimension()
 
@@ -62,7 +62,7 @@ def create_gchi0_pp_w0(giwk: GreensFunction, niv_pp: int) -> FourPoint:
 
     g_left_mat = g.mat[:, :, None, None, :, :] * eye_left
     g_right_mat = np.conj(g.mat)[:, None, :, :, None, :] * eye_right
-    gchi0_q = -config.sys.beta * g_left_mat * g_right_mat
+    gchi0_q = g_left_mat * g_right_mat
 
     return FourPoint(gchi0_q, SpinChannel.NONE, config.lattice.nq, 0, 1, has_compressed_q_dimension=True)
 
@@ -139,10 +139,6 @@ def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint) -> LocalFourPoint | Four
     for idx, w in enumerate(MFHelper.wn(config.box.niw_core)):
         f_q_r_pp_mat[..., omega == w] = -f_q_r_flip[..., idx, omega == w]
 
-    config.logger.log_info(
-        f"Calculated full {f_q_r_flip.channel.value if f_q_r_flip.channel is not SpinChannel.NONE else "local UD"} "
-        f"vertex in pp notation."
-    )
     if is_local:
         return LocalFourPoint(f_q_r_pp_mat, f_q_r_flip.channel, 0, frequency_notation=FrequencyNotation.PP)
     return FourPoint(
@@ -175,35 +171,29 @@ def calculate_full_vertex_pp_w0(
 
 
 def get_initial_gap_function(shape: tuple, channel: SpinChannel):
-    if channel != SpinChannel.SING and channel != SpinChannel.TRIP:
+    if channel not in {SpinChannel.SING, SpinChannel.TRIP}:
         raise ValueError("Channel must be either SING or TRIP.")
 
     gap0 = np.zeros(shape, dtype=np.complex64)
     niv = shape[-1] // 2
+    k_grid = config.lattice.k_grid.grid
 
-    def d_wave(k_grid):
-        return -np.cos(k_grid[0])[:, None, None] + np.cos(k_grid[1])[None, :, None]
+    symm = {
+        "d-wave": lambda k: -np.cos(k[0])[:, None, None] + np.cos(k[1])[None, :, None],
+        "p-wave-x": lambda k: np.sin(k[0])[:, None, None],
+        "p-wave-y": lambda k: np.sin(k[1])[None, :, None],
+    }
 
-    def p_wave_x(k_grid):
-        return np.sin(k_grid[0])[:, None, None]
-
-    def p_wave_y(k_grid):
-        return np.sin(k_grid[1])[None, :, None]
-
-    if config.eliashberg.symmetry == "d-wave":
-        gap0[..., niv:] = np.repeat(d_wave(config.lattice.k_grid.grid)[:, :, :, None, None, None], niv, axis=-1)
-    elif config.eliashberg.symmetry == "p-wave-x":
-        gap0[..., niv:] = np.repeat(p_wave_x(config.lattice.k_grid.grid)[:, :, :, None, None, None], niv, axis=-1)
-    elif config.eliashberg.symmetry == "p-wave-y":
-        gap0[..., niv:] = np.repeat(p_wave_y(config.lattice.k_grid.grid)[:, :, :, None, None, None], niv, axis=-1)
+    if config.eliashberg.symmetry in symm:
+        gap0[..., niv:] = np.repeat(symm[config.eliashberg.symmetry](k_grid)[:, :, :, None, None, None], niv, axis=-1)
     else:
         gap0 = np.random.random_sample(shape)
 
-    v_sym = ""
-    if config.eliashberg.symmetry == "d-wave":
-        v_sym = "even" if channel == SpinChannel.SING else "odd"
-    elif config.eliashberg.symmetry == "p-wave-x" or config.eliashberg.symmetry == "p-wave-y":
-        v_sym = "odd" if channel == SpinChannel.SING else "even"
+    v_sym = {
+        "d-wave": "even" if channel == SpinChannel.SING else "odd",
+        "p-wave-x": "odd" if channel == SpinChannel.SING else "even",
+        "p-wave-y": "odd" if channel == SpinChannel.SING else "even",
+    }.get(config.eliashberg.symmetry, "")
 
     if v_sym == "even":
         gap0[..., :niv] = gap0[..., niv:]
@@ -215,89 +205,75 @@ def get_initial_gap_function(shape: tuple, channel: SpinChannel):
     return gap0
 
 
-def solve_eliashberg_poweriter(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tuple[list, list[GapFunction]]:
+def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tuple[list, list[GapFunction]]:
     """
-    Solve the Eliashberg equation for the superconducting eigenvalue and gap function using the power iteration method.
+    Solves the Eliashberg equation for the superconducting eigenvalue and gap function using an
+    Implicitly Restarted Lanczos Method.
     """
+    logger = config.logger
+
     gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(
         config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk
     ).decompress_q_dimension()
+    logger.log_info(f"Mapped Gamma_pp ({gamma_q_r_pp.channel.value}) to full BZ.")
+    logger.log_memory_usage(f"Gamma_pp_{gamma_q_r_pp.channel.value}", gamma_q_r_pp, 1)
 
-    gamma_x = gamma_q_r_pp.fft() if gamma_q_r_pp.channel == SpinChannel.SING else -gamma_q_r_pp.fft()
-    gamma_x_flipped = gamma_x.flip_momentum_axis().flip_frequency_axis(-1)
+    sign = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
+
+    gamma_x = sign * gamma_q_r_pp.fft()
+    logger.log_info("Fourier-transformed Gamma_pp.")
+    gamma_x_flipped = gamma_x.flip_momentum_axis().flip_frequency_axis(-2)
 
     gap_shape = gamma_q_r_pp.nq + 2 * (gamma_q_r_pp.n_bands,) + (2 * gamma_q_r_pp.niv,)
     gchi0_q0_pp = gchi0_q0_pp.decompress_q_dimension()
 
-    sign = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
-
     gap0 = get_initial_gap_function(gap_shape, gamma_q_r_pp.channel)
+    logger.log_info(
+        f"Initialized the gap function as {config.eliashberg.symmetry if config.eliashberg.symmetry else "random"} "
+        f"for the {gamma_q_r_pp.channel.value}let channel."
+    )
 
     einsum_str1 = "xyzabcdv,xyzdcv->xyzabv"
     path1 = np.einsum_path(einsum_str1, gchi0_q0_pp.mat, gap0, optimize=True)[1]
-    einsum_str2 = "xyzabcdvp,xyzdcp->xyzabv"
+    einsum_str2 = "xyzadbcvp,xyzcdp->xyzabv"
     path2 = np.einsum_path(einsum_str2, gamma_x.mat, gap0, optimize=True)[1]
 
-    def mv(gap: np.ndarray):
-        gap_gg = gap.reshape(gap_shape)
-        gap_gg = np.fft.fftn(np.einsum(einsum_str1, gchi0_q0_pp.mat, gap_gg, optimize=path1))
-        gap_gg_flipped = np.roll(np.flip(gap_gg, axis=(0, 1, 2)), shift=1, axis=(0, 1, 2))
-        gap_new = np.einsum(einsum_str2, gamma_x.mat, gap_gg, optimize=path2)
-        gap_new += sign * np.einsum(einsum_str2, gamma_x_flipped.mat, gap_gg_flipped, optimize=path2)
-        gap_new *= 0.5 / config.lattice.q_grid.nk_tot / config.sys.beta
-        return np.fft.ifftn(gap_new).flatten()
+    norm = 0.5 / config.lattice.q_grid.nk_tot / config.sys.beta
 
-    mat = LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv, dtype=np.complex64)
-    lambdas, gaps = eigsh(mat, k=config.eliashberg.n_eig, which="LA", sigma=1, tol=config.eliashberg.epsilon, v0=gap0)
+    def mv(gap: np.ndarray):
+        gap_gg = np.fft.fftn(
+            np.einsum(einsum_str1, gchi0_q0_pp.mat, gap.reshape(gap_shape), optimize=path1), axes=(0, 1, 2)
+        )
+        gap_gg_flipped = np.roll(np.flip(gap_gg, axis=(0, 1, 2)), shift=1, axis=(0, 1, 2))
+        gap_new = np.einsum(einsum_str2, gamma_x.mat, gap_gg, optimize=path2) + sign * np.einsum(
+            einsum_str2, gamma_x_flipped.mat, gap_gg_flipped, optimize=path2
+        )
+        return np.fft.ifftn(norm * gap_new, axes=(0, 1, 2)).flatten()
+
+    mat = sp.sparse.linalg.LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv, dtype=np.complex64)
+    logger.log_info(
+        f"Starting Lanczos method to retrieve largest{"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"} "
+        f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"}."
+    )
+    lambdas, gaps = sp.sparse.linalg.eigsh(
+        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, which="LA"
+    )
+    logger.log_info(f"Finished Lanczos method for the {gamma_q_r_pp.channel.value}let channel.")
     idx = np.abs(lambdas - 1).argsort()
     lambdas = lambdas[idx]
     gaps = gaps[:, idx]
+    logger.log_info(
+        f"Superconducting eigenvalues for the {gamma_q_r_pp.channel.value}let "
+        f"channel are: {', '.join(f'{l:.6f}' for l in lambdas)}."
+    )
+    logger.log_info(f"Finished Eliashberg iteration for the {gamma_q_r_pp.channel.value}let channel.")
 
-    gap_functions = []
-    for i in range(config.eliashberg.n_eig):
-        gap_functions.append(GapFunction(gaps[..., i], gamma_q_r_pp.channel, gamma_q_r_pp.nq))
+    gap_functions = [
+        GapFunction(gaps[..., i].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)
+        for i in range(config.eliashberg.n_eig)
+    ]
 
     return lambdas, gap_functions
-
-
-def solve_eliashberg_eig(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tuple[float, GapFunction]:
-    r"""
-    Solve the Eliashberg equation for the superconducting eigenvalue and gap function. For this we have to solve the
-    eigenvalue problem for the matrix :math:`\mp\Gamma_{s/t;1b2a}^{k-k'\nu\nu'} @ \chi_{0}^{pp;k-k'\nu'\nu''}_{abcd}`.
-    We do this by taking the eigenvalues of the matrix in real space and then transforming back to momentum space. To
-    be more precise, we compute the discrete inverse Fourier transform of both the irreducible vertex and the bare
-    bubble susceptibility in pp-notation. We then multiply the two matrices in real space and take the leading eigenvalue
-    and corresponding eigenfunction of the resulting matrix. We then forward Fourier transform the eigenfunction to get
-    the gap function in momentum space.
-    """
-    logger = config.logger
-
-    gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk)
-    logger.log_info(f"Mapped Gamma_pp ({gamma_q_r_pp.channel.value}let) to full BZ.")
-
-    factor = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
-    gamma = gamma_q_r_pp.ifft().times("kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.ifft())
-    gamma += factor * gamma_q_r_pp.flip_momentum_axis().ifft().flip_frequency_axis(-1).times(
-        "kibjavp,kabcdp->kijcdvp", gchi0_q0_pp.flip_momentum_axis().ifft()
-    )
-    gamma *= 0.5 / config.sys.beta
-
-    obj = FourPoint(gamma, gamma_q_r_pp.channel, config.lattice.nk, 0, 2, has_compressed_q_dimension=True)
-    logger.log_info("Calculated the matrix for the eigenvalue problem.")
-    eigvals, eigvecs = obj.find_eigendecomposition()
-    logger.log_info("Calculated the eigenvalues and eigenvectors of the matrix.")
-
-    lam_r = eigvals.real.max()
-    logger.log_info(f"Found the largest eigenvalue for {gamma_q_r_pp.channel.value}let channel: {lam_r:.6f}.")
-
-    indices = np.argmax(eigvals.real, axis=-1)[..., None, None]
-    gap_r = np.take_along_axis(eigvecs, indices, axis=-2).squeeze(-2)
-    gap_r = gap_r.reshape(config.lattice.k_grid.nk_tot, config.sys.n_bands, config.sys.n_bands, 2 * gamma_q_r_pp.niv)
-    gap_r = GapFunction(gap_r, gamma_q_r_pp.channel, gamma_q_r_pp.nq, True, True).ifft()
-
-    logger.log_info(f"Found the the {gamma_q_r_pp.channel.value}let gap function.")
-    logger.log_info(f"Eliashberg equation for {gamma_q_r_pp.channel.value}let channel solved.")
-    return lam_r, gap_r
 
 
 def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, comm: MPI.Comm):
@@ -313,15 +289,16 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
     f_dens_pp = calculate_full_vertex_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, mpi_dist_irrk)
+    logger.log_info("Calculated full density vertex in pp notation.")
     f_magn_pp = calculate_full_vertex_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, mpi_dist_irrk)
-    logger.log_info("Created full density and magnetic vertex in pp notation.")
+    logger.log_info("Calculated full magnetic vertex in pp notation.")
 
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     mpi_dist_irrk.delete_file()
 
     gamma_sing_pp = 0.5 * f_dens_pp - 1.5 * f_magn_pp
     gamma_sing_pp.channel = SpinChannel.SING
-    logger.log_info("Created full singlet pairing vertex in pp notation.")
+    logger.log_info("Calculated full singlet pairing vertex in pp notation.")
 
     if config.eliashberg.save_pairing_vertex:
         gamma_sing_pp = gather_save_scatter(gamma_sing_pp, config.output.eliashberg_path, mpi_dist_irrk)
@@ -329,7 +306,7 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     gamma_trip_pp = 0.5 * f_dens_pp + 0.5 * f_magn_pp
     gamma_trip_pp.channel = SpinChannel.TRIP
     del f_dens_pp, f_magn_pp
-    logger.log_info("Created full triplet pairing vertex in pp notation.")
+    logger.log_info("Calculated full triplet pairing vertex in pp notation.")
 
     if config.eliashberg.save_pairing_vertex:
         gamma_trip_pp = gather_save_scatter(gamma_trip_pp, config.output.eliashberg_path, mpi_dist_irrk)
@@ -340,16 +317,17 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     if comm.rank == 0:
         niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
         gchi0_q0_pp = create_gchi0_pp_w0(giwk, niv_pp)
-        logger.log_info("Created the bare bubble susceptibility in pp notation and for w = 0.")
+        logger.log_info("Created the bare bubble susceptibility in pp notation.")
 
         f_ud_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_ud_loc.npy"))
         logger.log_info("Loaded the local full UD vertex from file.")
         f_ud_loc = transform_vertex_ph_to_pp_w0(f_ud_loc)
-        # gamma_sing_pp -= f_ud_loc
-        # gamma_trip_pp -= f_ud_loc
+        config.logger.log_info(f"Calculated full local UD vertex in pp notation.")
+        gamma_sing_pp -= f_ud_loc
+        gamma_trip_pp -= f_ud_loc
 
-        lambdas_sing, gaps_sing = solve_eliashberg_poweriter(gamma_sing_pp, gchi0_q0_pp)
-        lambdas_trip, gaps_trip = solve_eliashberg_poweriter(gamma_trip_pp, gchi0_q0_pp)
+        lambdas_sing, gaps_sing = solve_eliashberg_lanczos(gamma_sing_pp, gchi0_q0_pp)
+        lambdas_trip, gaps_trip = solve_eliashberg_lanczos(gamma_trip_pp, gchi0_q0_pp)
     else:
         lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
 

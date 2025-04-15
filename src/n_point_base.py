@@ -331,31 +331,36 @@ class IAmNonLocal(IHaveMat, ABC):
         """
         Performs a discrete forward Fourier transform over the momentum dimensions in-place and returns the original object.
         """
-        compress = False
-        if self.has_compressed_q_dimension:
-            compress = True
-            self.decompress_q_dimension()
+        copy = deepcopy(self)
 
-        np.fft.fftn(self.mat, axes=(0, 1, 2), out=self.mat)
-        return self.compress_q_dimension() if compress else self
+        compress = False
+        if copy.has_compressed_q_dimension:
+            compress = True
+            copy.decompress_q_dimension()
+
+        np.fft.fftn(copy.mat, axes=(0, 1, 2), out=copy.mat)
+        return copy.compress_q_dimension() if compress else copy
 
     def ifft(self):
         """
-        Performs a discrete inverse Fourier transform over the momentum dimensions in-place and returns the original object.
+        Performs a discrete inverse Fourier transform over the momentum dimensions and returns a copy.
         """
-        compress = False
-        if self.has_compressed_q_dimension:
-            compress = True
-            self.decompress_q_dimension()
+        copy = deepcopy(self)
 
-        np.fft.ifftn(self.mat, axes=(0, 1, 2), out=self.mat)
-        return self.compress_q_dimension() if compress else self
+        compress = False
+        if copy.has_compressed_q_dimension:
+            compress = True
+            copy.decompress_q_dimension()
+
+        np.fft.ifftn(copy.mat, axes=(0, 1, 2), out=copy.mat)
+        return copy.compress_q_dimension() if compress else copy
 
     def flip_momentum_axis(self):
         """
         Flips the momentum axis of the object and returns a copy.
         """
         copy = deepcopy(self)
+
         compress = False
         if copy.has_compressed_q_dimension:
             compress = True
