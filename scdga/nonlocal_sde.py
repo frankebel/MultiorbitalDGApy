@@ -5,6 +5,7 @@ import re
 import mpi4py.MPI as MPI
 
 import scdga.config as config
+from scdga.bubble_gen import BubbleGenerator
 from scdga.four_point import FourPoint
 from scdga.greens_function import GreensFunction, update_mu
 from scdga.interaction import LocalInteraction, Interaction
@@ -13,40 +14,6 @@ from scdga.matsubara_frequencies import *
 from scdga.mpi_distributor import MpiDistributor
 from scdga.n_point_base import SpinChannel
 from scdga.self_energy import SelfEnergy
-
-
-def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
-    """
-    Returns gchi0^{qk}_{lmm'l'} = -beta * G^{k}_{ll'} * G^{k-q}_{m'm}
-    """
-    wn = MFHelper.wn(config.box.niw_core, return_only_positive=True)
-
-    gchi0_q = np.zeros(
-        (len(q_list),) + (config.sys.n_bands,) * 4 + (len(wn), 2 * config.box.niv_full),
-        dtype=giwk.mat.dtype,
-    )
-
-    eye_left = np.eye(config.sys.n_bands)[None, None, None, None, :, :, None, None]
-    eye_right = np.eye(config.sys.n_bands)[None, None, None, :, None, None, :, None]
-
-    g_left_mat = (
-        giwk.mat[:, :, :, :, None, None, :, giwk.niv - config.box.niv_full : giwk.niv + config.box.niv_full] * eye_left
-    )
-
-    g_right = giwk.transpose_orbitals().mat
-    for idx_q, q in enumerate(q_list):
-        g_right_mat = np.roll(g_right, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :] * eye_right
-
-        for idx_w, wn_i in enumerate(wn):
-            start = giwk.niv - config.box.niv_full - wn_i
-            end = giwk.niv + config.box.niv_full - wn_i
-            gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat[..., start:end], axis=(0, 1, 2))
-
-    gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
-
-    return FourPoint(
-        gchi0_q, SpinChannel.NONE, config.lattice.nq, 1, 1, full_niw_range=False, has_compressed_q_dimension=True
-    )
 
 
 def get_hartree_fock(
@@ -324,7 +291,7 @@ def calculate_self_energy_q(
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
 
         logger.log_memory_usage("giwk", giwk_full, comm.size)
-        gchi0_q = create_generalized_chi0_q(giwk_full, my_irr_q_list)
+        gchi0_q = BubbleGenerator.create_generalized_chi0_q(giwk_full, my_irr_q_list)
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 

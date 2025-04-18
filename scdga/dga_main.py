@@ -92,6 +92,8 @@ def execute_dga_routine():
         chi_m.save(name="chi_magn", output_dir=config.output.output_path)
         vrg_d.save(name="vrg_dens", output_dir=config.output.output_path)
         vrg_m.save(name="vrg_magn", output_dir=config.output.output_path)
+        gchi_d.save(name="gchi_dens_loc", output_dir=config.output.output_path)
+        gchi_m.save(name="gchi_magn_loc", output_dir=config.output.output_path)
         f_d.save(name="f_dens_loc", output_dir=config.output.output_path)
         f_m.save(name="f_magn_loc", output_dir=config.output.output_path)
         del vrg_d, vrg_m
@@ -166,7 +168,9 @@ def execute_dga_routine():
     del gamma_d, gamma_m, sigma_dmft, sigma_loc
     logger.log_info("Non-local ladder-DGA routine finished.")
 
-    giwk_dga = GreensFunction.get_g_full(sigma_dga, config.sys.mu, ek).cut_niv(config.box.niv_full)
+    giwk_dga = GreensFunction.get_g_full(sigma_dga, config.sys.mu, ek).cut_niv(
+        config.box.niv_full + config.box.niw_core
+    )
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_dga.save(name=f"sigma_dga", output_dir=config.output.output_path)
@@ -225,7 +229,7 @@ def execute_dga_routine():
                     gaps_sing[i], kx, ky, name=f"gap_sing_{suffix}", output_dir=config.output.eliashberg_path
                 )
                 plotting.plot_gap_function(
-                    gaps_trip[i], kx, ky, name=f"gap_sing_{suffix}", output_dir=config.output.eliashberg_path
+                    gaps_trip[i], kx, ky, name=f"gap_trip_{suffix}", output_dir=config.output.eliashberg_path
                 )
             logger.log_info("Plotted singlet and triplet gap functions.")
 

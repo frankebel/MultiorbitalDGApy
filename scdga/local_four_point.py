@@ -507,73 +507,27 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def change_frequency_notation_ph_to_pp(self) -> "LocalFourPoint":
         r"""
-        Changes the frequency notation of the object from ph to pp and returns the object. The frequency shifts are
-
-        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (w - v_1 - v_2, v_1, v_2).
+        Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
+        The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
         """
-        if self.num_wn_dimensions + self.num_vn_dimensions != 3:
-            raise ValueError("Only objects with three frequency dimensions are supported.")
+        if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
+            raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
 
-        iw_pp, iv_pp, ivp_pp = MFHelper.get_frequencies_for_ph_to_pp_channel_conversion(self.niw, self.niv)
+        copy = deepcopy(self)
 
-        return LocalFourPoint(
-            self[..., iw_pp, iv_pp, ivp_pp],
-            self.channel,
-            1,
-            2,
-            full_niw_range=True,
-            full_niv_range=True,
-            frequency_notation=FrequencyNotation.PP,
-        )
+        if copy.frequency_notation == FrequencyNotation.PP:
+            return copy
 
-    def change_frequency_notation_ph_to_ph_bar(
-        self, other: "LocalFourPoint"
-    ) -> tuple["LocalFourPoint", "LocalFourPoint"]:
-        """
-        Changes the frequency notation of the object from ph to ph_bar and returns the object as a tuple in (d, m) channels.
-        Requires a density and a magnetic object.
-        """
-        if (
-            self.num_wn_dimensions + self.num_vn_dimensions != 3
-            or other.num_vn_dimensions + other.num_wn_dimensions != 3
-        ):
-            raise ValueError("Only objects with three frequency dimensions are supported.")
+        copy = copy.to_full_niw_range().to_full_niv_range()
 
-        if self.niw != other.niw or self.niv != other.niv:
-            raise ValueError("Both objects must have the same number of frequencies.")
+        if copy.num_vn_dimensions == 1:
+            copy = copy.extend_vn_to_diagonal()
 
-        if self.channel == other.channel and self.channel != SpinChannel.NONE:
-            raise ValueError(
-                "Channel of both objects must be different, one 'density' and one 'magnetic' object are needed."
-            )
-
-        iw_ph_bar, iv_ph_bar, ivp_ph_bar = MFHelper.get_frequencies_for_ph_to_ph_bar_channel_conversion(
-            self.niw, self.niv
-        )
-
-        mat_ph_dens = (self if self.channel == SpinChannel.DENS else other).mat[..., iw_ph_bar, iv_ph_bar, ivp_ph_bar]
-        mat_ph_magn = (self if self.channel == SpinChannel.MAGN else other).mat[..., iw_ph_bar, iv_ph_bar, ivp_ph_bar]
-
-        return (
-            LocalFourPoint(
-                -0.5 * mat_ph_dens - 1.5 * mat_ph_magn,
-                SpinChannel.DENS,
-                1,
-                2,
-                full_niw_range=True,
-                full_niv_range=True,
-                frequency_notation=FrequencyNotation.PH_BAR,
-            ).permute_orbitals("abcd->cbad"),
-            LocalFourPoint(
-                -0.5 * (mat_ph_dens - mat_ph_magn),
-                SpinChannel.MAGN,
-                1,
-                2,
-                full_niw_range=True,
-                full_niv_range=True,
-                frequency_notation=FrequencyNotation.PH_BAR,
-            ).permute_orbitals("abcd->cbad"),
-        )
+        iw_pp, iv_pp, ivp_pp = MFHelper.get_frequencies_for_ph_to_pp_channel_conversion(copy.niw, copy.niv)
+        copy.mat = copy.mat[..., iw_pp, iv_pp, ivp_pp]
+        copy.frequency_notation = FrequencyNotation.PP
+        copy.update_original_shape()
+        return copy
 
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """

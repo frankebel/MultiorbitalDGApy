@@ -1,4 +1,5 @@
 import scdga.config as config
+from scdga.bubble_gen import BubbleGenerator
 from scdga.greens_function import GreensFunction
 from scdga.interaction import LocalInteraction
 from scdga.local_four_point import LocalFourPoint
@@ -36,28 +37,6 @@ def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
         * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
     )
     return g_left_mat * g_right_mat
-
-
-def create_generalized_chi0(
-    g_loc: GreensFunction, frequency_shift: FrequencyShift = FrequencyShift.MINUS
-) -> LocalFourPoint:
-    r"""
-    Returns the generalized bare susceptibility
-    .. math:: \chi_{0;lmm'l'}^{wv} = -\beta G_{ll'}^{v} G_{m'm}^{v-w}.
-    """
-    wn = MFHelper.wn(config.box.niw_core)
-    iws, iws2 = np.array([MFHelper.get_frequency_shift(wn_i, frequency_shift) for wn_i in wn], dtype=int).T
-
-    niv_range = np.arange(-config.box.niv_full, config.box.niv_full)
-    g_left_mat = (
-        g_loc.mat[:, None, None, :, g_loc.niv + niv_range[None, :] + iws[:, None]]
-        * np.eye(g_loc.n_bands)[None, :, :, None, None, None]
-    )
-    g_right_mat = (
-        g_loc.mat[None, :, :, None, g_loc.niv + niv_range[None, :] + iws2[:, None]]
-        * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
-    )
-    return LocalFourPoint(-config.sys.beta * g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1)
 
 
 def create_gamma_r(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
@@ -205,7 +184,7 @@ def perform_local_schwinger_dyson(
     and the irreducible vertices. Employs explicit asymptotics as proposed by
     Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
     """
-    gchi0 = create_generalized_chi0(g_loc)
+    gchi0 = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
     gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert()
 
     gamma_d, gchi_d_sum, vrg_d, f_d, gchi_d = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
