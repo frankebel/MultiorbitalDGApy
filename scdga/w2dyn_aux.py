@@ -1,7 +1,7 @@
 import h5py
 
-import symmetrize_new as sym
-from n_point_base import *
+import scdga.symmetrize_new as sym
+from scdga.n_point_base import *
 
 
 class W2dynFile:

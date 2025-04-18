@@ -4,15 +4,15 @@ import re
 
 import mpi4py.MPI as MPI
 
-import config
-from four_point import FourPoint
-from greens_function import GreensFunction, update_mu
-from interaction import LocalInteraction, Interaction
-from local_four_point import LocalFourPoint
-from matsubara_frequencies import *
-from mpi_distributor import MpiDistributor
-from n_point_base import SpinChannel
-from self_energy import SelfEnergy
+import scdga.config as config
+from scdga.four_point import FourPoint
+from scdga.greens_function import GreensFunction, update_mu
+from scdga.interaction import LocalInteraction, Interaction
+from scdga.local_four_point import LocalFourPoint
+from scdga.matsubara_frequencies import *
+from scdga.mpi_distributor import MpiDistributor
+from scdga.n_point_base import SpinChannel
+from scdga.self_energy import SelfEnergy
 
 
 def create_generalized_chi0_q(giwk: GreensFunction, q_list: np.ndarray) -> FourPoint:
@@ -239,7 +239,7 @@ def calculate_sigma_from_kernel(
 
     kernel = kernel.to_full_niw_range()
     wn = MFHelper.wn(config.box.niw_core)
-    path = np.einsum_path("aijdwv,xyzadwv->xyzijv", kernel[0, ...], mat[..., None, :], optimize=True)[1]
+    path = np.einsum_path("aijdv,xyzadv->xyzijv", kernel[0, ..., 0, :], mat, optimize=True)[1]
 
     for idx_q, q in enumerate(full_q_list):
         shifted_mat = np.roll(giwk.mat, [-i for i in q], axis=(0, 1, 2))
@@ -386,8 +386,9 @@ def calculate_self_energy_q(
         old_mu = config.sys.mu
         if comm.rank == 0:
             config.sys.mu = update_mu(
-                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
-            )
+                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_dmft.smom[0]
+            )  # maybe sigma_new.fit_smom()[0]
+
         config.sys.mu = comm.bcast(config.sys.mu)
         mu_history.append(config.sys.mu)
         logger.log_info(f"Updated mu from {old_mu} to {config.sys.mu}.")

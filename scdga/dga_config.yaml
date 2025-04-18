@@ -1,7 +1,7 @@
 box_sizes:
-  niw_core: 100 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_core: 60 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_shell: 0 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
+  niw_core: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_core: 80 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_shell: 50 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
   symmetries: "two_dimensional_square" # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
@@ -12,16 +12,16 @@ lattice:
   # calculation. If 'kanamori', we expect the interaction input to be a list containing the number of bands and two to three kanamori parameters, [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   # (U' is also sometimes called V). If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
   # (similar to how a wannier_hr.dat file is structured, but with 4 orbital indices).
-  interaction_input: [ 2, 2, 0.5 ] # full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
+  interaction_input: [ 1, 0, 0 ] # full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   # this parameter will only be used if interaction_type is either 'kanamori' or 'custom'
   nk: [ 16, 16, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
 self_consistency:
-  max_iter: 15 # Maximum number of iterations
+  max_iter: 1 # Maximum number of iterations
   save_iter: True # If True, the code will save the self-consistency data for each iteration, making it possible to restart the calculation from this point
   epsilon: 1e-4 # Convergence criterion of the self-energy for each frequency
-  mixing: 0.2 # Mixing parameter for the self-energy. If set to 1, the self-energy is fully updated in each iteration. We use linear mixing,
+  mixing: 1 # Mixing parameter for the self-energy. If set to 1, the self-energy is fully updated in each iteration. We use linear mixing,
   # i.e. the new self-energy is a linear combination of the old and the new one. sigma_new = mixing * sigma_new + (1 - mixing) * sigma_old
   use_poly_fit: False # If True, the code will use the polynomial fit of the self-energy for the next iteration with the settings specified below. Will
   # not work if do_poly_fitting below is not set to True
@@ -35,6 +35,14 @@ dmft_input:
   fname_2p: "g4iw_sym.hdf5" # Name of the two-particle DMFT calculation; default: g4iw_sym.hdf5
   do_sym_v_vp: True # If True, the code will symmetrize G2 in the v and vp indices
 
+eliashberg:
+  perform_eliashberg: True # If True, the code will perform a power iteration to solve the linearized Eliashberg equation
+  save_pairing_vertex: False # if true, saves the pairing vertex to a file
+  n_eig: 2 # Number of eigenvalues and eigenvectors to be calculated. Default: 2
+  epsilon: 1e-12 # Convergence criterion for the eigenvalues and eigenvectors
+  symmetry: "random" # Symmetry of the gap function that will be used as a starting point for the power iteration. Available: p-wave-x, p-wave-y, d-wave, random
+  subfolder_name: "Eliashberg" # name for the subfolder where certain outputs are generated
+
 poly_fitting:
   do_poly_fitting: True # If True, the code will perform a polynomial fit of the non-local self-energy and the Green's function
   n_fit: -1 # Number of Matsubara frequencies used for fit; default: -1 (niv_core + 40)
@@ -42,5 +50,7 @@ poly_fitting:
 
 output:
   output_path: "" # Path, where the DGA output folders are created. If not specified, the output is created in the input folder directory of the DMFT files
-  do_plotting: False # If True, the code will plot the results into the output folder
+  do_plotting: True # If True, the code will plot the results into the output folder
+  plotting_subfolder_name: "Plots" # name for the subfolder where the plots are saved
   save_quantities: True # If True, the code will save several quantities into the output folder
+  save_fq: False # If True, the code will save the full vertex F(qvv') for d/m channels to a file. Attention: this will be a large file!

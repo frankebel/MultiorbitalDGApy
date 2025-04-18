@@ -3,11 +3,11 @@ from copy import deepcopy
 import numpy as np
 from scipy import optimize as opt
 
-import config
-from local_n_point import LocalNPoint
-from matsubara_frequencies import MFHelper
-from n_point_base import IAmNonLocal
-from self_energy import SelfEnergy
+import scdga.config as config
+from scdga.local_n_point import LocalNPoint
+from scdga.matsubara_frequencies import MFHelper
+from scdga.n_point_base import IAmNonLocal
+from scdga.self_energy import SelfEnergy
 
 
 def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray) -> float:

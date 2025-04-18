@@ -1,10 +1,10 @@
-import config
-from greens_function import GreensFunction
-from interaction import LocalInteraction
-from local_four_point import LocalFourPoint
-from matsubara_frequencies import MFHelper, FrequencyShift
-from n_point_base import *
-from self_energy import SelfEnergy
+import scdga.config as config
+from scdga.greens_function import GreensFunction
+from scdga.interaction import LocalInteraction
+from scdga.local_four_point import LocalFourPoint
+from scdga.matsubara_frequencies import MFHelper, FrequencyShift
+from scdga.n_point_base import *
+from scdga.self_energy import SelfEnergy
 
 
 def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFourPoint:
@@ -138,7 +138,7 @@ def create_vertex_functions(
     gchi0_inv_core: LocalFourPoint,
     g_loc: GreensFunction,
     u_loc: LocalInteraction,
-) -> tuple[LocalFourPoint, LocalFourPoint, LocalFourPoint, LocalFourPoint]:
+) -> tuple[LocalFourPoint, LocalFourPoint, LocalFourPoint, LocalFourPoint, LocalFourPoint]:
     """
     Calculates the three-leg vertex, the auxiliary susceptibility and the irreducible vertex. Employs explicit
     asymptotics as proposed by Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
@@ -150,10 +150,6 @@ def create_vertex_functions(
     del g2_r
     logger.log_info(f"Local generalized susceptibility chi^wvv' ({gchi_r.channel.value}) done.")
 
-    if config.output.do_plotting and config.current_rank == 0:
-        gchi_r.plot(omega=0, name=f"Gchi_{gchi_r.channel.value}", output_dir=config.output.output_path)
-        logger.log_info(f"Local generalized susceptibility ({gchi_r.channel.value}) plotted.")
-
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
     gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")
@@ -161,7 +157,6 @@ def create_vertex_functions(
     # f_r = create_full_vertex(gchi_r, gchi0_inv_core)
     f_r = create_full_vertex_from_gamma(gamma_r, gchi0, u_loc)
     logger.log_info(f"Local full vertex F^wvv' ({f_r.channel.value}) done.")
-    del gchi_r
 
     gchi_r_aux = create_auxiliary_chi(gamma_r, gchi0_inv_core, u_loc)
     logger.log_info(f"Local auxiliary susceptibility chi^*wvv' ({gchi_r_aux.channel.value}) done.")
@@ -175,7 +170,7 @@ def create_vertex_functions(
     gchi_r_aux_sum = create_generalized_chi_with_shell_correction(gchi_r_aux_sum, gchi0, u_loc)
     logger.log_info(f"Updated local susceptibility chi^w ({gchi_r_aux_sum.channel.value}) with asymptotic correction.")
 
-    return gamma_r, gchi_r_aux_sum, vrg_r, f_r
+    return gamma_r, gchi_r_aux_sum, vrg_r, f_r, gchi_r
 
 
 def get_loc_self_energy_vrg(
@@ -213,12 +208,11 @@ def perform_local_schwinger_dyson(
     gchi0 = create_generalized_chi0(g_loc)
     gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert()
 
-    gamma_dens, gchi_dens_sum, vrg_dens, f_dens = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
-    gamma_magn, gchi_magn_sum, vrg_magn, f_magn = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)
+    gamma_d, gchi_d_sum, vrg_d, f_d, gchi_d = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
+    gamma_m, gchi_m_sum, vrg_m, f_m, gchi_m = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)
 
-    sigma = get_loc_self_energy_vrg(vrg_dens, vrg_magn, gchi_dens_sum, gchi_magn_sum, g_loc, u_loc)
-
-    return gamma_dens, gamma_magn, gchi_dens_sum, gchi_magn_sum, vrg_dens, vrg_magn, f_dens, f_magn, sigma
+    sigma_loc = get_loc_self_energy_vrg(vrg_d, vrg_m, gchi_d_sum, gchi_m_sum, g_loc, u_loc)
+    return gamma_d, gamma_m, gchi_d_sum, gchi_m_sum, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc
 
 
 # ----------------------------------------------- AbinitioDGA algorithms -----------------------------------------------

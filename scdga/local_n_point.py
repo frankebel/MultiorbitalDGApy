@@ -1,6 +1,6 @@
 import os
 
-from n_point_base import *
+from scdga.n_point_base import *
 
 
 class LocalNPoint(IHaveMat):
@@ -68,7 +68,7 @@ class LocalNPoint(IHaveMat):
         if self.num_wn_dimensions == 0:
             return 0
         axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
-        return self.original_shape[axis] // 2 if self.full_niv_range else self.original_shape[axis]
+        return self.original_shape[axis] // 2
 
     @property
     def niv(self) -> int:
@@ -77,7 +77,7 @@ class LocalNPoint(IHaveMat):
         """
         if self.num_vn_dimensions == 0:
             return 0
-        return self.original_shape[-1] // 2 if self.full_niv_range else self.original_shape[-1]
+        return self.original_shape[-1] // 2
 
     @property
     def full_niw_range(self) -> bool:
@@ -211,38 +211,51 @@ class LocalNPoint(IHaveMat):
 
     def to_full_niv_range(self):
         """
-        Converts the object to the full fermionic frequency range in-place.
+        Converts the object to the full fermionic frequency range in-place. Works only on objects
+        with a single fermionic frequency dimension.
         """
         if self.num_vn_dimensions == 0 or self.full_niv_range:
             return self
 
-        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-1)), self.mat), axis=-1)
-        if self.num_vn_dimensions == 2:
-            self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-2)), self.mat), axis=-2)
+        if self.num_vn_dimensions != 1:
+            raise ValueError("Can only convert to full niv range if the number of fermionic frequency dimensions is 1.")
 
+        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-1)), self.mat), axis=-1)
         self.update_original_shape()
         self._full_niv_range = True
         return self
 
     def to_half_niv_range(self):
         """
-        Converts the object to the half fermionic frequency range in-place.
+        Converts the object to the half fermionic frequency range in-place. Works only on objects
+        with a single fermionic frequency dimension.
         """
         if self.num_vn_dimensions == 0 or not self.full_niv_range:
             return self
 
+        if self.num_vn_dimensions != 1:
+            raise ValueError("Can only convert to half niv range if the number of fermionic frequency dimensions is 1.")
+
         ind = np.arange(self.current_shape[-1] // 2, self.current_shape[-1])
         self.mat = np.take(self.mat, ind, axis=-1)
-        if self.num_vn_dimensions == 2:
-            self.mat = np.take(self.mat, ind, axis=-2)
         self.update_original_shape()
         self._full_niv_range = False
         return self
 
-    def flip_frequency_axis(self, axis: tuple):
+    def flip_frequency_axis(self, axis: tuple | int):
         """
         Flips the matrix along the specified axis.
         """
+        if self.num_wn_dimensions + self.num_vn_dimensions == 0:
+            raise ValueError("Cannot flip the matrix if there are no frequency dimensions.")
+
+        if isinstance(axis, int):
+            axis = (axis,)
+
+        axis_possible = tuple(range(-self.num_wn_dimensions - self.num_vn_dimensions, 0))
+        if not set(axis).issubset(axis_possible):
+            raise ValueError(f"Invalid axis {axis}. Possible axes are {axis_possible}.")
+
         self.mat = np.flip(self.mat, axis=axis)
         return self
 

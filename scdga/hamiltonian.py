@@ -1,10 +1,12 @@
 import itertools as it
 import logging
 
+import numpy as np
 import pandas as pd
 
-import brillouin_zone as bz
-from interaction import *
+import scdga.brillouin_zone as bz
+from scdga.interaction import LocalInteraction, Interaction
+from scdga.n_point_base import SpinChannel
 
 
 class HoppingElement:

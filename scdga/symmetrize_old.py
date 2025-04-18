@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 """
-  Helper script to symmetrize the output of the w2dynamics code.
-  Adapted from AbinitioDGA: https://github.com/AbinitioDGA/ADGA
+Helper script to symmetrize the output of the w2dynamics code.
+Adapted from AbinitioDGA: https://github.com/AbinitioDGA/ADGA
 """
-import h5py
-import numpy as np
 import sys
 from shutil import copyfile
+
+import h5py
+import numpy as np
 
 
 # not very pythonic utility function to unravel the band-spin compound index

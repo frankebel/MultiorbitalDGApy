@@ -2,8 +2,8 @@ import os
 
 import numpy as np
 
-from four_point import FourPoint
-from n_point_base import SpinChannel
+from scdga.four_point import FourPoint
+from scdga.n_point_base import SpinChannel
 
 if __name__ == "__main__":
     my_folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk64_Nq64_wc60_vc40_vs0"

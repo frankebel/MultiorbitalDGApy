@@ -1,7 +1,6 @@
 import logging
 import os
 from datetime import datetime
-from n_point_base import IHaveMat
 
 import mpi4py.MPI as MPI
 
@@ -52,7 +51,7 @@ class DgaLogger:
     def log_info(self, message: str):
         self.log(message, level=logging.INFO)
 
-    def log_memory_usage(self, obj_name: str, obj: IHaveMat, n_exists: int = 1):
+    def log_memory_usage(self, obj_name: str, obj, n_exists: int = 1):
         if obj is None:
             return
         self.log_info(

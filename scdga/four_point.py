@@ -1,9 +1,10 @@
+from copy import deepcopy
+
 import numpy as np
 
-from gap_function import GapFunction
-from interaction import Interaction, LocalInteraction
-from local_four_point import LocalFourPoint
-from n_point_base import *
+from scdga.interaction import Interaction, LocalInteraction
+from scdga.local_four_point import LocalFourPoint
+from scdga.n_point_base import IAmNonLocal, SpinChannel, FrequencyNotation
 
 
 class FourPoint(LocalFourPoint, IAmNonLocal):

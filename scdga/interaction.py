@@ -1,4 +1,8 @@
-from n_point_base import *
+from copy import deepcopy
+
+import numpy as np
+
+from scdga.n_point_base import IHaveMat, IHaveChannel, IAmNonLocal, SpinChannel
 
 
 class LocalInteraction(IHaveMat, IHaveChannel):

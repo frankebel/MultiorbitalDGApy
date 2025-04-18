@@ -4,15 +4,15 @@ import mpi4py.MPI as MPI
 import numpy as np
 import scipy as sp
 
-import config
-from four_point import FourPoint
-from gap_function import GapFunction
-from greens_function import GreensFunction
-from interaction import LocalInteraction, Interaction
-from local_four_point import LocalFourPoint
-from matsubara_frequencies import MFHelper
-from mpi_distributor import MpiDistributor
-from n_point_base import SpinChannel, FrequencyNotation
+import scdga.config as config
+from scdga.four_point import FourPoint
+from scdga.gap_function import GapFunction
+from scdga.greens_function import GreensFunction
+from scdga.interaction import LocalInteraction, Interaction
+from scdga.local_four_point import LocalFourPoint
+from scdga.matsubara_frequencies import MFHelper
+from scdga.mpi_distributor import MpiDistributor
+from scdga.n_point_base import SpinChannel, FrequencyNotation
 
 
 def delete_files(filepath: str, *args) -> None:
@@ -205,10 +205,11 @@ def get_initial_gap_function(shape: tuple, channel: SpinChannel):
     return gap0
 
 
-def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) -> tuple[list, list[GapFunction]]:
+def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     """
     Solves the Eliashberg equation for the superconducting eigenvalue and gap function using an
-    Implicitly Restarted Lanczos Method.
+    Implicitly Restarted Lanczos Method. Returns the first n_eig eigenvalues and eigenvectors plus the maximal
+    eigenvalue and corresponding eigenvector in two lists.
     """
     logger = config.logger
 
@@ -250,30 +251,48 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint) ->
         )
         return np.fft.ifftn(norm * gap_new, axes=(0, 1, 2)).flatten()
 
-    mat = sp.sparse.linalg.LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv, dtype=np.complex64)
+    mat = sp.sparse.linalg.LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv)
     logger.log_info(
         f"Starting Lanczos method to retrieve largest{"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"} "
         f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"}."
     )
-    lambdas, gaps = sp.sparse.linalg.eigsh(
-        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, which="LA"
+
+    lambda_max, gap_max = sp.sparse.linalg.eigsh(mat, k=1, tol=config.eliashberg.epsilon, v0=gap0, which="LA")
+    logger.log_info("Finished Lanczos method for the largest eigenvalue.")
+    logger.log_info(f"Maximum eigenvalue for {gamma_q_r_pp.channel.value}let channel is {lambda_max[0]:.6f}.")
+
+    logger.log_info(
+        f"Starting Lanczos method to retrieve the {config.eliashberg.n_eig} eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} "
+        f"closest to one and their corresponding "
+        f"eigenvector{"" if config.eliashberg.n_eig == 1 else "s"} using shift-invert mode."
     )
-    logger.log_info(f"Finished Lanczos method for the {gamma_q_r_pp.channel.value}let channel.")
+    lambdas, gaps = sp.sparse.linalg.eigsh(
+        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, sigma=1.0
+    )
+    logger.log_info(
+        f"Finished Lanczos method for the {gamma_q_r_pp.channel.value}let channel for "
+        f"the superconducting eigenvalues and gap functions."
+    )
     idx = np.abs(lambdas - 1).argsort()
     lambdas = lambdas[idx]
     gaps = gaps[:, idx]
     logger.log_info(
-        f"Superconducting eigenvalues for the {gamma_q_r_pp.channel.value}let "
-        f"channel are: {', '.join(f'{l:.6f}' for l in lambdas)}."
+        f"Superconducting eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} for the {gamma_q_r_pp.channel.value}let "
+        f"channel are: {', '.join(f'{lam:.6f}' for lam in lambdas)}."
     )
     logger.log_info(f"Finished Eliashberg iteration for the {gamma_q_r_pp.channel.value}let channel.")
 
-    gap_functions = [
+    gaps = [
         GapFunction(gaps[..., i].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)
         for i in range(config.eliashberg.n_eig)
     ]
 
-    return lambdas, gap_functions
+    lambdas = np.append(lambdas, lambda_max)
+    gaps = np.append(
+        gaps, [GapFunction(gap_max[..., 0].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)], axis=0
+    )
+
+    return lambdas, gaps
 
 
 def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, comm: MPI.Comm):
@@ -322,7 +341,7 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
         f_ud_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_ud_loc.npy"))
         logger.log_info("Loaded the local full UD vertex from file.")
         f_ud_loc = transform_vertex_ph_to_pp_w0(f_ud_loc)
-        config.logger.log_info(f"Calculated full local UD vertex in pp notation.")
+        logger.log_info(f"Calculated full local UD vertex in pp notation.")
         gamma_sing_pp -= f_ud_loc
         gamma_trip_pp -= f_ud_loc
 
@@ -330,10 +349,5 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
         lambdas_trip, gaps_trip = solve_eliashberg_lanczos(gamma_trip_pp, gchi0_q0_pp)
     else:
         lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
-
-    lambdas_sing = comm.bcast(lambdas_sing, root=0)
-    lambdas_trip = comm.bcast(lambdas_trip, root=0)
-    gaps_sing = comm.bcast(gaps_sing, root=0)
-    gaps_trip = comm.bcast(gaps_trip, root=0)
 
     return lambdas_sing, lambdas_trip, gaps_sing, gaps_trip

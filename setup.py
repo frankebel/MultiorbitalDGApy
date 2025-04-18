@@ -1,0 +1,24 @@
+from setuptools import setup, find_packages
+
+# Read dependencies from requirements.txt
+with open("requirements.txt") as f:
+    requirements = f.read().splitlines()
+
+setup(
+    name="scdga",
+    version="1.0.0",
+    description="Self-consistent multi-orbital ladder-DGA code for the multi-band Hubbard Model",
+    author="Julian Peil",
+    author_email="julian.peil@gmx.at",
+    packages=find_packages(),
+    install_requires=requirements,
+    license="MIT",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires=">=3.7",
+)

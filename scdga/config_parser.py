@@ -4,9 +4,9 @@ import os
 from mpi4py import MPI
 from ruamel.yaml import YAML
 
-import config
-from config import *
-from dga_logger import DgaLogger
+import scdga.config as config
+from scdga.config import *
+from scdga.dga_logger import DgaLogger
 
 
 class ConfigParser:
@@ -134,6 +134,7 @@ class ConfigParser:
         output_section = config_file["output"]
 
         conf.do_plotting = self._try_parse(output_section, "do_plotting", True)
+        conf.plotting_subfolder_name = self._try_parse(output_section, "plotting_subfolder_name", "Plots")
         conf.save_quantities = self._try_parse(output_section, "save_quantities", True)
         conf.output_path = self._try_parse(output_section, "output_path", "./")
         conf.save_fq = self._try_parse(output_section, "save_fq", False)

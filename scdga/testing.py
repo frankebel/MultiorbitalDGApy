@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50"
-iteration = "1"
+folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_4/"
+iteration = "7"
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
@@ -137,7 +137,10 @@ def show_mu_history():
 
 
 if __name__ == "__main__":
-    show_mean_self_energy()
-    show_self_energy_2d()
-    show_self_energy_kx_ky(3, 3)
+    # show_mean_self_energy()
+    # show_self_energy_2d()
+    # show_self_energy_kx_ky(3, 3)
     # show_mu_history()
+    mat = np.random.randn(10, 10)
+    cs = plt.contour(np.arange(10), np.arange(10), mat.T, levels=[0])
+    print(cs.get_paths())

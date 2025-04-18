@@ -1,8 +1,8 @@
 import numpy as np
 
-import brillouin_zone as bz
-from dga_logger import DgaLogger
-from hamiltonian import Hamiltonian
+import scdga.brillouin_zone as bz
+from scdga.dga_logger import DgaLogger
+from scdga.hamiltonian import Hamiltonian
 
 
 class InteractionConfig:
@@ -144,9 +144,11 @@ class OutputConfig:
     """
 
     def __init__(self):
-        self.do_plotting: bool = True
-        self.save_quantities: bool = True
         self.output_path: str = "./"
+        self.save_quantities: bool = True
+        self.do_plotting: bool = True
+        self.plotting_path: str = "./Plots/"
+        self.plotting_subfolder_name: str = "Plots"
         self.eliashberg_path: str = "./Eliashberg/"
         self.save_fq: bool = False
 

@@ -4,7 +4,7 @@ import h5py
 import mpi4py.MPI as MPI
 import numpy as np
 
-import config
+import scdga.config as config
 
 
 class MpiDistributor:

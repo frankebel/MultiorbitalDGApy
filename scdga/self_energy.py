@@ -3,10 +3,10 @@ from copy import deepcopy
 
 import numpy as np
 
-import config
-from local_n_point import LocalNPoint
-from matsubara_frequencies import MFHelper
-from n_point_base import IAmNonLocal
+import scdga.config as config
+from scdga.local_n_point import LocalNPoint
+from scdga.matsubara_frequencies import MFHelper
+from scdga.n_point_base import IAmNonLocal
 
 
 class SelfEnergy(LocalNPoint, IAmNonLocal):
@@ -34,7 +34,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         self._niv_core = self._estimate_niv_core() if estimate_niv_core else self.niv
 
     @property
-    def smom(self) -> tuple[float, float]:
+    def smom(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Returns the first two local momenta of the self-energy.
         """
@@ -65,48 +65,13 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         mom1 = np.mean(fitdata.imag * iwfit.imag, axis=-1)
         return mom0, mom1
 
-    def _estimate_niv_core(self, err: float = 1e-5):
+    def create_with_asympt_up_to_core(self) -> "SelfEnergy":
         """
-        Check when the real and the imaginary part are within an error margin of the asymptotic.
-        """
-        asympt = self._get_asympt(niv_full=self.niv, n_min=0)
-
-        max_ind_real = 0
-        max_ind_imag = 0
-
-        for i, j in it.product(range(self.n_bands), repeat=2):
-            k_mean = np.mean(self.mat[:, :, :, i, j, :], axis=(0, 1, 2))
-            asympt_mean = np.mean(asympt.mat[:, :, :, i, j, :], axis=(0, 1, 2))
-            ind_real = np.argmax(np.abs(k_mean.real - asympt_mean.real) < err)
-            ind_imag = np.argmax(np.abs(k_mean.imag - asympt_mean.imag) < err)
-
-            max_ind_real = max(max_ind_real, ind_real)
-            max_ind_imag = max(max_ind_imag, ind_imag)
-
-        niv_core = max(max_ind_real, max_ind_imag)
-        if niv_core < self._niv_core_min:
-            return self._niv_core_min
-        return niv_core
-
-    def _get_asympt(self, niv_full: int, n_min: int = None) -> "SelfEnergy":
-        """
-        Returns purely the asymptotic behaviour of the self-energy for the given frequency range.
-        Not intended to be used as its own but intended to be padded to the self-energy as an asymptotic tail.
-        """
-        if n_min is None:
-            n_min = self.niv
-        iv_asympt = 1j * MFHelper.vn(niv_full, config.sys.beta, shift=n_min)[None, None, ...]
-        asympt = (self._smom0[..., None] - 1.0 / iv_asympt * self._smom1[..., None])[None, None, None, ...] * np.ones(
-            self.nq
-        )[..., None, None, None]
-        return SelfEnergy(asympt)
-
-    def create_with_asympt(self) -> "SelfEnergy":
-        """
-        Concatenates the core and the asymptotic tail of the self-energy.
+        Concatenates the core and the asymptotic tail of the self-energy from the 'estimated' core region to the actual
+        specified core region (in settings).
         """
         copy = deepcopy(self)
-        asympt = copy._get_asympt(niv_full=copy.niv)
+        asympt = copy._get_asympt(niv=copy.niv)
 
         if copy._niv_core == copy.niv:
             return copy
@@ -114,6 +79,19 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
             return copy
 
         copy = copy.cut_niv(copy._niv_core)
+        copy.mat = np.concatenate(
+            (asympt.mat[..., : asympt.niv - copy.niv], copy.mat, asympt.mat[..., asympt.niv + copy.niv :]), axis=-1
+        )
+        return copy
+
+    def append_asympt(self, niv: int):
+        """
+        Adds the asymptotic tail to the self-energy up to niv.
+        """
+        copy = deepcopy(self)
+        asympt = copy._get_asympt(niv)
+        if niv <= copy.niv:
+            return copy
         copy.mat = np.concatenate(
             (asympt.mat[..., : asympt.niv - copy.niv], copy.mat, asympt.mat[..., asympt.niv + copy.niv :]), axis=-1
         )
@@ -161,10 +139,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         self.compress_q_dimension()
         other = other.compress_q_dimension()
 
-        if other.nq_tot == 1:
-            other_mat = np.tile(other.mat, (self.nq_tot, 1, 1, 1))
-        else:
-            other_mat = other.mat
+        other_mat = np.tile(other.mat, (self.nq_tot, 1, 1, 1)) if other.nq_tot == 1 else other.mat
         result_mat = np.concatenate(
             (other_mat[..., :niv_diff], self.mat, other_mat[..., niv_diff + 2 * self.niv :]), axis=-1
         )
@@ -182,9 +157,9 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         if n_fit > copy.niv or n_fit < 0:
             n_fit = niv_core + 200
 
-        copy.compress_q_dimension().to_half_niv_range()
+        copy = copy.compress_q_dimension().to_half_niv_range()
         vn_fit = MFHelper.vn(n_fit, return_only_positive=True)
-        vn_full = MFHelper.vn(copy.niv, return_only_positive=True)
+        vn_full = MFHelper.vn(2 * copy.niv, return_only_positive=True)
         poly_mat = np.zeros_like(copy.mat)
         fit_mat = copy.cut_niv(n_fit).mat
 
@@ -195,3 +170,39 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
                     poly_mat[k, o1, o2, :] = np.polyval(poly, vn_full)
 
         return SelfEnergy(poly_mat, copy.nq, copy.full_niv_range, copy.has_compressed_q_dimension, False)
+
+    def _estimate_niv_core(self, err: float = 1e-5):
+        """
+        Check when the real and the imaginary part are within an error margin of the asymptotic.
+        """
+        asympt = self._get_asympt(niv=self.niv, n_min=0)
+
+        max_ind_real = 0
+        max_ind_imag = 0
+
+        for i, j in it.product(range(self.n_bands), repeat=2):
+            k_mean = np.mean(self.mat[:, :, :, i, j, :], axis=(0, 1, 2))
+            asympt_mean = np.mean(asympt.mat[:, :, :, i, j, :], axis=(0, 1, 2))
+            ind_real = np.argmax(np.abs(k_mean.real - asympt_mean.real) < err)
+            ind_imag = np.argmax(np.abs(k_mean.imag - asympt_mean.imag) < err)
+
+            max_ind_real = max(max_ind_real, ind_real)
+            max_ind_imag = max(max_ind_imag, ind_imag)
+
+        niv_core = max(max_ind_real, max_ind_imag)
+        if niv_core < self._niv_core_min:
+            return self._niv_core_min
+        return niv_core
+
+    def _get_asympt(self, niv: int, n_min: int = None) -> "SelfEnergy":
+        """
+        Returns purely the asymptotic behaviour of the self-energy for the given frequency range.
+        Not intended to be used as its own but intended to be padded to the self-energy as an asymptotic tail.
+        """
+        if n_min is None:
+            n_min = self.niv
+        iv_asympt = 1j * MFHelper.vn(niv, config.sys.beta, shift=n_min)[None, None, ...]
+        asympt = (self._smom0[..., None] - 1.0 / iv_asympt * self._smom1[..., None])[None, None, None, ...] * np.ones(
+            self.nq
+        )[..., None, None, None]
+        return SelfEnergy(asympt, self.nq)

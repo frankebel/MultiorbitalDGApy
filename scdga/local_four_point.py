@@ -1,12 +1,9 @@
-import os
-
 import scipy as sp
-from matplotlib import pyplot as plt
 
-from interaction import LocalInteraction, Interaction
-from local_n_point import LocalNPoint
-from matsubara_frequencies import MFHelper
-from n_point_base import *
+from scdga.interaction import LocalInteraction, Interaction
+from scdga.local_n_point import LocalNPoint
+from scdga.matsubara_frequencies import MFHelper
+from scdga.n_point_base import *
 
 
 class LocalFourPoint(LocalNPoint, IHaveChannel):
@@ -365,13 +362,19 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if self.num_vn_dimensions != 1 or other.num_vn_dimensions != 1:
             raise ValueError("Both objects must have only one fermionic frequency dimension.")
 
-        self.to_half_niw_range().to_half_niv_range()
-        other = other.to_half_niw_range().to_half_niv_range()
-        result_mat = self.times("abcdwv,dcefwp->abefwvp", other)
-        self.to_full_niw_range().to_full_niv_range()
-        other = other.to_full_niw_range().to_full_niv_range()
+        is_self_full_niw_range = self.full_niw_range
+        is_other_full_niw_range = other.full_niw_range
 
-        return LocalFourPoint(result_mat, self.channel, 1, 2, False, False, self.frequency_notation).to_full_niv_range()
+        self.to_half_niw_range()
+        other = other.to_half_niw_range()
+        result_mat = self.times("abcdwv,dcefwp->abefwvp", other)
+
+        if is_self_full_niw_range:
+            self.to_full_niw_range()
+        if is_other_full_niw_range:
+            other = other.to_full_niw_range()
+
+        return LocalFourPoint(result_mat, self.channel, 1, 2, False, True, self.frequency_notation)
 
     def add(self, other):
         """
@@ -597,7 +600,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Returns the eigenvalues and eigenvectors. We can use eigh since due to time-reversal symmetry, we expect the matrices
         in compound notation to be hermitean.
         """
-        mat = deepcopy(self).to_full_niw_range().to_full_niv_range().to_compound_indices().mat
+        mat = deepcopy(self).to_full_niw_range().to_compound_indices().mat
         eigvals, eigvecs = np.linalg.eigh(mat)
         return eigvals, eigvecs
 
@@ -676,49 +679,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         return LocalFourPoint.identity(
             other.n_bands, other.niw, other.niv, other.num_vn_dimensions, other.full_niw_range
         )
-
-    def plot(
-        self,
-        orbs: np.ndarray | list | tuple = (0, 0, 0, 0),
-        omega: int = 0,
-        do_save: bool = True,
-        output_dir: str = "./",
-        name: str = "Name",
-        colormap: str = "RdBu",
-        show: bool = False,
-    ) -> None:
-        """
-        Plots the four-point object for a given set of orbitals and a given bosonic frequency.
-        """
-        if np.abs(omega) > self.niw:
-            raise ValueError(f"Omega {omega} out of range.")
-        if len(orbs) != 4:
-            raise ValueError("'orbs' needs to be of size 4.")
-
-        fig, axes = plt.subplots(ncols=2, figsize=(7, 3), dpi=251)
-        axes = axes.flatten()
-        wn_list = MFHelper.wn(self.niw)
-        wn_index = np.argmax(wn_list == omega)
-        mat = self.mat[orbs[0], orbs[1], orbs[2], orbs[3], wn_index, ...]
-        vn = MFHelper.vn(self.niv)
-        im1 = axes[0].pcolormesh(vn, vn, mat.real, cmap=colormap)
-        im2 = axes[1].pcolormesh(vn, vn, mat.imag, cmap=colormap)
-        axes[0].set_title(r"$\Re$")
-        axes[1].set_title(r"$\Im$")
-        for ax in axes:
-            ax.set_xlabel(r"$\nu_p$")
-            ax.set_ylabel(r"$\nu$")
-            ax.set_aspect("equal")
-        fig.suptitle(name)
-        fig.colorbar(im1, ax=(axes[0]), aspect=15, fraction=0.08, location="right", pad=0.05)
-        fig.colorbar(im2, ax=(axes[1]), aspect=15, fraction=0.08, location="right", pad=0.05)
-        plt.tight_layout()
-        if do_save:
-            plt.savefig(os.path.join(output_dir, f"{name}_w{omega}.png"))
-        if show:
-            plt.show()
-        else:
-            plt.close()
 
     def _revert_frequency_dimensions_after_operation(
         self, other: "LocalFourPoint", other_extended: bool, self_extended: bool

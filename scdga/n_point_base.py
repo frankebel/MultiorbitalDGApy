@@ -23,52 +23,6 @@ class FrequencyNotation(Enum):
     PP: str = "pp"
 
 
-class IHaveChannel(ABC):
-    """
-    Abstract interface for classes that have a channel attribute.
-    """
-
-    def __init__(
-        self, channel: SpinChannel = SpinChannel.NONE, frequency_notation: FrequencyNotation = FrequencyNotation.PH
-    ):
-        self._channel = channel
-        self._frequency_notation = frequency_notation
-
-    @property
-    def channel(self) -> SpinChannel:
-        """
-        Returns the channel reducibility (not the frequency notation) of the object.
-        For a set of available channels, see class SpinChannel.
-        """
-        return self._channel
-
-    @channel.setter
-    def channel(self, value: SpinChannel) -> None:
-        """
-        Sets the channel reducibility of the object. For a set of available channels, see class SpinChannel.
-        """
-        if not isinstance(value, SpinChannel):
-            raise ValueError("Channel must be of type SpinChannel.")
-        self._channel = value
-
-    @property
-    def frequency_notation(self) -> FrequencyNotation:
-        """
-        Returns the frequency notation (not the channel reducibility) of the object.
-        For a set of available notations, see class FrequencyNotation.
-        """
-        return self._frequency_notation
-
-    @frequency_notation.setter
-    def frequency_notation(self, value: FrequencyNotation) -> None:
-        """
-        Sets the frequency notation of the object. For a set of available notations, see class FrequencyNotation.
-        """
-        if not isinstance(value, FrequencyNotation):
-            raise ValueError("Frequency notation must be of type FrequencyNotation.")
-        self._frequency_notation = value
-
-
 class IHaveMat(ABC):
     """
     Abstract interface for classes that have a mat attribute. Adds a couple of convenience methods for matrix operations.
@@ -135,7 +89,7 @@ class IHaveMat(ABC):
         """
         Multiplication with a scalar or another matrix.
         """
-        if not isinstance(other, (int, float, complex, np.ndarray)):
+        if not isinstance(other, (int, float, complex)):
             raise ValueError("Multiplication only supported with numbers or numpy arrays.")
 
         copy = deepcopy(self)
@@ -199,6 +153,52 @@ class IHaveMat(ABC):
         )
 
 
+class IHaveChannel(ABC):
+    """
+    Abstract interface for classes that have a channel attribute.
+    """
+
+    def __init__(
+        self, channel: SpinChannel = SpinChannel.NONE, frequency_notation: FrequencyNotation = FrequencyNotation.PH
+    ):
+        self._channel = channel
+        self._frequency_notation = frequency_notation
+
+    @property
+    def channel(self) -> SpinChannel:
+        """
+        Returns the channel reducibility (not the frequency notation) of the object.
+        For a set of available channels, see class SpinChannel.
+        """
+        return self._channel
+
+    @channel.setter
+    def channel(self, value: SpinChannel) -> None:
+        """
+        Sets the channel reducibility of the object. For a set of available channels, see class SpinChannel.
+        """
+        if not isinstance(value, SpinChannel):
+            raise ValueError("Channel must be of type SpinChannel.")
+        self._channel = value
+
+    @property
+    def frequency_notation(self) -> FrequencyNotation:
+        """
+        Returns the frequency notation (not the channel reducibility) of the object.
+        For a set of available notations, see class FrequencyNotation.
+        """
+        return self._frequency_notation
+
+    @frequency_notation.setter
+    def frequency_notation(self, value: FrequencyNotation) -> None:
+        """
+        Sets the frequency notation of the object. For a set of available notations, see class FrequencyNotation.
+        """
+        if not isinstance(value, FrequencyNotation):
+            raise ValueError("Frequency notation must be of type FrequencyNotation.")
+        self._frequency_notation = value
+
+
 class IAmNonLocal(IHaveMat, ABC):
     """
     Abstract interface for objects that are momentum dependent. Since we focus on ladder objects, we do not
@@ -206,7 +206,7 @@ class IAmNonLocal(IHaveMat, ABC):
     """
 
     def __init__(self, mat: np.ndarray, nq: tuple[int, int, int], has_compressed_q_dimension: bool = False):
-        super().__init__(mat)
+        IHaveMat.__init__(self, mat)
         self._nq = nq
         self._has_compressed_q_dimension = has_compressed_q_dimension
 
@@ -233,7 +233,7 @@ class IAmNonLocal(IHaveMat, ABC):
 
     def shift_k_by_q(self, q: tuple | list[int] = (0, 0, 0)) -> np.ndarray:
         """
-        Shifts the momentum by the given value and returns a numpy array.
+        Shifts the momentum by the given value and returns a numpy array with decompressed momentum dimension.
         """
         compress = False
         if self.has_compressed_q_dimension:
@@ -245,21 +245,23 @@ class IAmNonLocal(IHaveMat, ABC):
             self.compress_q_dimension()
         return result
 
-    def shift_k_by_pi(self) -> np.ndarray:
+    def shift_k_by_pi(self):
         r"""
         Shifts the momentum by :math:`\pi` and returns a numpy array.
         """
-        compress = False
-        if self.has_compressed_q_dimension:
-            compress = True
-            self.decompress_q_dimension()
+        copy = deepcopy(self)
 
-        shifts = np.array(self.current_shape[:3]) // 2
-        result = np.roll(self.mat, shift=shifts, axis=(0, 1, 2))
+        compress = False
+        if copy.has_compressed_q_dimension:
+            compress = True
+            copy.decompress_q_dimension()
+
+        shifts = np.array(copy.current_shape[:3]) // 2
+        copy.mat = np.roll(copy.mat, shift=shifts, axis=(0, 1, 2))
 
         if compress:
-            self.compress_q_dimension()
-        return result
+            copy.compress_q_dimension()
+        return copy
 
     def compress_q_dimension(self):
         """
@@ -309,7 +311,11 @@ class IAmNonLocal(IHaveMat, ABC):
         Finds the matrix element for a given momentum q.
         """
         result = deepcopy(self).reduce_q(np.array(list(q))[None, ...])
-        result._nq = q
+        result._nq = (1, 1, 1)
+
+        if result.current_shape == (0,):
+            raise ValueError("No matrix element found for the given momentum.")
+
         return result
 
     def map_to_full_bz(self, inverse_map: np.ndarray, nq: tuple = None):

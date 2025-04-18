@@ -1,13 +1,13 @@
 import os
 
-import brillouin_zone as bz
-import config
-import w2dyn_aux
-from greens_function import GreensFunction
-from hamiltonian import Hamiltonian
-from local_four_point import LocalFourPoint
-from n_point_base import *
-from self_energy import SelfEnergy
+import scdga.brillouin_zone as bz
+import scdga.config as config
+import scdga.w2dyn_aux as w2dyn_aux
+from scdga.greens_function import GreensFunction
+from scdga.hamiltonian import Hamiltonian
+from scdga.local_four_point import LocalFourPoint
+from scdga.n_point_base import *
+from scdga.self_energy import SelfEnergy
 
 
 def uniquify_path(path: str = None):
@@ -87,10 +87,12 @@ def load_from_w2dyn_file_and_update_config():
     )
 
     config.output.output_path = uniquify_path(os.path.join(config.output.output_path, output_format))
+    config.output.plotting_path = os.path.join(config.output.output_path, config.output.plotting_subfolder_name)
     config.output.eliashberg_path = os.path.join(config.output.output_path, config.eliashberg.subfolder_name)
 
     if not os.path.exists(config.output.output_path):
         os.makedirs(config.output.output_path)
+        os.makedirs(config.output.plotting_path)
         os.makedirs(config.output.eliashberg_path)
 
     g2_dens = update_g2_from_dmft(g2_dens)
@@ -104,15 +106,6 @@ def update_frequency_boxes(niw: int, niv: int) -> None:
     Updates the frequency boxes based on the available frequencies in the DMFT four-point object.
     """
     logger = config.logger
-    if config.box.niv_core == -1:
-        config.box.niv_core = niv
-        logger.log_info(f"Number of fermionic Matsubara frequency is set to '-1'. Using niv = {niv}.")
-    elif config.box.niv_core > niv:
-        config.box.niv_core = niv
-        logger.log_info(
-            f"Number of fermionic Matsubara frequencies cannot exceed available "
-            f"frequencies in the DMFT four-point object. Using niv = {niv}."
-        )
 
     if config.box.niw_core == -1:
         config.box.niw_core = niw
@@ -122,6 +115,16 @@ def update_frequency_boxes(niw: int, niv: int) -> None:
         logger.log_info(
             f"Number of bosonic Matsubara frequencies cannot exceed available "
             f"frequencies in the DMFT four-point object. Using niw = {niw}."
+        )
+
+    if config.box.niv_core == -1:
+        config.box.niv_core = niv
+        logger.log_info(f"Number of fermionic Matsubara frequency is set to '-1'. Using niv = {niv}.")
+    elif config.box.niv_core > niv:
+        config.box.niv_core = niv
+        logger.log_info(
+            f"Number of fermionic Matsubara frequencies cannot exceed available "
+            f"frequencies in the DMFT four-point object. Using niv = {niv}."
         )
 
     config.box.niv_full = config.box.niv_core + config.box.niv_shell
@@ -134,8 +137,8 @@ def update_g2_from_dmft(g2: LocalFourPoint) -> LocalFourPoint:
     """
     g2 = g2.cut_niw_and_niv(config.box.niw_core, config.box.niv_core)
     if config.dmft.do_sym_v_vp:
-        config.logger.log_info(f"Symmetrizing G2_{g2.channel.value} with respect to v and v'.")
         g2 = g2.symmetrize_v_vp()
+        config.logger.log_info(f"Symmetrized G2 ({g2.channel.value}) with respect to v and v'.")
     return g2
 
 
