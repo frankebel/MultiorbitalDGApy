@@ -12,7 +12,7 @@ from scdga.self_energy import SelfEnergy
 
 def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray) -> float:
     """
-    Returns the total filling. Helper method for root finding of mu.
+    Returns the total filling. Helper method for the root finding of mu.
     """
     n_bands = sigma_mat.shape[-2]
     eye_bands = np.eye(n_bands, n_bands)
@@ -42,7 +42,7 @@ def root_fun(
     mu: float, target_filling: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray
 ) -> float:
     """
-    Function to minimize in order to find a new mu via Newton's method.
+    Function to minimize to find a new mu via Newton's method.
     """
     return get_total_fill(mu, ek, sigma_mat, beta, smom0) - target_filling
 
@@ -50,8 +50,8 @@ def root_fun(
 def update_mu(
     mu0: float, target_filling: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray
 ) -> float:
-    """
-    Updates the chemical potential to match the target filling.
+    r"""
+    Updates the chemical potential to match the target filling by using Newton's method to find the optimal :math:`\mu`.
     """
     mu = mu0
     try:

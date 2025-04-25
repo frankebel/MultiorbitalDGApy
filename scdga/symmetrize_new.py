@@ -48,7 +48,7 @@ def extract_g2_general(group_string: str, indices: list, file: h5py.File) -> tup
     elements = elements.transpose(0, -1, 1, 2)
 
     # for some reason, the elements are stored transposed in vv' in symmetrize_old.py
-    # therefore, every time we have to read or write, we have to transpose in vv' (do not confuse with the transpose above)
+    # therefore, every time we have to read or write, we have to transpose in vv' (this is a different transpose than above)
     elements = elements.transpose(0, 1, 3, 2)
 
     # construct G2dens and G2magn the output file

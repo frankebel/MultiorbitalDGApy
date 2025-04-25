@@ -70,14 +70,14 @@ class MFHelper:
     def get_frequencies_for_ph_to_pp_channel_conversion(
         niw: int, niv: int
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
+        r"""
         Returns the new indices :math:`(w', v_1', v_2')' for the conversion of ph to pp channel.\n
-        .. math::  F_{pp}[w,v_1,v_2] = F_{ph}[w',v_1',v_2'] \n
-        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (w - v_1 - v_2, v_1, v_2)
+        .. math::  F_{pp}[w,v_1,v_2] = F_{ph}[w',v_1',v_2']
+        .. math::  (w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)
         """
-        niw, niv = niw // 3, min(niw // 3, niv // 3)
-        iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
-        return niw + iv + ivp - iw, niv + iv, niv + ivp
+        niw_pp, niv_pp = niw // 3, min(niw // 3, niv // 3)
+        iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw_pp, niv_pp)
+        return niw_pp + iv + ivp - iw, niv_pp + iv, niv_pp + ivp
 
     @staticmethod
     def get_frequencies_for_ph_to_ph_bar_channel_conversion(

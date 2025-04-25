@@ -35,7 +35,6 @@ class ConfigParser:
         config.logger = DgaLogger(comm)
 
         self._config_file = comm.bcast(self._config_file, root=0)
-        config.current_rank = comm.rank
 
         self._build_config_from_file(self._config_file)
         return self
@@ -157,7 +156,9 @@ class ConfigParser:
         conf.max_iter = self._try_parse(sc_section, "max_iter", 20)
         conf.save_iter = self._try_parse(sc_section, "save_iter", True)
         conf.epsilon = self._try_parse(sc_section, "epsilon", 1e-4)
-        conf.mixing = self._try_parse(sc_section, "mixing", 0.3)
+        conf.mixing = self._try_parse(sc_section, "mixing", 0.2)
+        conf.mixing_strategy = self._try_parse(sc_section, "mixing_strategy", "linear")
+        conf.mixing_history_length = self._try_parse(sc_section, "mixing_history_length", 3)
         conf.use_poly_fit = self._try_parse(sc_section, "use_poly_fit", True)
         conf.previous_sc_path = self._try_parse(sc_section, "previous_sc_path", "./")
 
@@ -171,10 +172,10 @@ class ConfigParser:
         eliashberg_section = conf_file["eliashberg"]
 
         conf.perform_eliashberg = self._try_parse(eliashberg_section, "perform_eliashberg", False)
-        conf.save_pairing_vertex = self._try_parse(eliashberg_section, "save_pairing_vertex", True)
+        conf.save_pairing_vertex = self._try_parse(eliashberg_section, "save_pairing_vertex", False)
         conf.n_eig = self._try_parse(eliashberg_section, "n_eig", 2)
         conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
-        conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "d-wave")
+        conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "random")
         conf.subfolder_name = self._try_parse(eliashberg_section, "subfolder_name", "Eliashberg")
 
         return conf

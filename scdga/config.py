@@ -66,15 +66,18 @@ class SelfConsistencyConfig:
     Class to store the self-consistency parameters. The self-consistency loop is controlled by the maximum number of
     iterations, the convergence criterion epsilon, the mixing parameter and the option to save the quantities throughout
     the self-consistency iteration. If previous_sc_path is set, the self-consistency will be started from the previous
-    self-consistency iteration found in this path.
+    self-consistency iteration found in this path. We also added the possibility to change the mixing scheme from "linear" to
+    (periodic) Pulay mixing, using a history of the last couple iterations if available.
     """
 
     def __init__(self):
         self.max_iter: int = 20
         self.save_iter: bool = True
         self.epsilon: float = 1e-4
-        self.mixing: float = 0.3
-        self.use_poly_fit = True
+        self.mixing: float = 0.2
+        self.mixing_strategy: str = "linear"
+        self.mixing_history_length: int = 3
+        self.use_poly_fit = False
         self.previous_sc_path: str = "/."
 
 
@@ -152,9 +155,6 @@ class OutputConfig:
         self.eliashberg_path: str = "./Eliashberg/"
         self.save_fq: bool = False
 
-
-# instead of passing around the comm object to every function, we can use a global variable
-current_rank: int = 0
 
 logger: DgaLogger
 box: BoxConfig = BoxConfig()

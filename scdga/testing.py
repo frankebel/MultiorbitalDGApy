@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_4/"
-iteration = "7"
+from scdga.symmetrize_new import component2index_band
+
+folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_7/"
+iteration = "30"
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
@@ -72,7 +74,7 @@ def show_self_energy_2d():
     siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
     # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
     siw_dga_nonlocal = np.load(f"{folder}/sigma_dga_iteration_{iteration}.npy")
-    siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
+    # siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
     # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
 
     niv = siw_dga_nonlocal.shape[-1] // 2
@@ -82,8 +84,8 @@ def show_self_energy_2d():
     siw_dga_nonlocal = np.reshape(siw_dga_nonlocal, (16, 16, 1) + siw_dga_nonlocal.shape[1:])
     siw_dga_nonlocal = siw_dga_nonlocal[..., 0, 0, 0, niv]
     # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    niv_paul = siw_paul.shape[-1] // 2
-    siw_paul = siw_paul[..., 0, niv_paul]
+    # niv_paul = siw_paul.shape[-1] // 2
+    # siw_paul = siw_paul[..., 0, niv_paul]
 
     # siw_dga_nonlocal = np.roll(siw_dga_nonlocal, (-2, -1), axis=(0, 1))
 
@@ -99,23 +101,23 @@ def show_self_energy_2d():
     axes[0, 1].set_title("Imag, DGA")
 
     # Second row: siw_paul
-    im3 = axes[1, 0].matshow(siw_paul.real, cmap="viridis")
-    axes[1, 0].set_title("Real, Paul")
+    # im3 = axes[1, 0].matshow(siw_paul.real, cmap="viridis")
+    # axes[1, 0].set_title("Real, Paul")
 
-    im4 = axes[1, 1].matshow(siw_paul.imag, cmap="viridis")
-    axes[1, 1].set_title("Imag, Paul")
+    # im4 = axes[1, 1].matshow(siw_paul.imag, cmap="viridis")
+    # axes[1, 1].set_title("Imag, Paul")
 
-    im5 = axes[0, 2].matshow((siw_dga_nonlocal - siw_paul).real, cmap="viridis")
-    axes[0, 2].set_title("Real, Difference")
-    im6 = axes[1, 2].matshow((siw_dga_nonlocal - siw_paul).imag, cmap="viridis")
-    axes[1, 2].set_title("Imag, Difference")
+    # im5 = axes[0, 2].matshow((siw_dga_nonlocal - siw_paul).real, cmap="viridis")
+    # axes[0, 2].set_title("Real, Difference")
+    # im6 = axes[1, 2].matshow((siw_dga_nonlocal - siw_paul).imag, cmap="viridis")
+    # axes[1, 2].set_title("Imag, Difference")
 
     fig.colorbar(im1, ax=axes[0, 0])
     fig.colorbar(im2, ax=axes[0, 1])
-    fig.colorbar(im3, ax=axes[1, 0])
-    fig.colorbar(im4, ax=axes[1, 1])
-    fig.colorbar(im5, ax=axes[0, 2])
-    fig.colorbar(im6, ax=axes[1, 2])
+    # fig.colorbar(im3, ax=axes[1, 0])
+    # fig.colorbar(im4, ax=axes[1, 1])
+    # fig.colorbar(im5, ax=axes[0, 2])
+    # fig.colorbar(im6, ax=axes[1, 2])
 
     # Adjust layout
     fig.tight_layout()
@@ -136,11 +138,75 @@ def show_mu_history():
     plt.show()
 
 
+class GFComponent(object):
+    """Class for indexing green's functions.
+    An instance of GFComponent holds the following fields:
+    *** index: compound index of all indices (one-based single number)
+    *** bands: band indices (zero-based list)
+    *** spins: spin indices (zero-based list)
+    *** bandspin: band-spin compound indices
+    *** n_bands: number of impurity orbitals
+    *** n_ops: number of operators in Greens function
+             2 -> 1-particle Green's function
+             4 -> 2-particle Green's function"""
+
+    def __init__(self, index=None, bands=None, spins=None, bandspin=None, n_bands=0, n_ops=0, n_spins=2):
+
+        if n_bands == 0 or n_ops == 0:
+            raise ValueError("n_bands and n_ops have to be set" + " to non-zero positive integers")
+
+        self.n_bands = n_bands
+        self.n_ops = n_ops
+        dims_bs = n_ops * (n_bands * n_spins,)
+        dims_1 = (n_bands, n_spins)
+
+        if index is not None and bands is None:  # initialize from compound index
+            self.index = index
+            self.bandspin = np.unravel_index(self.index - 1, dims_bs)
+            self.bands, self.spins = np.unravel_index(list(self.bandspin), dims_1)
+
+        elif bands is not None and index is None:  # initialize from bands (and spins)
+            self.bands = bands
+            if spins is None:  # use only band indices (e.g. d/m channel)
+                self.spins = n_ops * (0,)
+            else:
+                self.spins = spins
+
+            self.bandspin = np.ravel_multi_index((self.bands, self.spins), (n_bands, n_spins))
+            self.index = np.ravel_multi_index(self.bandspin, dims_bs) + 1
+
+        elif bandspin is not None and index is None:
+            self.index = np.ravel_multi_index(bandspin, dims_bs) + 1
+
+        else:
+            raise ValueError("index and bands both supplied")
+
+    def bsbs(self):
+        bsbs = np.vstack((self.bands, self.spins)).transpose().reshape(-1)
+        return tuple(bsbs)
+
+
+def component2index_general(Nbands, N, b, s):
+    """converting a band-spin pattern into an index
+    :param N: number of operators
+    :param b: band array of length N
+    :param s: spin array of length N
+    :return index: general flavor index"""
+
+    return GFComponent(n_bands=Nbands, n_ops=N, bands=b, spins=s).index
+
+
 if __name__ == "__main__":
-    # show_mean_self_energy()
+    # orbs = [0, 0, 0, 0], [1, 1, 1, 1]
+    # spins = [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 1, 1], [1, 1, 0, 0], [1, 0, 0, 1], [0, 1, 1, 0]
+    # n_bands = 2
+
+    # indices = []
+    # for o in orbs:
+    # for s in spins:
+    # indices.append(int(component2index_general(n_bands, 4, o, s)))
+    # print(sorted(indices))
+    show_mean_self_energy()
     # show_self_energy_2d()
-    # show_self_energy_kx_ky(3, 3)
+    # show_self_energy_kx_ky(7, 7)
     # show_mu_history()
-    mat = np.random.randn(10, 10)
-    cs = plt.contour(np.arange(10), np.arange(10), mat.T, levels=[0])
-    print(cs.get_paths())

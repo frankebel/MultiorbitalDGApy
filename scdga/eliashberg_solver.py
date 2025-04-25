@@ -49,7 +49,7 @@ def create_full_vertex_q_r(
     u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, comm: MPI.Comm
 ) -> FourPoint:
     """
-    Calculate the full vertex function in the given channel. See Eq. (3.140) and Eq. (3.141) in my thesis.
+    Calculate the full vertex function in the given channel. See Eq. (3.139) in my thesis.
     """
     logger = config.logger
     logger.log_info(f"Starting to calculate the full {channel.value} vertex.")
@@ -126,7 +126,7 @@ def calculate_full_vertex_pp_w0(
 ):
     """
     Calculates the full vertex function in PH notation and transforms it to PP notation.
-    For the calculation of F, see Eq. (3.140) and Eq. (3.141) in my thesis.
+    For the calculation of F, see Eq. (3.140a) and Eq. (3.140b) in my thesis.
     """
     logger = config.logger
 
@@ -134,6 +134,8 @@ def calculate_full_vertex_pp_w0(
     color = mpi_dist_irrk.comm.rank // group_size
     sub_comm = mpi_dist_irrk.comm.Split(color, mpi_dist_irrk.comm.rank)
 
+    # we are splitting the comm into three groups to calculate the full vertex only for a small subset of the
+    # irreducible BZ at a time to save memory.
     f_q_r = None
     for i in range(sub_comm.size):
         if sub_comm.rank == i:
@@ -150,7 +152,12 @@ def calculate_full_vertex_pp_w0(
     return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp)
 
 
-def get_initial_gap_function(shape: tuple, channel: SpinChannel):
+def get_initial_gap_function(shape: tuple, channel: SpinChannel) -> np.ndarray:
+    """
+    Generates the initial gap function based on the specified shape, spin channel,
+    and symmetry settings from the configuration. Depending on the symmetry and
+    spin channel, it initializes the gap function with appropriate properties.
+    """
     if channel not in {SpinChannel.SING, SpinChannel.TRIP}:
         raise ValueError("Channel must be either SING or TRIP.")
 
@@ -175,10 +182,8 @@ def get_initial_gap_function(shape: tuple, channel: SpinChannel):
         "p-wave-y": "odd" if channel == SpinChannel.SING else "even",
     }.get(config.eliashberg.symmetry, "")
 
-    if v_sym == "even":
-        gap0[..., :niv] = gap0[..., niv:]
-    elif v_sym == "odd":
-        gap0[..., :niv] = -gap0[..., niv:]
+    if v_sym in {"even", "odd"}:
+        gap0[..., :niv] = gap0[..., niv:] if v_sym == "even" else -gap0[..., niv:]
     else:
         gap0 = np.random.random_sample(shape)
 
@@ -188,8 +193,8 @@ def get_initial_gap_function(shape: tuple, channel: SpinChannel):
 def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     """
     Solves the Eliashberg equation for the superconducting eigenvalue and gap function using an
-    Implicitly Restarted Lanczos Method. Returns the first n_eig eigenvalues and eigenvectors plus the maximal
-    eigenvalue and corresponding eigenvector in two lists.
+    Implicitly Restarted Lanczos Method. Returns the first n_eig eigenvalues and eigenvectors and the maximum
+    eigenvalue and corresponding eigenvector in two separate lists, one for the lambdas, one for the gaps.
     """
     logger = config.logger
 
@@ -260,7 +265,6 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
         f"Superconducting eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} for the {gamma_q_r_pp.channel.value}let "
         f"channel are: {', '.join(f'{lam:.6f}' for lam in lambdas)}."
     )
-    logger.log_info(f"Finished Eliashberg iteration for the {gamma_q_r_pp.channel.value}let channel.")
 
     gaps = [
         GapFunction(gaps[..., i].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)
@@ -396,12 +400,22 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
         phi_trip_loc = create_local_reducible_pp_diagrams(giwk, SpinChannel.TRIP)
         logger.log_info("Created the local reducible triplet pairing diagrams.")
 
+        phi_ud_loc = 0.5 * (phi_sing_loc + phi_trip_loc)
         gamma_sing_pp -= phi_sing_loc
         gamma_trip_pp -= phi_trip_loc
 
+        logger.log_info("Starting to solve the Eliashberg equation for the singlet channel.")
         lambdas_sing, gaps_sing = solve_eliashberg_lanczos(gamma_sing_pp, gchi0_q0_pp)
+        logger.log_info("Finished solving the Eliashberg equation for the singlet channel.")
+        logger.log_info("Starting to solve the Eliashberg equation for the triplet channel.")
         lambdas_trip, gaps_trip = solve_eliashberg_lanczos(gamma_trip_pp, gchi0_q0_pp)
+        logger.log_info("Finished solving the Eliashberg equation for the triplet channel.")
     else:
         lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
+
+    lambdas_sing = comm.bcast(lambdas_sing, root=0)
+    lambdas_trip = comm.bcast(lambdas_trip, root=0)
+    gaps_sing = comm.bcast(gaps_sing, root=0)
+    gaps_trip = comm.bcast(gaps_trip, root=0)
 
     return lambdas_sing, lambdas_trip, gaps_sing, gaps_trip

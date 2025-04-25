@@ -1,8 +1,10 @@
 import glob
 import os
 import re
+from copy import deepcopy
 
 import mpi4py.MPI as MPI
+import numpy as np
 
 import scdga.config as config
 from scdga.bubble_gen import BubbleGenerator
@@ -10,7 +12,7 @@ from scdga.four_point import FourPoint
 from scdga.greens_function import GreensFunction, update_mu
 from scdga.interaction import LocalInteraction, Interaction
 from scdga.local_four_point import LocalFourPoint
-from scdga.matsubara_frequencies import *
+from scdga.matsubara_frequencies import MFHelper
 from scdga.mpi_distributor import MpiDistributor
 from scdga.n_point_base import SpinChannel
 from scdga.self_energy import SelfEnergy
@@ -283,15 +285,17 @@ def calculate_self_energy_q(
     delta_sigma = sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
     mu_history = [config.sys.mu]
 
-    for i in range(starting_iter, starting_iter + config.self_consistency.max_iter):
+    for current_iter in range(starting_iter + 1, starting_iter + config.self_consistency.max_iter + 1):
         logger.log_info("----------------------------------------")
-        logger.log_info(f"Starting iteration {i + 1}.")
+        logger.log_info(f"Starting iteration {current_iter}.")
         logger.log_info("----------------------------------------")
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
 
         logger.log_memory_usage("giwk", giwk_full, comm.size)
-        gchi0_q = BubbleGenerator.create_generalized_chi0_q(giwk_full, my_irr_q_list)
+        gchi0_q = BubbleGenerator.create_generalized_chi0_q(
+            giwk_full, config.box.niw_core, config.box.niv_full, my_irr_q_list
+        )
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
@@ -345,15 +349,15 @@ def calculate_self_energy_q(
         sigma_new = sigma_new + hartree + fock
         logger.log_info("Full non-local self-energy calculated.")
 
-        # this is done to minimize noise. We remove some fluctuations from dmft that are included in the local self
-        # energy calculated in this code and add the smooth dmft self-energy
+        # This is done to minimize noise. We remove some fluctuations from dmft that are included in the local self-energy
+        # calculated in this code and add the smooth dmft self-energy
         sigma_new += delta_sigma
         sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)
 
         old_mu = config.sys.mu
         if comm.rank == 0:
             config.sys.mu = update_mu(
-                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_dmft.smom[0]
+                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
             )  # maybe sigma_new.fit_smom()[0]
 
         config.sys.mu = comm.bcast(config.sys.mu)
@@ -364,16 +368,18 @@ def calculate_self_energy_q(
             sigma_new = sigma_new.fit_polynomial(
                 config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core
             )
-            logger.log_info(f"Fitted polynomial to sigma at iteration {i+1}.")
+            logger.log_info(f"Fitted polynomial to sigma at iteration {current_iter}.")
 
-        sigma_new = config.self_consistency.mixing * sigma_new + (1 - config.self_consistency.mixing) * sigma_old
-        logger.log_info(
-            f"Sigma mixed with previous iteration using a mixing parameter of {config.self_consistency.mixing}."
-        )
+        logger.log_info("Applying mixing strategy for the self-energy.")
+        if comm.rank == 0:
+            sigma_new = apply_mixing_strategy(sigma_new, sigma_old, sigma_dmft, current_iter)
+        else:
+            sigma_new = None
+        sigma_new = comm.bcast(sigma_new)
 
         if config.self_consistency.save_iter and config.output.save_quantities and comm.rank == 0:
-            sigma_new.save(name=f"sigma_dga_iteration_{i+1}", output_dir=config.output.output_path)
-            logger.log_info(f"Saved sigma for iteration {i+1} as numpy array.")
+            sigma_new.save(name=f"sigma_dga_iteration_{current_iter}", output_dir=config.output.output_path)
+            logger.log_info(f"Saved sigma for iteration {current_iter} as numpy array.")
 
         logger.log_info("Checking self-consistency convergence.")
         if comm.rank == 0:
@@ -384,7 +390,7 @@ def calculate_self_energy_q(
 
         sigma_old = sigma_new
         if converged:
-            logger.log_info(f"Self-consistency reached. Sigma converged at iteration {i+1}.")
+            logger.log_info(f"Self-consistency reached. Sigma converged at iteration {current_iter}.")
             break
         logger.log_info("Self-consistency not reached yet.")
 
@@ -396,3 +402,97 @@ def calculate_self_energy_q(
         logger.log_info("Saved mu history as numpy array.")
 
     return sigma_old
+
+
+def read_last_n_sigmas_from_files(n: int, output_path: str = "./", previous_sc_path: str = "./") -> list[np.ndarray]:
+    """
+    Reads the last n total self-energies from the output directory and - if specified - the previous self-consistency path.
+    """
+    files_output_dir = glob.glob(os.path.join(output_path, "sigma_dga_iteration_*.npy"))
+    if previous_sc_path != "" and previous_sc_path is not None and os.path.exists(previous_sc_path):
+        files_prev_sc_dir = glob.glob(os.path.join(previous_sc_path, "sigma_dga_iteration_*.npy"))
+    else:
+        files_prev_sc_dir = []
+    files = files_output_dir + files_prev_sc_dir
+
+    last_iterations = sorted(
+        [(int(match.group(1)), f) for f in files if (match := re.search(r"sigma_dga_iteration_(\d+)\.npy$", f))],
+        key=lambda x: x[0],
+        reverse=True,
+    )
+    last_iterations = last_iterations[:n] if len(last_iterations) >= n else last_iterations
+    return [np.load(file) for _, file in last_iterations]
+
+
+def apply_mixing_strategy(
+    sigma_new: SelfEnergy, sigma_old: SelfEnergy, sigma_dmft: SelfEnergy, current_iter: int
+) -> SelfEnergy:
+    """
+    Applies the mixing strategy for the self-consistency loop. The mixing strategy is defined in the config file and
+    is either 'linear' or 'pulay'.
+    """
+    logger = config.logger
+    strategy = config.self_consistency.mixing_strategy
+    n_hist = config.self_consistency.mixing_history_length
+
+    if (
+        strategy == "pulay"
+        and current_iter > n_hist
+        and config.self_consistency.save_iter
+        and config.output.save_quantities
+    ):
+        last_results = read_last_n_sigmas_from_files(
+            n_hist, config.output.output_path, config.self_consistency.previous_sc_path
+        )
+        logger.log_info(f"Loaded last {n_hist} self-energies from files.")
+        sigma_dmft_stacked = np.tile(sigma_dmft.mat, (config.lattice.k_grid.nk_tot, 1, 1, 1))
+        last_proposals = [sigma_dmft_stacked] + last_results
+        last_results = last_results + [sigma_new.mat]
+
+        niv_dmft = sigma_new.current_shape[-1] // 2
+        niv_core = config.box.niv_core
+        last_proposals = [sigma[..., niv_dmft - niv_core : niv_dmft + niv_core] for sigma in last_proposals]
+        last_results = [sigma[..., niv_dmft - niv_core : niv_dmft + niv_core] for sigma in last_results]
+
+        shape = last_results[-1].shape
+        n_total = int(np.prod(shape))
+        r_matrix = np.zeros((2 * n_total, n_hist), dtype=np.float64)
+        f_matrix = np.zeros_like(r_matrix)
+        f_i = np.zeros((2 * n_total), dtype=np.float64)
+
+        def get_proposal(idx: int):
+            return last_proposals[idx].flatten()
+
+        def get_result(idx: int):
+            return last_results[idx].flatten()
+
+        for i in range(n_hist):
+            proposal_diff = get_proposal(-1 - i) - get_proposal(-2 - i)
+            r_matrix[:n_total, i] = proposal_diff.real
+            r_matrix[n_total:, i] = proposal_diff.imag
+
+            result_diff = get_result(-1 - i) - get_result(-2 - i)
+            f_matrix[:n_total, i] = result_diff.real
+            f_matrix[n_total:, i] = result_diff.imag
+
+            f_matrix[:, i] -= r_matrix[:, i]
+
+        result_diff = get_result(-1) - get_proposal(-1)
+        f_i[:n_total] = result_diff.real
+        f_i[n_total:] = result_diff.imag
+
+        update = config.self_consistency.mixing * f_i
+        h_j = f_matrix.T @ f_i
+        fact1 = (r_matrix + config.self_consistency.mixing * f_matrix) @ np.linalg.inv(f_matrix.T @ f_matrix)
+        update -= fact1 @ h_j
+        update = update[:n_total] + 1j * update[n_total:]
+        sigma_new.mat[..., niv_dmft - niv_core : niv_dmft + niv_core] = sigma_old.compress_q_dimension().mat[
+            ..., niv_dmft - niv_core : niv_dmft + niv_core
+        ] + update.reshape(shape)
+        return sigma_new
+
+    sigma_new = config.self_consistency.mixing * sigma_new + (1 - config.self_consistency.mixing) * sigma_old
+    logger.log_info(
+        f"Sigma linearly mixed with previous iteration using a mixing parameter of {config.self_consistency.mixing}."
+    )
+    return sigma_new
