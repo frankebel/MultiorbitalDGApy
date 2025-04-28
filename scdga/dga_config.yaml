@@ -1,6 +1,6 @@
 box_sizes:
   niw_core: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_core: 80 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_core: -1 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
   niv_shell: 50 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
@@ -24,7 +24,7 @@ self_consistency:
   mixing: 0.1 # Linear Mixing parameter for the self-energy: sigma_new = mixing * sigma_new + (1 - mixing) * sigma_old. Will be
   # used in every iteration if the mixing strategy is set to 'linear' and only for the first couple iterations if the mixing strategy is set to "pulay".
   mixing_strategy: "pulay" # Available mixing strategies: "linear", "pulay". Note that "pulay" will only work if "save_iter" here and "save_quantities" below are set to true.
-  mixing_history_length: 2 # Number of previous iterations used for Pulay mixing. Default: 3
+  mixing_history_length: 2 # Number of previous iterations used for Pulay mixing. Default: 2
   use_poly_fit: False # If True, the code will use the polynomial fit of the self-energy for the next iteration with the settings specified below. Will
   # not work if do_poly_fitting below is not set to True
   previous_sc_path: "" # Path to the previous self-consistency folder. If not specified, the code will start a new calculation from scratch. If specified,

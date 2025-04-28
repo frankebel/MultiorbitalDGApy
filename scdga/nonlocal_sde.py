@@ -383,7 +383,7 @@ def calculate_self_energy_q(
 
         logger.log_info("Checking self-consistency convergence.")
         if comm.rank == 0:
-            converged = np.allclose(sigma_old.mat[0], sigma_new.mat[0], atol=config.self_consistency.epsilon)
+            converged = np.allclose(sigma_old.mat, sigma_new.mat, atol=config.self_consistency.epsilon)
         else:
             converged = False
         converged = comm.bcast(converged)
@@ -444,7 +444,6 @@ def apply_mixing_strategy(
         last_results = read_last_n_sigmas_from_files(
             n_hist, config.output.output_path, config.self_consistency.previous_sc_path
         )
-        logger.log_info(f"Loaded last {n_hist} self-energies from files.")
         sigma_dmft_stacked = np.tile(sigma_dmft.mat, (config.lattice.k_grid.nk_tot, 1, 1, 1))
         last_proposals = [sigma_dmft_stacked] + last_results
         last_results = last_results + [sigma_new.mat]
@@ -453,6 +452,7 @@ def apply_mixing_strategy(
         niv_core = config.box.niv_core
         last_proposals = [sigma[..., niv_dmft - niv_core : niv_dmft + niv_core] for sigma in last_proposals]
         last_results = [sigma[..., niv_dmft - niv_core : niv_dmft + niv_core] for sigma in last_results]
+        logger.log_info(f"Loaded last {n_hist} self-energies from files.")
 
         shape = last_results[-1].shape
         n_total = int(np.prod(shape))
@@ -477,9 +477,9 @@ def apply_mixing_strategy(
 
             f_matrix[:, i] -= r_matrix[:, i]
 
-        result_diff = get_result(-1) - get_proposal(-1)
-        f_i[:n_total] = result_diff.real
-        f_i[n_total:] = result_diff.imag
+        iter_diff = get_result(-1) - get_proposal(-1)
+        f_i[:n_total] = iter_diff.real
+        f_i[n_total:] = iter_diff.imag
 
         update = config.self_consistency.mixing * f_i
         h_j = f_matrix.T @ f_i
@@ -489,6 +489,14 @@ def apply_mixing_strategy(
         sigma_new.mat[..., niv_dmft - niv_core : niv_dmft + niv_core] = sigma_old.compress_q_dimension().mat[
             ..., niv_dmft - niv_core : niv_dmft + niv_core
         ] + update.reshape(shape)
+
+        if current_iter > n_hist + 5:
+            config.self_consistency.mixing_history_length = 3
+
+        logger.log_info(
+            f"Pulay mixing applied with {n_hist} previous iterations and a mixing parameter of {config.self_consistency.mixing}."
+        )
+
         return sigma_new
 
     sigma_new = config.self_consistency.mixing * sigma_new + (1 - config.self_consistency.mixing) * sigma_old

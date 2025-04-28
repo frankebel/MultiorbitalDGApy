@@ -3,8 +3,8 @@ import numpy as np
 
 from scdga.symmetrize_new import component2index_band
 
-folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_7/"
-iteration = "30"
+folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk1024_Nq1024_wc140_vc140_vs150_3/"
+iteration = "50"
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
@@ -39,11 +39,11 @@ def show_self_energy_kx_ky(kx: int, ky: int):
     plt.show()
 
 
-def show_mean_self_energy():
+def show_mean_self_energy(save: bool, path: str):
     siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
     # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
     siw_dga_nonlocal = np.load(f"{folder}/sigma_dga_iteration_{iteration}.npy")
-    siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
+    # siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
     # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
 
     niv = siw_dga_nonlocal.shape[-1] // 2
@@ -52,22 +52,26 @@ def show_mean_self_energy():
     # siw_dga_local = siw_dga_local[..., niv:]
     siw_dga_nonlocal = np.mean(siw_dga_nonlocal[..., niv : niv + 80], axis=0)[0, 0]  # + 0.2 + 1j * 0.2
     # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    niv_paul = siw_paul.shape[-1] // 2
-    siw_paul = np.mean(siw_paul[..., niv_paul : niv_paul + 80], axis=(0, 1, 2))
+    # niv_paul = siw_paul.shape[-1] // 2
+    # siw_paul = np.mean(siw_paul[..., niv_paul : niv_paul + 80], axis=(0, 1, 2))
 
     plt.figure()
     plt.plot(siw_dga_nonlocal.real, label="real, dga")
     plt.plot(siw_dga_nonlocal.imag, label="imag, dga")
     # plt.plot(siw_dga_nonlocal_fit.real, label="real, dga_fit")
     # plt.plot(siw_dga_nonlocal_fit.imag, label="imag, dga_fit")
-    plt.plot(siw_paul.real, label="real, paul")
-    plt.plot(siw_paul.imag, label="imag, paul")
+    # plt.plot(siw_paul.real, label="real, paul")
+    # plt.plot(siw_paul.imag, label="imag, paul")
     plt.plot(siw_dmft.real, label="real, dmft")
     plt.plot(siw_dmft.imag, label="imag, dmft")
     plt.tight_layout()
     plt.legend()
     plt.grid()
-    plt.show()
+    if save:
+        plt.savefig(f"{path}/self_energy_{iteration}.png")
+    else:
+        plt.show()
+    plt.close()
 
 
 def show_self_energy_2d():
@@ -138,62 +142,16 @@ def show_mu_history():
     plt.show()
 
 
-class GFComponent(object):
-    """Class for indexing green's functions.
-    An instance of GFComponent holds the following fields:
-    *** index: compound index of all indices (one-based single number)
-    *** bands: band indices (zero-based list)
-    *** spins: spin indices (zero-based list)
-    *** bandspin: band-spin compound indices
-    *** n_bands: number of impurity orbitals
-    *** n_ops: number of operators in Greens function
-             2 -> 1-particle Green's function
-             4 -> 2-particle Green's function"""
+def component2index_general(n_bands: int, bands: list, spins: list) -> int:
+    if n_bands == 0:
+        raise ValueError("Nbands and N have to be set to non-zero positive integers.")
 
-    def __init__(self, index=None, bands=None, spins=None, bandspin=None, n_bands=0, n_ops=0, n_spins=2):
+    n_spins = 2
+    dims_bs = 4 * (n_bands * n_spins,)
+    dims_1 = (n_bands, n_spins)
 
-        if n_bands == 0 or n_ops == 0:
-            raise ValueError("n_bands and n_ops have to be set" + " to non-zero positive integers")
-
-        self.n_bands = n_bands
-        self.n_ops = n_ops
-        dims_bs = n_ops * (n_bands * n_spins,)
-        dims_1 = (n_bands, n_spins)
-
-        if index is not None and bands is None:  # initialize from compound index
-            self.index = index
-            self.bandspin = np.unravel_index(self.index - 1, dims_bs)
-            self.bands, self.spins = np.unravel_index(list(self.bandspin), dims_1)
-
-        elif bands is not None and index is None:  # initialize from bands (and spins)
-            self.bands = bands
-            if spins is None:  # use only band indices (e.g. d/m channel)
-                self.spins = n_ops * (0,)
-            else:
-                self.spins = spins
-
-            self.bandspin = np.ravel_multi_index((self.bands, self.spins), (n_bands, n_spins))
-            self.index = np.ravel_multi_index(self.bandspin, dims_bs) + 1
-
-        elif bandspin is not None and index is None:
-            self.index = np.ravel_multi_index(bandspin, dims_bs) + 1
-
-        else:
-            raise ValueError("index and bands both supplied")
-
-    def bsbs(self):
-        bsbs = np.vstack((self.bands, self.spins)).transpose().reshape(-1)
-        return tuple(bsbs)
-
-
-def component2index_general(Nbands, N, b, s):
-    """converting a band-spin pattern into an index
-    :param N: number of operators
-    :param b: band array of length N
-    :param s: spin array of length N
-    :return index: general flavor index"""
-
-    return GFComponent(n_bands=Nbands, n_ops=N, bands=b, spins=s).index
+    bandspin = np.ravel_multi_index((bands, spins), dims_1)
+    return np.ravel_multi_index(bandspin, dims_bs) + 1
 
 
 if __name__ == "__main__":
@@ -204,9 +162,11 @@ if __name__ == "__main__":
     # indices = []
     # for o in orbs:
     # for s in spins:
-    # indices.append(int(component2index_general(n_bands, 4, o, s)))
+    # indices.append(int(component2index_general(n_bands, o, s)))
     # print(sorted(indices))
-    show_mean_self_energy()
+    for i in range(1, 101):
+        iteration = i
+        show_mean_self_energy(save=True, path="/home/julpe/Desktop/plots")
     # show_self_energy_2d()
     # show_self_energy_kx_ky(7, 7)
     # show_mu_history()
