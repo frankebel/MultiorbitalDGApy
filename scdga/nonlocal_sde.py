@@ -242,6 +242,37 @@ def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[Sel
     return SelfEnergy(mat, config.lattice.nk, True, True, False), max_iter
 
 
+def calculate_sigma_from_kernel_v2(
+    kernel: FourPoint, giwk_full: GreensFunction, full_q_list: np.ndarray, comm: MPI.Comm
+) -> SelfEnergy:
+    """
+    ATTENTION: THE MAPPING TO FBZ MIGHT BE ERRONEOUS. VIKTOR TOLD ME THAT
+    """
+    irrk_k_list = config.lattice.k_grid.get_irrq_list()
+    mpi_dist_irrk = MpiDistributor.create_distributor(ntasks=len(irrk_k_list), comm=comm, name="Q")
+
+    vn, wn = giwk_full.niv + MFHelper.vn(config.box.niv_core), MFHelper.wn(config.box.niw_core)
+    v_minus_w = vn[None, :] - wn[:, None]
+
+    mat = np.zeros(
+        (len(irrk_k_list), config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
+        dtype=kernel.mat.dtype,
+    )
+
+    kernel_mat = kernel.to_full_niw_range().mat
+    print(mpi_dist_irrk.my_tasks)
+
+    for i, my_task in enumerate(mpi_dist_irrk.my_tasks):
+        k = irrk_k_list[my_task]
+        indices = k[None, :] - full_q_list
+        g_q = giwk_full.mat[indices[:, 0], indices[:, 1], indices[:, 2]][..., v_minus_w]
+        mat[my_task] = np.einsum("qaijdwv,qadwv->ijv", kernel_mat, g_q, optimize=True)
+
+    mat = mat[config.lattice.k_grid.irrk_inv, ...].reshape(config.lattice.k_grid.nk_tot, *mat.shape[1:])
+    mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
+    return SelfEnergy(mat, config.lattice.nk, True, True)
+
+
 def calculate_self_energy_q(
     comm: MPI.Comm,
     giwk: GreensFunction,
@@ -336,10 +367,13 @@ def calculate_self_energy_q(
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
-        kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
-        logger.log_info("Kernel mapped to full BZ and scattered across all MPI ranks.")
+        kernel.mat = comm.bcast(kernel.mat, root=0)
+        # kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
+        # logger.log_info("Kernel mapped to full BZ and scattered across all MPI ranks.")
 
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
+        # sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
+        sigma_new = calculate_sigma_from_kernel_v2(kernel, giwk_full, full_q_list, comm)
+
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
 
