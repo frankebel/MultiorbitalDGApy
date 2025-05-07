@@ -31,7 +31,7 @@ self_consistency:
   # the code will start from the last iteration of the previous calculation and do max_iter steps on top
 
 lambda_correction:
-  perform_lambda_correction: False # If True, the code will perform a lambda correction and not a self-consistency scheme. This is only possible for single-orbital systems!
+  perform_lambda_correction: True # If True, the code will perform a lambda correction and not a self-consistency scheme. This is only possible for single-orbital systems!
 
 dmft_input:
   type: "w2dyn" # Input format. Available is 'w2dyn'
@@ -41,7 +41,7 @@ dmft_input:
   do_sym_v_vp: True # If True, the code will symmetrize G2 in the v and vp indices
 
 eliashberg:
-  perform_eliashberg: False # If True, the code will perform a power iteration to solve the linearized Eliashberg equation
+  perform_eliashberg: True # If True, the code will perform a power iteration to solve the linearized Eliashberg equation
   save_pairing_vertex: False # if true, saves the pairing vertex to a file
   n_eig: 2 # Number of eigenvalues and eigenvectors to be calculated. Default: 2
   epsilon: 1e-12 # Convergence criterion for the eigenvalues and eigenvectors
@@ -55,7 +55,7 @@ poly_fitting:
 
 output:
   output_path: "" # Path, where the DGA output folders are created. If not specified, the output is created in the input folder directory of the DMFT files
-  do_plotting: True # If True, the code will plot the results into the output folder
+  do_plotting: False # If True, the code will plot the results into the output folder
   plotting_subfolder_name: "Plots" # name for the subfolder where the plots are saved
   save_quantities: True # If True, the code will save several quantities into the output folder
   save_fq: False # If True, the code will save the full vertex F(qvv') for d/m channels to a file. Attention: this will be a large file!

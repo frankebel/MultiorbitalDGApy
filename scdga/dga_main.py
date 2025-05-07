@@ -226,11 +226,6 @@ def execute_dga_routine():
         logger.log_info("Starting with Eliashberg equation.")
         lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(giwk_dga, u_loc, v_nonloc, comm)
 
-        lambdas_sing = comm.bcast(lambdas_sing, root=0)
-        lambdas_trip = comm.bcast(lambdas_trip, root=0)
-        gaps_sing = comm.bcast(gaps_sing, root=0)
-        gaps_trip = comm.bcast(gaps_trip, root=0)
-
         if config.output.save_quantities and comm.rank == 0:
             np.savetxt(
                 os.path.join(config.output.eliashberg_path, "eigenvalues.txt"),

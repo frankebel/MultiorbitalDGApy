@@ -189,8 +189,9 @@ def calculate_sigma_kernel_r_q(
 
     if config.lambda_correction.perform_lambda_correction:
         gchi_aux_q_r_sum.mat = mpi_dist_irrq.gather(gchi_aux_q_r_sum.mat)
-        logger.log_info(f"Performing lambda correction for {gchi_aux_q_r_sum.channel} channel.")
+
         if mpi_dist_irrq.comm.rank == 0:
+            logger.log_info(f"Performing lambda correction for {gchi_aux_q_r_sum.channel} channel.")
             chi_r_loc = LocalFourPoint.load(
                 os.path.join(config.output.output_path, f"chi_{gchi_aux_q_r_sum.channel.value}_loc.npy"),
                 gchi_aux_q_r_sum.channel,
@@ -198,9 +199,10 @@ def calculate_sigma_kernel_r_q(
             ).to_full_niw_range()
             gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(gchi_aux_q_r_sum, chi_r_loc)
             del chi_r_loc
-        logger.log_info(
-            f"Lambda correction applied. Lambda for {gchi_aux_q_r_sum.channel.value} channel is: {lambda_r:.6f}."
-        )
+            logger.log_info(
+                f"Lambda correction applied. Lambda for {gchi_aux_q_r_sum.channel.value} channel is: {lambda_r:.6f}."
+            )
+
         gchi_aux_q_r_sum.mat = mpi_dist_irrq.scatter(gchi_aux_q_r_sum.mat)
 
     if config.eliashberg.perform_eliashberg:
