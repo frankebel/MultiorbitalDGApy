@@ -30,9 +30,31 @@ def execute_dga_routine():
     else:
         g_dmft, sigma_dmft, g2_dens, g2_magn = None, None, None, None
 
-    config.lattice, config.box, config.output, config.sys, config.self_consistency = comm.bcast(
-        (config.lattice, config.box, config.output, config.sys, config.self_consistency), root=0
+    (
+        config.lattice,
+        config.box,
+        config.output,
+        config.sys,
+        config.self_consistency,
+        config.eliashberg,
+        config.lambda_correction,
+    ) = comm.bcast(
+        (
+            config.lattice,
+            config.box,
+            config.output,
+            config.sys,
+            config.self_consistency,
+            config.eliashberg,
+            config.lambda_correction,
+        ),
+        root=0,
     )
+
+    if comm.rank == 0 and config.sys.n_bands != 1 and config.lambda_correction.perform_lambda_correction:
+        raise ValueError(
+            "Lambda correction is not available for multi-band systems. Please disable it in the config file."
+        )
 
     config_parser.save_config_file(path=config.output.output_path, name="dga_config.yaml")
 
@@ -84,14 +106,16 @@ def execute_dga_routine():
             "Saved (f_dens_loc + 3 f_magn_loc) as numpy file, which is needed for the double-counting correction."
         )
 
+    if (config.lambda_correction.perform_lambda_correction or config.output.save_quantities) and comm.rank == 0:
+        chi_d.save(name="chi_dens_loc", output_dir=config.output.output_path)
+        chi_m.save(name="chi_magn_loc", output_dir=config.output.output_path)
+
     if config.output.save_quantities and comm.rank == 0:
         gamma_d.save(name="Gamma_dens", output_dir=config.output.output_path)
         gamma_m.save(name="Gamma_magn", output_dir=config.output.output_path)
         sigma_loc.save(name="siw_dga_local", output_dir=config.output.output_path)
-        chi_d.save(name="chi_d", output_dir=config.output.output_path)
-        chi_m.save(name="chi_magn", output_dir=config.output.output_path)
-        vrg_d.save(name="vrg_dens", output_dir=config.output.output_path)
-        vrg_m.save(name="vrg_magn", output_dir=config.output.output_path)
+        vrg_d.save(name="vrg_dens_loc", output_dir=config.output.output_path)
+        vrg_m.save(name="vrg_magn_loc", output_dir=config.output.output_path)
         gchi_d.save(name="gchi_dens_loc", output_dir=config.output.output_path)
         gchi_m.save(name="gchi_magn_loc", output_dir=config.output.output_path)
         f_d.save(name="f_dens_loc", output_dir=config.output.output_path)
@@ -174,7 +198,7 @@ def execute_dga_routine():
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_dga.save(name=f"sigma_dga", output_dir=config.output.output_path)
-        logger.log_info("Saved non-local self energy as numpy file.")
+        logger.log_info("Saved non-local self-energy as numpy file.")
 
         giwk_dga.save(name=f"giwk_dga", output_dir=config.output.output_path)
         logger.log_info("Saved non-local Green's function as numpy file.")
@@ -183,13 +207,13 @@ def execute_dga_routine():
         sigma_fit = sigma_dga.fit_polynomial(config.poly_fitting.n_fit, config.poly_fitting.o_fit, config.box.niv_core)
         sigma_fit.save(name=f"sigma_dga_fitted", output_dir=config.output.output_path)
         logger.log_info(f"Fitted polynomial of degree {config.poly_fitting.o_fit} to sigma.")
-        logger.log_info("Saved fitted non-local self energy as numpy file.")
+        logger.log_info("Saved fitted non-local self-energy as numpy file.")
         del sigma_fit
 
     if config.output.do_plotting and comm.rank == 0:
         kx, ky = config.lattice.k_grid.kx_shift, config.lattice.k_grid.ky_shift
         plotting.plot_two_point_kx_ky(sigma_dga, kx, ky, name="Sigma_dga_kz0", output_dir=config.output.plotting_path)
-        logger.log_info("Plotted non-local self energy as a function of kx and ky.")
+        logger.log_info("Plotted non-local self-energy as a function of kx and ky.")
 
         plotting.plot_two_point_kx_ky(giwk_dga, kx, ky, name="Giwk_dga_kz0", output_dir=config.output.plotting_path)
         logger.log_info("Plotted non-local Green's function as a function of kx and ky.")

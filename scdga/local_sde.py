@@ -3,7 +3,7 @@ from scdga.bubble_gen import BubbleGenerator
 from scdga.greens_function import GreensFunction
 from scdga.interaction import LocalInteraction
 from scdga.local_four_point import LocalFourPoint
-from scdga.matsubara_frequencies import MFHelper, FrequencyShift
+from scdga.matsubara_frequencies import MFHelper
 from scdga.n_point_base import *
 from scdga.self_energy import SelfEnergy
 
@@ -229,7 +229,7 @@ def perform_local_schwinger_dyson_abinitio_dga(
     logger.log_info("Generalized susceptibility chi^wvv' (magn) done.")
     del g2_magn
 
-    gchi0_loc_full = create_generalized_chi0(g_loc)
+    gchi0_loc_full = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
     logger.log_info("Local bare susceptibility chi_0^wv done.")
     gchi0_core = gchi0_loc_full.cut_niv(config.box.niv_core)
 

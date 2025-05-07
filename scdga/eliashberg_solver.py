@@ -418,4 +418,6 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     gaps_sing = comm.bcast(gaps_sing, root=0)
     gaps_trip = comm.bcast(gaps_trip, root=0)
 
+    mpi_dist_irrk.delete_file()
+
     return lambdas_sing, lambdas_trip, gaps_sing, gaps_trip

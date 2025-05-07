@@ -96,6 +96,16 @@ class EliashbergConfig:
         self.subfolder_name: str = "Eliashberg"
 
 
+class LambdaCorrectionConfig:
+    """
+    Class to store the configuration for the lambda correction. It is defined by the option to perform the lambda
+    correction and the type of lambda correction.
+    """
+
+    def __init__(self):
+        self.perform_lambda_correction: bool = True
+
+
 class DmftConfig:
     """
     Class to store the DMFT parameters. The DMFT input is defined by the type of input, the input path, the filenames
@@ -159,6 +169,7 @@ class OutputConfig:
 logger: DgaLogger
 box: BoxConfig = BoxConfig()
 lattice: LatticeConfig = LatticeConfig()
+lambda_correction: LambdaCorrectionConfig = LambdaCorrectionConfig()
 dmft: DmftConfig = DmftConfig()
 sys: SystemConfig = SystemConfig()
 output: OutputConfig = OutputConfig()

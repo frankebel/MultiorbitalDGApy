@@ -1,12 +1,12 @@
 import glob
 import os
 import re
-from copy import deepcopy
 
 import mpi4py.MPI as MPI
 import numpy as np
 
 import scdga.config as config
+import scdga.lambda_correction as lc
 from scdga.bubble_gen import BubbleGenerator
 from scdga.four_point import FourPoint
 from scdga.greens_function import GreensFunction, update_mu
@@ -148,27 +148,27 @@ def calculate_sigma_kernel_r_q(
     gchi0_q_core_sum: FourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
-    comm: MPI.Comm,
+    mpi_dist_irrq: MpiDistributor,
 ) -> FourPoint:
     logger = config.logger
 
     gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
-    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, comm.size)
+    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, mpi_dist_irrq.comm.size)
 
     if config.eliashberg.perform_eliashberg:
         gchi_aux_q_r.save(
-            name=f"gchi_aux_q_{gchi_aux_q_r.channel.value}_rank_{comm.rank}",
+            name=f"gchi_aux_q_{gchi_aux_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
             output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
         )
 
     vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_core_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
-    logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, comm.size)
+    logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
 
     if config.eliashberg.perform_eliashberg:
         vrg_q_r.save(
-            name=f"vrg_q_{vrg_q_r.channel.value}_rank_{comm.rank}",
+            name=f"vrg_q_{vrg_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
             output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
         )
 
@@ -182,21 +182,37 @@ def calculate_sigma_kernel_r_q(
         f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
     )
     logger.log_memory_usage(
-        f"Summed auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value})", gchi_aux_q_r_sum, comm.size
+        f"Summed auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value})",
+        gchi_aux_q_r_sum,
+        mpi_dist_irrq.comm.size,
     )
+
+    if config.lambda_correction.perform_lambda_correction:
+        gchi_aux_q_r_sum.mat = mpi_dist_irrq.gather(gchi_aux_q_r_sum.mat)
+        logger.log_info(f"Performing lambda correction for {gchi_aux_q_r_sum.channel} channel.")
+        if mpi_dist_irrq.comm.rank == 0:
+            chi_r_loc = LocalFourPoint.load(
+                os.path.join(config.output.output_path, f"chi_{gchi_aux_q_r_sum.channel.value}_loc.npy"),
+                gchi_aux_q_r_sum.channel,
+                num_vn_dimensions=0,
+            ).to_full_niw_range()
+            gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(gchi_aux_q_r_sum, chi_r_loc)
+            del chi_r_loc
+        logger.log_info(
+            f"Lambda correction applied. Lambda for {gchi_aux_q_r_sum.channel.value} channel is: {lambda_r:.6f}."
+        )
+        gchi_aux_q_r_sum.mat = mpi_dist_irrq.scatter(gchi_aux_q_r_sum.mat)
 
     if config.eliashberg.perform_eliashberg:
         gchi_aux_q_r_sum.save(
-            name=f"gchi_aux_q_{gchi_aux_q_r_sum.channel.value}_sum_rank_{comm.rank}",
+            name=f"gchi_aux_q_{gchi_aux_q_r_sum.channel.value}_sum_rank_{mpi_dist_irrq.comm.rank}",
             output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
         )
 
     return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
 
 
-def calculate_sigma_from_kernel(
-    kernel: FourPoint, giwk: GreensFunction, full_q_list: np.ndarray, batch_size: int = 1
-) -> SelfEnergy:
+def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, full_q_list: np.ndarray) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
@@ -242,35 +258,24 @@ def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[Sel
     return SelfEnergy(mat, config.lattice.nk, True, True, False), max_iter
 
 
-def calculate_sigma_from_kernel_v2(
-    kernel: FourPoint, giwk_full: GreensFunction, full_q_list: np.ndarray, comm: MPI.Comm
-) -> SelfEnergy:
+def read_last_n_sigmas_from_files(n: int, output_path: str = "./", previous_sc_path: str = "./") -> list[np.ndarray]:
     """
-    ATTENTION: THE MAPPING TO FBZ MIGHT BE ERRONEOUS. VIKTOR TOLD ME THAT
+    Reads the last n total self-energies from the output directory and - if specified - the previous self-consistency path.
     """
-    irrk_k_list = config.lattice.k_grid.get_irrq_list()
-    mpi_dist_irrk = MpiDistributor.create_distributor(ntasks=len(irrk_k_list), comm=comm, name="Q")
+    files_output_dir = glob.glob(os.path.join(output_path, "sigma_dga_iteration_*.npy"))
+    if previous_sc_path != "" and previous_sc_path is not None and os.path.exists(previous_sc_path):
+        files_prev_sc_dir = glob.glob(os.path.join(previous_sc_path, "sigma_dga_iteration_*.npy"))
+    else:
+        files_prev_sc_dir = []
+    files = files_output_dir + files_prev_sc_dir
 
-    vn, wn = giwk_full.niv + MFHelper.vn(config.box.niv_core), MFHelper.wn(config.box.niw_core)
-    v_minus_w = vn[None, :] - wn[:, None]
-
-    mat = np.zeros(
-        (len(irrk_k_list), config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
-        dtype=kernel.mat.dtype,
+    last_iterations = sorted(
+        [(int(match.group(1)), f) for f in files if (match := re.search(r"sigma_dga_iteration_(\d+)\.npy$", f))],
+        key=lambda x: x[0],
+        reverse=True,
     )
-
-    kernel_mat = kernel.to_full_niw_range().mat
-    print(mpi_dist_irrk.my_tasks)
-
-    for i, my_task in enumerate(mpi_dist_irrk.my_tasks):
-        k = irrk_k_list[my_task]
-        indices = k[None, :] - full_q_list
-        g_q = giwk_full.mat[indices[:, 0], indices[:, 1], indices[:, 2]][..., v_minus_w]
-        mat[my_task] = np.einsum("qaijdwv,qadwv->ijv", kernel_mat, g_q, optimize=True)
-
-    mat = mat[config.lattice.k_grid.irrk_inv, ...].reshape(config.lattice.k_grid.nk_tot, *mat.shape[1:])
-    mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
-    return SelfEnergy(mat, config.lattice.nk, True, True)
+    last_iterations = last_iterations[:n] if len(last_iterations) >= n else last_iterations
+    return [np.load(file) for _, file in last_iterations]
 
 
 def calculate_self_energy_q(
@@ -352,12 +357,12 @@ def calculate_self_energy_q(
         del gchi0_q_core
 
         kernel += calculate_sigma_kernel_r_q(
-            gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, comm
+            gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
         logger.log_info("Calculated kernel for density channel.")
 
         kernel += 3 * calculate_sigma_kernel_r_q(
-            gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, comm
+            gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
@@ -367,12 +372,10 @@ def calculate_self_energy_q(
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
-        kernel.mat = comm.bcast(kernel.mat, root=0)
-        # kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
-        # logger.log_info("Kernel mapped to full BZ and scattered across all MPI ranks.")
+        kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
+        logger.log_info("Kernel mapped to full BZ and scattered across all MPI ranks.")
 
-        # sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
-        sigma_new = calculate_sigma_from_kernel_v2(kernel, giwk_full, full_q_list, comm)
+        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
 
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
@@ -436,26 +439,6 @@ def calculate_self_energy_q(
         logger.log_info("Saved mu history as numpy array.")
 
     return sigma_old
-
-
-def read_last_n_sigmas_from_files(n: int, output_path: str = "./", previous_sc_path: str = "./") -> list[np.ndarray]:
-    """
-    Reads the last n total self-energies from the output directory and - if specified - the previous self-consistency path.
-    """
-    files_output_dir = glob.glob(os.path.join(output_path, "sigma_dga_iteration_*.npy"))
-    if previous_sc_path != "" and previous_sc_path is not None and os.path.exists(previous_sc_path):
-        files_prev_sc_dir = glob.glob(os.path.join(previous_sc_path, "sigma_dga_iteration_*.npy"))
-    else:
-        files_prev_sc_dir = []
-    files = files_output_dir + files_prev_sc_dir
-
-    last_iterations = sorted(
-        [(int(match.group(1)), f) for f in files if (match := re.search(r"sigma_dga_iteration_(\d+)\.npy$", f))],
-        key=lambda x: x[0],
-        reverse=True,
-    )
-    last_iterations = last_iterations[:n] if len(last_iterations) >= n else last_iterations
-    return [np.load(file) for _, file in last_iterations]
 
 
 def apply_mixing_strategy(
@@ -523,9 +506,6 @@ def apply_mixing_strategy(
         sigma_new.mat[..., niv_dmft - niv_core : niv_dmft + niv_core] = sigma_old.compress_q_dimension().mat[
             ..., niv_dmft - niv_core : niv_dmft + niv_core
         ] + update.reshape(shape)
-
-        if current_iter > n_hist + 5:
-            config.self_consistency.mixing_history_length = 3
 
         logger.log_info(
             f"Pulay mixing applied with {n_hist} previous iterations and a mixing parameter of {config.self_consistency.mixing}."

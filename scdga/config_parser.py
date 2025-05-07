@@ -54,6 +54,7 @@ class ConfigParser:
         config.output = self._build_output_config(conf_file)
         config.self_consistency = self._build_self_consistency_config(conf_file)
         config.eliashberg = self._build_eliashberg_config(conf_file)
+        config.lambda_correction = self._build_lambda_correction_config(conf_file)
         config.poly_fitting = self._build_poly_fitting_config(conf_file)
         config.box = self._build_box_config(conf_file)
         config.lattice = self._build_lattice_config(conf_file)
@@ -121,7 +122,7 @@ class ConfigParser:
 
     def _build_system_config(self, _) -> SystemConfig:
         """
-        Builds the system config. This will be filled outside by the main routine.
+        Builds the system config. This will be filled from the outside by the main routine.
         """
         return SystemConfig()
 
@@ -177,6 +178,14 @@ class ConfigParser:
         conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
         conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "random")
         conf.subfolder_name = self._try_parse(eliashberg_section, "subfolder_name", "Eliashberg")
+
+        return conf
+
+    def _build_lambda_correction_config(self, conf_file):
+        conf = LambdaCorrectionConfig()
+        lambda_section = conf_file["lambda_correction"]
+
+        conf.perform_lambda_correction = self._try_parse(lambda_section, "perform_lambda_correction", False)
 
         return conf
 
