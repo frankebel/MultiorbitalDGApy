@@ -7,3 +7,4 @@ scipy~=1.15.2
 multimethod~=2.0
 pytest~=8.3.5
 setuptools~=78.1.0
+ruamel.yaml~=0.18.10

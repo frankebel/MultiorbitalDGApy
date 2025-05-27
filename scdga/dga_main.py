@@ -78,7 +78,7 @@ def execute_dga_routine():
         logger.log_info("Plotted g2 (dens) and g2 (magn).")
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
-    giwk_dga = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek)
+    g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek)
     u_loc = config.lattice.hamiltonian.get_local_u()
     v_nonloc = config.lattice.hamiltonian.get_vq(config.lattice.q_grid)
 
@@ -87,7 +87,7 @@ def execute_dga_routine():
 
     if comm.rank == 0:
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (
-            local_sde.perform_local_schwinger_dyson(giwk_dga, g2_dens, g2_magn, u_loc)
+            local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
         )
     else:
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (None,) * 11
@@ -123,11 +123,6 @@ def execute_dga_routine():
         del vrg_d, vrg_m
         logger.log_info("Saved all relevant quantities as numpy files.")
 
-    if config.eliashberg.perform_eliashberg and comm.rank == 0:
-        (0.5 * f_d - 0.5 * f_m).save(name="f_ud_loc", output_dir=config.output.output_path)
-        del f_d, f_m
-        logger.log_info("Saved f_ud_loc as numpy file, which is needed for Gamma_pp.")
-
     if config.output.do_plotting and comm.rank == 0:
         plotting.plot_nu_nup(gchi_d, omega=0, name=f"Gchi_dens", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gchi_m, omega=0, name=f"Gchi_magn", output_dir=config.output.plotting_path)
@@ -152,7 +147,7 @@ def execute_dga_routine():
             [chi_d.mat],
             [chi_m.mat],
             ["Loc-tilde"],
-            giwk_dga.e_kin,
+            g_loc.e_kin,
             name="loc",
             output_dir=config.output.plotting_path,
         )
@@ -187,7 +182,7 @@ def execute_dga_routine():
 
     logger.log_info("Starting non-local ladder-DGA routine.")
     sigma_dga = nonlocal_sde.calculate_self_energy_q(
-        comm, giwk_dga, gamma_d, gamma_m, u_loc, v_nonloc, sigma_dmft, sigma_loc
+        comm, g_loc, gamma_d, gamma_m, u_loc, v_nonloc, sigma_dmft, sigma_loc
     )
     del gamma_d, gamma_m, sigma_dmft, sigma_loc
     logger.log_info("Non-local ladder-DGA routine finished.")
@@ -224,7 +219,9 @@ def execute_dga_routine():
         if not np.allclose(config.lattice.q_grid.nk, config.lattice.k_grid.nk):
             raise ValueError("Eliashberg equation can only be solved when nq = nk.")
         logger.log_info("Starting with Eliashberg equation.")
-        lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(giwk_dga, u_loc, v_nonloc, comm)
+        lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
+            giwk_dga, g_loc, u_loc, v_nonloc, comm
+        )
 
         if config.output.save_quantities and comm.rank == 0:
             np.savetxt(

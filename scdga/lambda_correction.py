@@ -57,11 +57,8 @@ def perform_single_lambda_correction(chi_r: FourPoint, chi_r_loc: LocalFourPoint
     Performs the lambda correction on the physical susceptibility for a single spin-channel. Returns (i) the corrected
     susceptibility in the irreducible BZ and half niw range and (ii) lambda as a tuple.
     """
-    logger = config.logger
     chi_r = chi_r.to_full_niw_range().map_to_full_bz(config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk)
     chi_r_mat = chi_r.compress_q_dimension().mat.squeeze()
-    lambda_start = get_lambda_start(chi_r_mat)
-
-    lambda_r = find_lambda(chi_r_mat, chi_r_loc.mat.sum() / config.sys.beta, lambda_start)
+    lambda_r = find_lambda(chi_r_mat, chi_r_loc.mat.sum() / config.sys.beta, get_lambda_start(chi_r_mat))
     chi_r.mat = apply_lambda(chi_r_mat, lambda_r)[config.lattice.q_grid.irrk_ind][:, None, None, None, None, :]
     return chi_r.to_half_niw_range(), lambda_r

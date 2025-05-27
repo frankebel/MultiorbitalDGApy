@@ -1,3 +1,4 @@
+import numpy as np
 import scipy as sp
 
 from scdga.interaction import LocalInteraction, Interaction
@@ -548,15 +549,19 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.update_original_shape()
         return copy
 
-    def find_eigendecomposition(self) -> tuple[np.ndarray, np.ndarray]:
+    def rotate_orbitals(self, theta: float = np.pi):
+        r"""
+        Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
+        radians and the number of orbitals needs to be 2.
         """
-        Finds the eigendecomposition of the LocalFourPoint object (in compound indices!).
-        Returns the eigenvalues and eigenvectors. We can use eigh since due to time-reversal symmetry, we expect the matrices
-        in compound notation to be hermitean.
-        """
-        mat = deepcopy(self).to_full_niw_range().to_compound_indices().mat
-        eigvals, eigvecs = np.linalg.eigh(mat)
-        return eigvals, eigvecs
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
+
+        copy = deepcopy(self)
+        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
+        copy.mat = np.einsum("pi,qj,rk,sl,pqrs...->ijkl...", np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        return copy
 
     @staticmethod
     def load(

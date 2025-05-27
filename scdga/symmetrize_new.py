@@ -111,37 +111,26 @@ def get_niw_niv(vertex_file, g4iw_groupstring, indices):
 
 if __name__ == "__main__":
     default_ph_filename = "Vertex.hdf5"
-    default_pp_filename = "Vertex_pp.hdf5"
     default_output_filename = "g4iw_sym.hdf5"
 
-    input_ph_filename = input(f"Enter the DMFT vertex file name for PH channel (default = {default_ph_filename}): ")
-    input_pp_filename = input(f"Enter the DMFT vertex file name for PP channel (default = {default_pp_filename}): ")
+    input_ph_filename = input(f"Enter the DMFT vertex file name (default = {default_ph_filename}): ")
     output_filename = input(f"Enter the output filename (default = {default_output_filename}): ")
 
     input_ph_filename = input_ph_filename if input_ph_filename else default_ph_filename
-    input_pp_filename = input_pp_filename if input_pp_filename else default_pp_filename
     output_filename = output_filename if output_filename else default_output_filename
 
     vertex_file_ph = h5py.File(input_ph_filename, "r")
-    vertex_file_pp = vertex_file_ph if input_pp_filename == input_ph_filename else h5py.File(input_pp_filename, "r")
     output_file = h5py.File(output_filename, "w")
 
     n_bands = int(vertex_file_ph[".config"].attrs[f"atoms.1.nd"]) + int(vertex_file_ph[".config"].attrs[f"atoms.1.np"])
 
     g4iw_ph_groupstring = "worm-last/ineq-001/g4iw-worm"
-    g4iw_pp_groupstring = "worm-last/ineq-001/g4iwpp-worm"
 
     try:
         indices_ph = list(vertex_file_ph[g4iw_ph_groupstring].keys())
     except KeyError:
         logging.getLogger().warning("No g4iw-worm group found in the PH input file. Aborting.")
         exit()
-
-    try:
-        indices_pp = list(vertex_file_pp[g4iw_pp_groupstring].keys())
-    except KeyError:
-        indices_pp = None
-        logging.getLogger().warning("No g4iwpp-worm group found in the PP input file. No vertex asymptotics possible.")
 
     # determination of niw and niv for ph channel
     niw, niv = get_niw_niv(vertex_file_ph, g4iw_ph_groupstring, indices_ph)
@@ -167,34 +156,6 @@ if __name__ == "__main__":
     gc.collect()
     print("G2_dens and G2_magn successfully written to file.")
 
-    if indices_pp is None:
-        output_file.close()
-        vertex_file_ph.close()
-        vertex_file_pp.close()
-        print("Done!")
-        exit()
-
-    niw, niv = get_niw_niv(vertex_file_pp, g4iw_pp_groupstring, indices_pp)
-
-    print("Extracting G2pp ...")
-    _, _, g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph = extract_g2_general(
-        g4iw_pp_groupstring, indices_pp, vertex_file_pp
-    )
-    print("G2pp extracted. Calculating G2_sing, G2_trip and G2^pp_ud for pp ...")
-    g2_sing_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp - g2_uddu_pp - g2_duud_ph)
-    g2_trip_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp + g2_uddu_pp + g2_duud_ph)
-    g2_ud_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp)
-
-    del g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph
-    gc.collect()
-    print("G2_sing, G2_trip and G2^pp_ud calculated. Writing to file ...")
-
-    save_to_file([g2_sing_pp, g2_trip_pp, g2_ud_pp], ["sing", "trip", "ud_pp"], niw, n_bands)
-    del g2_sing_pp, g2_trip_pp, g2_ud_pp
-    gc.collect()
-    print("G2_sing, G2_trip and G2^pp_ud successfully written to file.")
-
     output_file.close()
     vertex_file_ph.close()
-    vertex_file_pp.close()
     print("Done!")

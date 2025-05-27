@@ -99,29 +99,30 @@ def create_full_vertex_q_r(
     return f_q_r
 
 
-def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint, niv_pp: int) -> LocalFourPoint | FourPoint:
+def transform_vertex_ph_to_pp_w0(
+    f_q_r: LocalFourPoint, niv_pp: int, channel: SpinChannel = SpinChannel.NONE
+) -> LocalFourPoint | FourPoint:
     """
-    Transform the vertex function from particle-hole notation to particle-particle notation. This is done by
-    flipping the last Matsubara frequency to get v, -v' and then applying the necessary condition of w = v-v'.
+    Transforms the vertex function from particle-hole notation to particle-particle notation based on Motoharu's
+    frequency convention (which is the same as Georg Rohringer's). This is done by flipping the last Matsubara
+    frequency to get v, -v' and then applying the necessary condition of w = v-v'.
     """
     is_local = not isinstance(f_q_r, FourPoint)
 
     vn = MFHelper.vn(niv_pp)
     omega = vn[:, None] - vn[None, :]
-    f_q_r_flip = f_q_r.cut_niv(niv_pp).to_full_niw_range().flip_frequency_axis(-1)
-    del f_q_r
-    f_q_r_pp_mat = np.zeros((*f_q_r_flip.current_shape[:-3], 2 * niv_pp, 2 * niv_pp), dtype=f_q_r_flip.mat.dtype)
+    f_q_r = f_q_r.cut_niv(niv_pp).to_full_niw_range().flip_frequency_axis(-1)
+    f_q_r_pp_mat = np.zeros((*f_q_r.current_shape[:-3], 2 * niv_pp, 2 * niv_pp), dtype=f_q_r.mat.dtype)
     for idx, w in enumerate(MFHelper.wn(config.box.niw_core)):
-        f_q_r_pp_mat[..., omega == w] = -f_q_r_flip[..., idx, omega == w]
+        f_q_r_pp_mat[..., omega == w] = -f_q_r[..., idx, omega == w]
 
+    channel = channel if channel != SpinChannel.NONE else f_q_r.channel
     if is_local:
-        return LocalFourPoint(f_q_r_pp_mat, f_q_r_flip.channel, 0, frequency_notation=FrequencyNotation.PP)
-    return FourPoint(
-        f_q_r_pp_mat, f_q_r_flip.channel, config.lattice.q_grid.nk, 0, 2, True, True, True, FrequencyNotation.PP
-    )
+        return LocalFourPoint(f_q_r_pp_mat, channel, 0, frequency_notation=FrequencyNotation.PP)
+    return FourPoint(f_q_r_pp_mat, channel, config.lattice.q_grid.nk, 0, 2, True, True, True, FrequencyNotation.PP)
 
 
-def calculate_full_vertex_pp_w0(
+def create_full_vertex_q_r_pp_w0(
     u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, niv_pp: int, mpi_dist_irrk: MpiDistributor
 ):
     """
@@ -142,14 +143,14 @@ def calculate_full_vertex_pp_w0(
             f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
         sub_comm.Barrier()
     sub_comm.Free()
-    logger.log_info(f"Full momentum-dependent ladder-vertex ({channel.value}) calculated.")
+    logger.log_info(f"Full momentum-dependent ladder-vertex ({channel.value}let) calculated.")
     logger.log_memory_usage(f"Full vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)
 
     if config.output.save_fq:
         f_q_r = gather_save_scatter(f_q_r, config.output.output_path, mpi_dist_irrk)
         config.logger.log_info(f"Saved full {f_q_r.channel.value} vertex in the irreducible BZ to file.")
 
-    return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp)
+    return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
 
 
 def get_initial_gap_function(shape: tuple, channel: SpinChannel) -> np.ndarray:
@@ -208,7 +209,7 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
 
     gamma_x = sign * gamma_q_r_pp.fft()
     logger.log_info("Fourier-transformed Gamma_pp.")
-    gamma_x_flipped = gamma_x.flip_momentum_axis().flip_frequency_axis(-2)
+    gamma_x_flipped = gamma_x.flip_momentum_axis().flip_frequency_axis(-1).permute_orbitals("abcd->adcb")
 
     gap_shape = gamma_q_r_pp.nq + 2 * (gamma_q_r_pp.n_bands,) + (2 * gamma_q_r_pp.niv,)
     gchi0_q0_pp = gchi0_q0_pp.decompress_q_dimension()
@@ -219,7 +220,7 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
         f"for the {gamma_q_r_pp.channel.value}let channel."
     )
 
-    einsum_str1 = "xyzabcdv,xyzdcv->xyzabv"
+    einsum_str1 = "xyzacbdv,xyzdcv->xyzabv"
     path1 = np.einsum_path(einsum_str1, gchi0_q0_pp.mat, gap0, optimize=True)[1]
     einsum_str2 = "xyzadbcvp,xyzcdp->xyzabv"
     path2 = np.einsum_path(einsum_str2, gamma_x.mat, gap0, optimize=True)[1]
@@ -279,7 +280,14 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     return lambdas, gaps
 
 
-def create_local_reducible_pp_diagrams(giwk: GreensFunction, channel: SpinChannel) -> LocalFourPoint:
+def create_local_reducible_pp_diagrams(
+    giwk_dmft: GreensFunction,
+    f_dens_loc: LocalFourPoint,
+    f_magn_loc: LocalFourPoint,
+    gchi_dens_loc: LocalFourPoint,
+    gchi_magn_loc: LocalFourPoint,
+    channel: SpinChannel,
+) -> LocalFourPoint:
     """
     Create the reducible particle-particle diagrams for either singlet or triplet channels.
     """
@@ -288,42 +296,23 @@ def create_local_reducible_pp_diagrams(giwk: GreensFunction, channel: SpinChanne
     if channel not in (SpinChannel.SING, SpinChannel.TRIP):
         raise ValueError("Channel must be either singlet or triplet.")
 
-    giwk_loc = deepcopy(giwk)
-    giwk_loc.mat = np.mean(giwk_loc.mat, axis=(0, 1, 2))
-    gchi0 = BubbleGenerator.create_generalized_chi0(giwk_loc, config.box.niw_core, config.box.niv_core)
-    del giwk_loc
+    gchi0 = BubbleGenerator.create_generalized_chi0(
+        giwk_dmft, config.box.niw_core, config.box.niv_core
+    ).change_frequency_notation_ph_to_pp()
 
-    f_dens_loc = (
-        LocalFourPoint.load(os.path.join(config.output.output_path, f"f_dens_loc.npy"), SpinChannel.DENS)
-        .cut_niv(config.box.niv_core)  # f_dens is saved with an extended frequency box from asymptotics
-        .change_frequency_notation_ph_to_pp()
-    )
-    f_magn_loc = (
-        LocalFourPoint.load(os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN)
-        .cut_niv(config.box.niv_core)  # f_magn is saved with an extended frequency box from asymptotics
-        .change_frequency_notation_ph_to_pp()
-    )
+    f_dens_loc = f_dens_loc.cut_niv(config.box.niv_core).change_frequency_notation_ph_to_pp()
+    f_magn_loc = f_magn_loc.cut_niv(config.box.niv_core).change_frequency_notation_ph_to_pp()
     logger.log_info("Loaded full local density and magnetic vertices and transformed them to pp notation.")
 
     f_r_loc = 0.5 * f_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * f_magn_loc
-    del f_dens_loc, f_magn_loc
     f_r_loc.channel = channel
     logger.log_info(f"Constructed local {channel.value}let vertex.")
 
-    gchi_dens_loc = LocalFourPoint.load(
-        os.path.join(config.output.output_path, f"gchi_dens_loc.npy"), SpinChannel.DENS
-    ).change_frequency_notation_ph_to_pp()
-    gchi_magn_loc = LocalFourPoint.load(
-        os.path.join(config.output.output_path, f"gchi_magn_loc.npy"), SpinChannel.MAGN
-    ).change_frequency_notation_ph_to_pp()
     logger.log_info("Loaded local density and magnetic susceptibilities and transformed them to pp notation.")
 
     gchi_r_loc = 0.5 * gchi_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * gchi_magn_loc
-    del gchi_dens_loc, gchi_magn_loc
     gchi_r_loc.channel = channel
     logger.log_info(f"Constructed local {channel.value}let susceptibility.")
-
-    gchi0 = gchi0.change_frequency_notation_ph_to_pp()
 
     sign = 1 if channel == SpinChannel.SING else -1
     gamma_r_loc = config.sys.beta**2 * (4 * (gchi_r_loc - sign * gchi0).invert() + 2 * sign * gchi0.invert())
@@ -335,7 +324,9 @@ def create_local_reducible_pp_diagrams(giwk: GreensFunction, channel: SpinChanne
     return phi_r_loc
 
 
-def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, comm: MPI.Comm):
+def solve(
+    giwk_dga: GreensFunction, giwk_dmft: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, comm: MPI.Comm
+):
     """
     Solve the Eliashberg equation for the superconducting eigenvalue and gap function.
     """
@@ -349,9 +340,9 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
 
     niv_pp = min(config.box.niw_core // 3, config.box.niv_core // 3)
 
-    f_dens_pp = calculate_full_vertex_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, niv_pp, mpi_dist_irrk)
+    f_dens_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, niv_pp, mpi_dist_irrk)
     logger.log_info("Calculated full density vertex in pp notation.")
-    f_magn_pp = calculate_full_vertex_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
+    f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
     logger.log_info("Calculated full magnetic vertex in pp notation.")
 
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
@@ -382,27 +373,36 @@ def solve(giwk: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, 
     gamma_trip_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
 
     if comm.rank == 0:
-        gchi0_q0_pp = BubbleGenerator.create_generalized_chi0_pp_w0(giwk, niv_pp)
+        gchi0_q0_pp = BubbleGenerator.create_generalized_chi0_pp_w0(giwk_dga, niv_pp)
         logger.log_info("Created the bare bubble susceptibility in pp notation.")
 
-        logger.log_info("Starting to calculate the local full UD vertex in pp notation.")
-        f_ud_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_ud_loc.npy"))
-        logger.log_info("Loaded the local full UD vertex from file.")
-        f_ud_loc = transform_vertex_ph_to_pp_w0(f_ud_loc, niv_pp)
-        logger.log_info(f"Calculated full local UD vertex in pp notation.")
-        gamma_sing_pp -= f_ud_loc
-        gamma_trip_pp -= f_ud_loc
+        f_dens_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_dens_loc.npy"), SpinChannel.DENS)
+        f_magn_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN)
+        f_ud_loc_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
 
-        logger.log_info("Starting to calculate the local reducible singlet pairing diagrams.")
-        phi_sing_loc = create_local_reducible_pp_diagrams(giwk, SpinChannel.SING)
-        logger.log_info("Created the local reducible singlet pairing diagrams.")
-        logger.log_info("Starting to calculate the local reducible triplet pairing diagrams.")
-        phi_trip_loc = create_local_reducible_pp_diagrams(giwk, SpinChannel.TRIP)
-        logger.log_info("Created the local reducible triplet pairing diagrams.")
+        gamma_sing_pp -= f_ud_loc_pp
+        gamma_trip_pp -= f_ud_loc_pp
+        logger.log_info(f"Calculated full singlet and triplet vertices in pp notation.")
 
-        phi_ud_loc = 0.5 * (phi_sing_loc + phi_trip_loc)
-        gamma_sing_pp -= phi_sing_loc
-        gamma_trip_pp -= phi_trip_loc
+        gchi_dens_loc = LocalFourPoint.load(
+            os.path.join(config.output.output_path, f"gchi_dens_loc.npy"), SpinChannel.DENS
+        ).change_frequency_notation_ph_to_pp()
+        gchi_magn_loc = LocalFourPoint.load(
+            os.path.join(config.output.output_path, f"gchi_magn_loc.npy"), SpinChannel.MAGN
+        ).change_frequency_notation_ph_to_pp()
+
+        phi_sing_loc_pp = create_local_reducible_pp_diagrams(
+            giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.SING
+        )
+        phi_trip_loc_pp = create_local_reducible_pp_diagrams(
+            giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.TRIP
+        )
+        phi_ud_loc_pp = 0.5 * (phi_sing_loc_pp + phi_trip_loc_pp)
+
+        gamma_sing_pp -= phi_ud_loc_pp
+        gamma_trip_pp -= phi_ud_loc_pp
+        del f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc
+        logger.log_info("Created the local reducible singlet and triplet pairing diagrams.")
 
         logger.log_info("Starting to solve the Eliashberg equation for the singlet channel.")
         lambdas_sing, gaps_sing = solve_eliashberg_lanczos(gamma_sing_pp, gchi0_q0_pp)

@@ -179,6 +179,20 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         niv_cut_range = np.arange(-niv_cut, niv_cut)
         return self.mat[..., self.niv + niv_cut_range[None, :] - wn[:, None]]
 
+    def rotate_orbitals(self, theta: float = np.pi):
+        r"""
+        Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
+        radians and the number of orbitals needs to be 2.
+        """
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
+
+        copy = deepcopy(self)
+        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        einsum_str = "pi,qj,xpq...->xij..." if self.has_compressed_q_dimension else "pi,qj,xyzpq...->xyzij..."
+        copy.mat = np.einsum(einsum_str, np.conj(r.T), r, copy.mat, optimize=True)
+        return copy
+
     def _get_fill_nonlocal(self) -> tuple[float, np.ndarray, np.ndarray]:
         """
         Returns the total filling, the k-mean of the occupation and the occupation.

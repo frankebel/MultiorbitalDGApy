@@ -136,23 +136,29 @@ def calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
     """
     u_r = v_nonloc.as_channel(vrg_q_r.channel) + u_loc.as_channel(vrg_q_r.channel)
     kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
+
     if vrg_q_r.channel == SpinChannel.MAGN:
-        kernel -= 2.0 / 3.0
+        kernel -= 2.0 / 3.0 * FourPoint.identity_like(kernel.to_full_niw_range())
+        kernel = kernel.to_half_niw_range()
+
     return u_r @ kernel
 
 
 def calculate_sigma_kernel_r_q(
     gamma_r: LocalFourPoint,
-    gchi0_q_core_inv: FourPoint,
+    gchi0_q_inv: FourPoint,
     gchi0_q_full_sum: FourPoint,
     gchi0_q_core_sum: FourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
     mpi_dist_irrq: MpiDistributor,
 ) -> FourPoint:
+    """
+    Returns the kernel in a specific channel for the self-energy calculation.
+    """
     logger = config.logger
 
-    gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_core_inv, u_loc, v_nonloc)
+    gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
     logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, mpi_dist_irrq.comm.size)
 
@@ -162,7 +168,7 @@ def calculate_sigma_kernel_r_q(
             output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
         )
 
-    vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_core_inv)
+    vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
 
@@ -182,16 +188,14 @@ def calculate_sigma_kernel_r_q(
         f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
     )
     logger.log_memory_usage(
-        f"Summed auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value})",
-        gchi_aux_q_r_sum,
-        mpi_dist_irrq.comm.size,
+        f"Summed auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value})", gchi_aux_q_r_sum, mpi_dist_irrq.comm.size
     )
 
     if config.lambda_correction.perform_lambda_correction:
         gchi_aux_q_r_sum.mat = mpi_dist_irrq.gather(gchi_aux_q_r_sum.mat)
 
         if mpi_dist_irrq.comm.rank == 0:
-            logger.log_info(f"Performing lambda correction for {gchi_aux_q_r_sum.channel} channel.")
+            logger.log_info(f"Performing lambda correction for {gchi_aux_q_r_sum.channel.value} channel.")
             chi_r_loc = LocalFourPoint.load(
                 os.path.join(config.output.output_path, f"chi_{gchi_aux_q_r_sum.channel.value}_loc.npy"),
                 gchi_aux_q_r_sum.channel,
@@ -501,9 +505,8 @@ def apply_mixing_strategy(
         f_i[n_total:] = iter_diff.imag
 
         update = config.self_consistency.mixing * f_i
-        h_j = f_matrix.T @ f_i
         fact1 = (r_matrix + config.self_consistency.mixing * f_matrix) @ np.linalg.inv(f_matrix.T @ f_matrix)
-        update -= fact1 @ h_j
+        update -= fact1 @ (f_matrix.T @ f_i)
         update = update[:n_total] + 1j * update[n_total:]
         sigma_new.mat[..., niv_dmft - niv_core : niv_dmft + niv_core] = sigma_old.compress_q_dimension().mat[
             ..., niv_dmft - niv_core : niv_dmft + niv_core

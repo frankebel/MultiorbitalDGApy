@@ -3,9 +3,7 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 
-from scdga.symmetrize_new import component2index_band
-
-folder = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_6/"
+folder = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc70_vs150/"
 iteration = "1"
 
 
@@ -14,6 +12,7 @@ def show_self_energy_kx_ky(kx: int, ky: int):
     # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
     siw_dga_nonlocal = np.load(f"{folder}/sigma_dga_iteration_{iteration}.npy")
     siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
+    siw_diff = np.abs(siw_dga_nonlocal - siw_paul)
     # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
 
     niv = siw_dga_nonlocal.shape[-1] // 2
@@ -29,12 +28,10 @@ def show_self_energy_kx_ky(kx: int, ky: int):
     plt.figure()
     plt.plot(siw_dga_nonlocal.real, label="real, dga")
     plt.plot(siw_dga_nonlocal.imag, label="imag, dga")
-    # plt.plot(siw_dga_nonlocal_fit.real, label="real, dga_fit")
-    # plt.plot(siw_dga_nonlocal_fit.imag, label="imag, dga_fit")
+    plt.plot(siw_diff.real, label="real, dga_fit")
+    plt.plot(siw_diff.imag, label="imag, dga_fit")
     plt.plot(siw_paul.real, label="real, paul")
     plt.plot(siw_paul.imag, label="imag, paul")
-    # plt.plot(siw_dmft.real, label="real, dmft")
-    # plt.plot(siw_dmft.imag, label="imag, dmft")
     plt.tight_layout()
     plt.legend()
     plt.grid()
@@ -42,33 +39,32 @@ def show_self_energy_kx_ky(kx: int, ky: int):
 
 
 def show_mean_self_energy(save: bool, path: str):
-    siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
+    # siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
     # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
-    siw_dga_nonlocal = np.load(f"{folder}/sigma_dga_iteration_{iteration}.npy")
-    siw_paul = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_spch_Nk1024_Nq1024_wc140_vc80_vs50/siwk_dga.npy"
+    siw_oneband = np.load(
+        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_6/sigma_dga_iteration_1.npy"
+    )
+    siw_twoband = np.load(
+        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100_twoband/sigma_dga_iteration_1.npy"
     )
     # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
 
-    niv = siw_dga_nonlocal.shape[-1] // 2
+    niv = siw_oneband.shape[-1] // 2
 
-    siw_dmft = siw_dmft[..., niv : niv + 80]
+    # siw_dmft = siw_dmft[..., niv : niv + 80]
     # siw_dga_local = siw_dga_local[..., niv:]
-    siw_dga_nonlocal = np.mean(siw_dga_nonlocal[..., niv : niv + 80], axis=0)[0, 0]  # + 0.2 + 1j * 0.2
+    siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=0)[0, 0]
     # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    niv_paul = siw_paul.shape[-1] // 2
-    siw_paul = np.mean(siw_paul[..., niv_paul : niv_paul + 80], axis=(0, 1, 2))
+    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[0, 0]
 
     plt.figure()
-    plt.plot(siw_dga_nonlocal.real, label="real, dga")
-    plt.plot(siw_dga_nonlocal.imag, label="imag, dga")
-    # plt.plot(siw_dga_nonlocal_fit.real, label="real, dga_fit")
-    # plt.plot(siw_dga_nonlocal_fit.imag, label="imag, dga_fit")
-    plt.plot(siw_paul.real, label="real, paul")
-    plt.plot(siw_paul.imag, label="imag, paul")
-    # plt.plot(siw_dmft.real, label="real, dmft")
-    # plt.plot(siw_dmft.imag, label="imag, dmft")
+    plt.plot(siw_oneband.real, label="real, 1-band")
+    plt.plot(siw_oneband.imag, label="imag, 1-band")
+    plt.plot(siw_twoband.real, label="real, 2-band")
+    plt.plot(siw_twoband.imag, label="imag, 2-band")
     plt.ylim(-2.5, 4)
+    plt.xlabel(r"$\nu_n$")
+    plt.ylabel(r"$\Sigma(\nu_n)$")
     plt.tight_layout()
     plt.legend()
     plt.grid()
@@ -80,53 +76,47 @@ def show_mean_self_energy(save: bool, path: str):
 
 
 def show_self_energy_2d():
-    siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
-    # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
-    siw_dga_nonlocal = np.load(f"{folder}/sigma_dga_iteration_{iteration}.npy")
-    # siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
-    # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
+    siw_dga_nonlocal_minus = np.load(
+        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_15/sigma_dga_iteration_1.npy"
+    )
+    siw_dga_nonlocal_plus = np.load(
+        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_14/sigma_dga_iteration_1.npy"
+    )
 
-    niv = siw_dga_nonlocal.shape[-1] // 2
+    niv = siw_dga_nonlocal_minus.shape[-1] // 2
+    siw_dga_nonlocal_minus = np.reshape(siw_dga_nonlocal_minus, (16, 16, 1) + siw_dga_nonlocal_minus.shape[1:])
+    siw_dga_nonlocal_minus = siw_dga_nonlocal_minus[..., 0, 0, 0, niv]
 
-    siw_dmft = siw_dmft[..., niv : niv + 80]
-    # siw_dga_local = siw_dga_local[..., niv:]
-    siw_dga_nonlocal = np.reshape(siw_dga_nonlocal, (16, 16, 1) + siw_dga_nonlocal.shape[1:])
-    siw_dga_nonlocal = siw_dga_nonlocal[..., 0, 0, 0, niv]
-    # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    # niv_paul = siw_paul.shape[-1] // 2
-    # siw_paul = siw_paul[..., 0, niv_paul]
+    siw_dga_nonlocal_plus = np.reshape(siw_dga_nonlocal_plus, (16, 16, 1) + siw_dga_nonlocal_plus.shape[1:])
+    siw_dga_nonlocal_plus = siw_dga_nonlocal_plus[..., 0, 0, 0, niv]
 
-    # siw_dga_nonlocal = np.roll(siw_dga_nonlocal, (-2, -1), axis=(0, 1))
+    fig, axes = plt.subplots(2, 3, figsize=(10, 10))  # 2x3 grid
 
-    # assert np.allclose(siw_dga_nonlocal, siw_paul, atol=1e-3)
+    # First column: with -np.min()
+    im1 = axes[0, 0].matshow(siw_dga_nonlocal_minus.real, cmap="viridis")
+    axes[0, 0].set_title("Real, -np.min()")
 
-    fig, axes = plt.subplots(2, 3, figsize=(10, 10))  # 2x2 grid
+    im2 = axes[1, 0].matshow(siw_dga_nonlocal_minus.imag, cmap="viridis")
+    axes[1, 0].set_title("Imag, -np.min()")
 
-    # First row: siw_dga_nonlocal
-    im1 = axes[0, 0].matshow(siw_dga_nonlocal.real, cmap="viridis")
-    axes[0, 0].set_title("Real, DGA")
+    # Second row: with +np.min()
+    im3 = axes[0, 1].matshow(siw_dga_nonlocal_plus.real, cmap="viridis")
+    axes[0, 1].set_title("Real, +np.min()")
 
-    im2 = axes[0, 1].matshow(siw_dga_nonlocal.imag, cmap="viridis")
-    axes[0, 1].set_title("Imag, DGA")
+    im4 = axes[1, 1].matshow(siw_dga_nonlocal_plus.imag, cmap="viridis")
+    axes[1, 1].set_title("Imag, +np.min()")
 
-    # Second row: siw_paul
-    # im3 = axes[1, 0].matshow(siw_paul.real, cmap="viridis")
-    # axes[1, 0].set_title("Real, Paul")
+    im5 = axes[0, 2].matshow(np.abs(siw_dga_nonlocal_minus - siw_dga_nonlocal_plus).real, cmap="viridis")
+    axes[0, 2].set_title("Real, Difference")
+    im6 = axes[1, 2].matshow(np.abs(siw_dga_nonlocal_minus - siw_dga_nonlocal_plus).imag, cmap="viridis")
+    axes[1, 2].set_title("Imag, Difference")
 
-    # im4 = axes[1, 1].matshow(siw_paul.imag, cmap="viridis")
-    # axes[1, 1].set_title("Imag, Paul")
-
-    # im5 = axes[0, 2].matshow((siw_dga_nonlocal - siw_paul).real, cmap="viridis")
-    # axes[0, 2].set_title("Real, Difference")
-    # im6 = axes[1, 2].matshow((siw_dga_nonlocal - siw_paul).imag, cmap="viridis")
-    # axes[1, 2].set_title("Imag, Difference")
-
-    fig.colorbar(im1, ax=axes[0, 0])
-    fig.colorbar(im2, ax=axes[0, 1])
-    # fig.colorbar(im3, ax=axes[1, 0])
-    # fig.colorbar(im4, ax=axes[1, 1])
-    # fig.colorbar(im5, ax=axes[0, 2])
-    # fig.colorbar(im6, ax=axes[1, 2])
+    fig.colorbar(im1, ax=axes[0, 0], aspect=15, fraction=0.08, location="right", pad=0.05)
+    fig.colorbar(im2, ax=axes[1, 0], aspect=15, fraction=0.08, location="right", pad=0.05)
+    fig.colorbar(im3, ax=axes[0, 1], aspect=15, fraction=0.08, location="right", pad=0.05)
+    fig.colorbar(im4, ax=axes[1, 1], aspect=15, fraction=0.08, location="right", pad=0.05)
+    fig.colorbar(im5, ax=axes[0, 2], aspect=15, fraction=0.08, location="right", pad=0.05)
+    fig.colorbar(im6, ax=axes[1, 2], aspect=15, fraction=0.08, location="right", pad=0.05)
 
     # Adjust layout
     fig.tight_layout()
@@ -171,14 +161,23 @@ def get_worm_components(num_bands: int) -> list[int]:
 if __name__ == "__main__":
     n_bands = 2
     indices = get_worm_components(n_bands)
-    print(sorted(indices))
-    print(len(indices))
+    # print(sorted(indices))
+    # print(len(indices))
     """
     for i in range(1, 101):
         iteration = i
         show_mean_self_energy(save=True, path="/home/julpe/Desktop/plots")
     """
-    # show_mean_self_energy(False, "")
+    show_mean_self_energy(False, "")
     # show_self_energy_2d()
     # show_self_energy_kx_ky(7, 7)
     # show_mu_history()
+
+    # gamma_with_st_sing = np.load("/home/julpe/Desktop/gamma_with_st_sing.npy")
+    # gamma_with_ud_sing = np.load("/home/julpe/Desktop/gamma_with_ud_sing.npy")
+
+    # gamma_with_st_trip = np.load("/home/julpe/Desktop/gamma_with_st_trip.npy")
+    # gamma_with_ud_trip = np.load("/home/julpe/Desktop/gamma_with_ud_trip.npy")
+
+    # assert np.allclose(gamma_with_st_sing, gamma_with_ud_sing)
+    # assert np.allclose(gamma_with_st_trip, gamma_with_ud_trip)

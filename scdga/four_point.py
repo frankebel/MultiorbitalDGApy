@@ -495,6 +495,24 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.frequency_notation,
         ).to_full_indices(self.original_shape)
 
+    def rotate_orbitals(self, theta: float = np.pi):
+        r"""
+        Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
+        radians and the number of orbitals needs to be 2.
+        """
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
+
+        copy = deepcopy(self)
+        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        einsum_str = (
+            "pi,qj,rk,sl,xpqrs...->xijkl..."
+            if self.has_compressed_q_dimension
+            else "pi,qj,rk,sl,xyzpqrs...->xyzijkl..."
+        )
+        copy.mat = np.einsum(einsum_str, np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        return copy
+
     @staticmethod
     def load(
         filename: str,
