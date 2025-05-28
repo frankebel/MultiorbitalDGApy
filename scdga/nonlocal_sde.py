@@ -193,21 +193,13 @@ def calculate_sigma_kernel_r_q(
 
     if config.lambda_correction.perform_lambda_correction:
         gchi_aux_q_r_sum.mat = mpi_dist_irrq.gather(gchi_aux_q_r_sum.mat)
-
         if mpi_dist_irrq.comm.rank == 0:
-            logger.log_info(f"Performing lambda correction for {gchi_aux_q_r_sum.channel.value} channel.")
-            chi_r_loc = LocalFourPoint.load(
-                os.path.join(config.output.output_path, f"chi_{gchi_aux_q_r_sum.channel.value}_loc.npy"),
-                gchi_aux_q_r_sum.channel,
-                num_vn_dimensions=0,
-            ).to_full_niw_range()
-            gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(gchi_aux_q_r_sum, chi_r_loc)
-            del chi_r_loc
-            logger.log_info(
-                f"Lambda correction applied. Lambda for {gchi_aux_q_r_sum.channel.value} channel is: {lambda_r:.6f}."
-            )
-
+            gchi_aux_q_r_sum = perform_lambda_correction(gchi_aux_q_r_sum)
         gchi_aux_q_r_sum.mat = mpi_dist_irrq.scatter(gchi_aux_q_r_sum.mat)
+
+    if config.output.save_quantities or config.lambda_correction.perform_lambda_correction:
+        gchi_aux_q_r_sum.save(name=f"chi_phys_q_{gchi_aux_q_r_sum.channel.value}", output_dir=config.output.output_path)
+        logger.log_info(f"Saved physical susceptibility ({gchi_aux_q_r_sum.channel.value}) to file.")
 
     if config.eliashberg.perform_eliashberg:
         gchi_aux_q_r_sum.save(
@@ -216,6 +208,61 @@ def calculate_sigma_kernel_r_q(
         )
 
     return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
+
+
+def perform_lambda_correction(gchi_aux_q_r_sum: FourPoint) -> FourPoint:
+    """
+    Performs the lambda correction on the physical susceptibility. If 'spch' is specified, the lambda correction will
+    be performed on both the density and magnetic channel whereas only the magnetic channel will be corrected if
+    'sp' is specified.
+    """
+    logger = config.logger
+
+    if config.lambda_correction.type not in ["spch", "sp"]:
+        raise ValueError("Lambda correction type must be either 'spch' or 'sp'.")
+
+    logger.log_info(f"Lambda correction type set to '{config.lambda_correction.type}'.")
+
+    if config.lambda_correction.type == "spch":
+        logger.log_info(f"Performing 'spch' lambda correction for {gchi_aux_q_r_sum.channel.value} channel.")
+        chi_r_loc = LocalFourPoint.load(
+            os.path.join(config.output.output_path, f"chi_{gchi_aux_q_r_sum.channel.value}_loc.npy"),
+            gchi_aux_q_r_sum.channel,
+            num_vn_dimensions=0,
+        ).to_full_niw_range()
+        gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(
+            gchi_aux_q_r_sum, chi_r_loc.mat.sum() / config.sys.beta
+        )
+        del chi_r_loc
+        logger.log_info(
+            f"Lambda correction 'spch' applied. Lambda for {gchi_aux_q_r_sum.channel.value} channel is: {lambda_r:.6f}."
+        )
+        return gchi_aux_q_r_sum
+
+    # sp lambda correction only performed for magn channel
+    if gchi_aux_q_r_sum.channel == SpinChannel.MAGN:
+        logger.log_info(f"Performing 'sp' lambda correction for magn channel.")
+        gchi_aux_q_dens_sum = FourPoint.load(
+            os.path.join(config.output.output_path, f"chi_phys_q_dens.npy"),
+            SpinChannel.DENS,
+            num_vn_dimensions=0,
+        ).to_full_niw_range()
+
+        chi_dens_loc, chi_magn_loc = [
+            LocalFourPoint.load(
+                os.path.join(config.output.output_path, f"chi_{channel.value}_loc.npy"),
+                channel,
+                num_vn_dimensions=0,
+            ).to_full_niw_range()
+            for channel in [SpinChannel.DENS, SpinChannel.MAGN]
+        ]
+
+        chi_magn_loc_sum = 1 / config.sys.beta * np.sum(chi_dens_loc.mat + chi_magn_loc.mat) - 1 / (
+            config.sys.beta * config.lattice.q_grid.nk_tot
+        ) * np.sum(gchi_aux_q_dens_sum.mat)
+        gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(gchi_aux_q_r_sum, chi_magn_loc_sum)
+        logger.log_info(f"Lambda correction 'sp' applied. Lambda for magn channel is: {lambda_r:.6f}.")
+    return gchi_aux_q_r_sum
 
 
 def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, full_q_list: np.ndarray) -> SelfEnergy:

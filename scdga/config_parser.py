@@ -186,6 +186,7 @@ class ConfigParser:
         lambda_section = conf_file["lambda_correction"]
 
         conf.perform_lambda_correction = self._try_parse(lambda_section, "perform_lambda_correction", False)
+        conf.type = self._try_parse(lambda_section, "type", "spch")
 
         return conf
 

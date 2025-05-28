@@ -104,6 +104,7 @@ class LambdaCorrectionConfig:
 
     def __init__(self):
         self.perform_lambda_correction: bool = True
+        self.type: str = "spch"
 
 
 class DmftConfig:

@@ -42,12 +42,19 @@ def show_mean_self_energy(save: bool, path: str):
     # siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
     # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
     siw_oneband = np.load(
-        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_6/sigma_dga_iteration_1.npy"
+        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100/sigma_dga_iteration_1.npy"
     )
     siw_twoband = np.load(
         f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100_twoband/sigma_dga_iteration_1.npy"
     )
     # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
+
+    mu_history1 = np.load(
+        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100/mu_history.npy"
+    )
+    mu_history2 = np.load(
+        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100_twoband/mu_history.npy"
+    )
 
     niv = siw_oneband.shape[-1] // 2
 
@@ -55,14 +62,14 @@ def show_mean_self_energy(save: bool, path: str):
     # siw_dga_local = siw_dga_local[..., niv:]
     siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=0)[0, 0]
     # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[0, 0]
+    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[1, 1]
 
     plt.figure()
     plt.plot(siw_oneband.real, label="real, 1-band")
     plt.plot(siw_oneband.imag, label="imag, 1-band")
     plt.plot(siw_twoband.real, label="real, 2-band")
     plt.plot(siw_twoband.imag, label="imag, 2-band")
-    plt.ylim(-2.5, 4)
+    # plt.ylim(-2.5, 4)
     plt.xlabel(r"$\nu_n$")
     plt.ylabel(r"$\Sigma(\nu_n)$")
     plt.tight_layout()
