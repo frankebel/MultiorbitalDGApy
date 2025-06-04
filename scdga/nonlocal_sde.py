@@ -401,10 +401,11 @@ def calculate_self_energy_q(
         gchi0_q_core_inv = gchi0_q_core.invert().take_vn_diagonal()
         logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv, comm.size)
 
-        gchi0_q_core_inv.save(
-            name=f"gchi0_q_inv_rank_{comm.rank}",
-            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
-        )
+        if config.eliashberg.perform_eliashberg:
+            gchi0_q_core_inv.save(
+                name=f"gchi0_q_inv_rank_{comm.rank}",
+                output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+            )
 
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core
@@ -472,8 +473,12 @@ def calculate_self_energy_q(
             logger.log_info(f"Saved sigma for iteration {current_iter} as numpy array.")
 
         logger.log_info("Checking self-consistency convergence.")
-        if comm.rank == 0:
-            converged = np.allclose(sigma_old.mat, sigma_new.mat, atol=config.self_consistency.epsilon)
+        if comm.rank == 0 and current_iter > starting_iter + 1:
+            converged = np.allclose(
+                sigma_old.compress_q_dimension().mat,
+                sigma_new.compress_q_dimension().mat,
+                atol=config.self_consistency.epsilon,
+            )
         else:
             converged = False
         converged = comm.bcast(converged)

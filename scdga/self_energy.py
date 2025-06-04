@@ -51,6 +51,11 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         """
         Fits the first two local momenta of the self-energy.
         """
+        compress = False
+        if self.has_compressed_q_dimension:
+            compress = True
+            self.decompress_q_dimension()
+
         mat_half_v = np.mean(self.mat[..., self.niv :], axis=(0, 1, 2))
         iv = 1j * MFHelper.vn(self.niv, config.sys.beta, return_only_positive=True)
 
@@ -63,6 +68,9 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
 
         mom0 = np.mean(fitdata.real, axis=-1)
         mom1 = np.mean(fitdata.imag * iwfit.imag, axis=-1)
+
+        if compress:
+            self.compress_q_dimension()
         return mom0, mom1
 
     def create_with_asympt_up_to_core(self) -> "SelfEnergy":
