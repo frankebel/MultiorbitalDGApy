@@ -12,6 +12,7 @@ import scdga.local_sde as local_sde
 import scdga.nonlocal_sde as nonlocal_sde
 import scdga.plotting as plotting
 from scdga.config_parser import ConfigParser
+from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.greens_function import GreensFunction
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -86,12 +87,36 @@ def execute_dga_routine():
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
 
     if comm.rank == 0:
+        count_nonzero_orbital_entries(g2_dens, "g2_dens")
+        count_nonzero_orbital_entries(g2_magn, "g2_magn")
+
+    if comm.rank == 0:
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (
             local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
         )
     else:
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (None,) * 11
-    del g2_dens, g2_magn
+
+    if comm.rank == 0:
+        count_nonzero_orbital_entries(g2_dens, "g2_dens")
+        count_nonzero_orbital_entries(g2_magn, "g2_magn")
+
+        count_nonzero_orbital_entries(gchi_d, "gchi_dens")
+        count_nonzero_orbital_entries(gchi_m, "gchi_magn")
+
+        count_nonzero_orbital_entries(gamma_d, "gamma_dens")
+        count_nonzero_orbital_entries(gamma_m, "gamma_magn")
+        count_nonzero_orbital_entries(chi_d, "chi_dens")
+        count_nonzero_orbital_entries(chi_m, "chi_magn")
+        count_nonzero_orbital_entries(vrg_d, "vrg_dens")
+        count_nonzero_orbital_entries(vrg_m, "vrg_magn")
+        count_nonzero_orbital_entries(f_d, "f_dens")
+        count_nonzero_orbital_entries(f_m, "f_magn")
+
+        count_nonzero_orbital_entries(sigma_loc, "sigma_loc")
+        count_nonzero_orbital_entries(sigma_dmft, "sigma_dmft")
+
+        count_nonzero_orbital_entries(u_loc, "u_loc")
 
     # there is no need to broadcast the other quantities
     gamma_d = comm.bcast(gamma_d, root=0)
@@ -111,16 +136,21 @@ def execute_dga_routine():
         chi_m.save(name="chi_magn_loc", output_dir=config.output.output_path)
 
     if config.output.save_quantities and comm.rank == 0:
-        gamma_d.save(name="Gamma_dens", output_dir=config.output.output_path)
-        gamma_m.save(name="Gamma_magn", output_dir=config.output.output_path)
+        g2_dens.save(name="g2_dens_loc", output_dir=config.output.output_path)
+        g2_magn.save(name="g2_magn_loc", output_dir=config.output.output_path)
+        del g2_dens, g2_magn
+
+        gamma_d.save(name="gamma_dens_loc", output_dir=config.output.output_path)
+        gamma_m.save(name="gamma_magn_loc", output_dir=config.output.output_path)
         sigma_loc.save(name="siw_dga_local", output_dir=config.output.output_path)
         vrg_d.save(name="vrg_dens_loc", output_dir=config.output.output_path)
         vrg_m.save(name="vrg_magn_loc", output_dir=config.output.output_path)
+        del vrg_d, vrg_m
+
         gchi_d.save(name="gchi_dens_loc", output_dir=config.output.output_path)
         gchi_m.save(name="gchi_magn_loc", output_dir=config.output.output_path)
         f_d.save(name="f_dens_loc", output_dir=config.output.output_path)
         f_m.save(name="f_magn_loc", output_dir=config.output.output_path)
-        del vrg_d, vrg_m
         logger.log_info("Saved all relevant quantities as numpy files.")
 
     if config.output.do_plotting and comm.rank == 0:

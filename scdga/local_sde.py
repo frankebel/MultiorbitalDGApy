@@ -26,15 +26,15 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFo
 def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
     r"""
     Returns the product of two Green's functions
-    .. math:: B_{0;lmm'l'}^{v} = G_{ll'}^{v} G_{m'm}^{v}.
+    .. math:: B_{0;lmm'l'}^{vv'} = G_{lm}^{v} G_{m'l'}^{vv'}.
     """
     if niv_slice == -1:
         niv_slice = g_loc.niv
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
-    g_left_mat = g_loc_slice_mat[:, None, None, :, :, None] * np.eye(g_loc.n_bands)[None, :, :, None, None, None]
+    g_left_mat = g_loc_slice_mat[:, :, None, None, :, None] * np.eye(g_loc.n_bands)[:, :, None, None, None, None]
     g_right_mat = (
-        np.swapaxes(g_loc_slice_mat, 0, 1)[None, :, :, None, None, :]
-        * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
+        np.swapaxes(g_loc_slice_mat, 0, 1)[None, None, :, :, None, :]
+        * np.eye(g_loc.n_bands)[None, None, :, :, None, None]
     )
     return g_left_mat * g_right_mat
 
@@ -108,7 +108,7 @@ def create_vrg(gchi_aux: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFour
     See Eq. (3.71) in Paul Worm's thesis.
     """
     gchi_aux_sum = gchi_aux.sum_over_vn(config.sys.beta, axis=(-1,))
-    return config.sys.beta * (gchi0_inv @ gchi_aux_sum).take_vn_diagonal()
+    return config.sys.beta * (gchi0_inv @ gchi_aux_sum)
 
 
 def create_vertex_functions(
@@ -133,7 +133,6 @@ def create_vertex_functions(
     gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")
 
-    # f_r = create_full_vertex(gchi_r, gchi0_inv_core)
     f_r = create_full_vertex_from_gamma(gamma_r, gchi0, u_loc)
     logger.log_info(f"Local full vertex F^wvv' ({f_r.channel.value}) done.")
 
@@ -185,7 +184,7 @@ def perform_local_schwinger_dyson(
     Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
     """
     gchi0 = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
-    gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert()
+    gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert().take_vn_diagonal()
 
     gamma_d, gchi_d_sum, vrg_d, f_d, gchi_d = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
     gamma_m, gchi_m_sum, vrg_m, f_m, gchi_m = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)

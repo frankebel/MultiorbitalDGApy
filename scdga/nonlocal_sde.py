@@ -8,6 +8,7 @@ import numpy as np
 import scdga.config as config
 import scdga.lambda_correction as lc
 from scdga.bubble_gen import BubbleGenerator
+from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.four_point import FourPoint
 from scdga.greens_function import GreensFunction, update_mu
 from scdga.interaction import LocalInteraction, Interaction
@@ -162,6 +163,9 @@ def calculate_sigma_kernel_r_q(
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
     logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, mpi_dist_irrq.comm.size)
 
+    if mpi_dist_irrq.comm.rank == 0:
+        count_nonzero_orbital_entries(gchi_aux_q_r, f"gchi_aux_q_{gchi_aux_q_r.channel.value}")
+
     if config.eliashberg.perform_eliashberg:
         gchi_aux_q_r.save(
             name=f"gchi_aux_q_{gchi_aux_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
@@ -172,45 +176,50 @@ def calculate_sigma_kernel_r_q(
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
 
+    if mpi_dist_irrq.comm.rank == 0:
+        count_nonzero_orbital_entries(vrg_q_r, f"vrg_q_r_{vrg_q_r.channel.value}")
+
     if config.eliashberg.perform_eliashberg:
         vrg_q_r.save(
             name=f"vrg_q_{vrg_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
             output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
         )
 
-    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
+    chi_phys_q_r = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
     del gchi_aux_q_r
 
-    gchi_aux_q_r_sum = create_generalized_chi_q_with_shell_correction(
-        gchi_aux_q_r_sum, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
+    chi_phys_q_r = create_generalized_chi_q_with_shell_correction(
+        chi_phys_q_r, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
     )
     logger.log_info(
-        f"Updated non-local susceptibility chi^q ({gchi_aux_q_r_sum.channel.value}) with asymptotic correction."
+        f"Updated non-local susceptibility chi^q ({chi_phys_q_r.channel.value}) with asymptotic correction."
     )
     logger.log_memory_usage(
-        f"Summed auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value})", gchi_aux_q_r_sum, mpi_dist_irrq.comm.size
+        f"Summed auxiliary susceptibility ({chi_phys_q_r.channel.value})", chi_phys_q_r, mpi_dist_irrq.comm.size
     )
 
-    if config.lambda_correction.perform_lambda_correction:
-        gchi_aux_q_r_sum.mat = mpi_dist_irrq.gather(gchi_aux_q_r_sum.mat)
-        if mpi_dist_irrq.comm.rank == 0:
-            gchi_aux_q_r_sum = perform_lambda_correction(gchi_aux_q_r_sum)
-        gchi_aux_q_r_sum.mat = mpi_dist_irrq.scatter(gchi_aux_q_r_sum.mat)
+    if mpi_dist_irrq.comm.rank == 0:
+        count_nonzero_orbital_entries(chi_phys_q_r, f"gchi_aux_q_{chi_phys_q_r.channel.value}_sum")
 
-    if config.output.save_quantities or config.lambda_correction.perform_lambda_correction:
-        gchi_aux_q_r_sum.save(name=f"chi_phys_q_{gchi_aux_q_r_sum.channel.value}", output_dir=config.output.output_path)
-        logger.log_info(f"Saved physical susceptibility ({gchi_aux_q_r_sum.channel.value}) to file.")
+    if config.lambda_correction.perform_lambda_correction or config.output.save_quantities:
+        chi_phys_q_r.mat = mpi_dist_irrq.gather(chi_phys_q_r.mat)
+        if mpi_dist_irrq.comm.rank == 0:
+            if config.lambda_correction.perform_lambda_correction:
+                chi_phys_q_r = perform_lambda_correction(chi_phys_q_r)
+            chi_phys_q_r.save(name=f"chi_phys_q_{chi_phys_q_r.channel.value}", output_dir=config.output.output_path)
+        chi_phys_q_r.mat = mpi_dist_irrq.scatter(chi_phys_q_r.mat)
+        logger.log_info(f"Saved physical susceptibility ({chi_phys_q_r.channel.value}) to file.")
 
     if config.eliashberg.perform_eliashberg:
-        gchi_aux_q_r_sum.save(
-            name=f"gchi_aux_q_{gchi_aux_q_r_sum.channel.value}_sum_rank_{mpi_dist_irrq.comm.rank}",
+        chi_phys_q_r.save(
+            name=f"gchi_aux_q_{chi_phys_q_r.channel.value}_sum_rank_{mpi_dist_irrq.comm.rank}",
             output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
         )
 
-    return calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc)
+    return calculate_kernel_r_q(vrg_q_r, chi_phys_q_r, v_nonloc, u_loc)
 
 
-def perform_lambda_correction(gchi_aux_q_r_sum: FourPoint) -> FourPoint:
+def perform_lambda_correction(chi_phys_q_r: FourPoint) -> FourPoint:
     """
     Performs the lambda correction on the physical susceptibility. If 'spch' is specified, the lambda correction will
     be performed on both the density and magnetic channel whereas only the magnetic channel will be corrected if
@@ -224,25 +233,25 @@ def perform_lambda_correction(gchi_aux_q_r_sum: FourPoint) -> FourPoint:
     logger.log_info(f"Lambda correction type set to '{config.lambda_correction.type}'.")
 
     if config.lambda_correction.type == "spch":
-        logger.log_info(f"Performing 'spch' lambda correction for {gchi_aux_q_r_sum.channel.value} channel.")
+        logger.log_info(f"Performing lambda correction for {chi_phys_q_r.channel.value} channel.")
         chi_r_loc = LocalFourPoint.load(
-            os.path.join(config.output.output_path, f"chi_{gchi_aux_q_r_sum.channel.value}_loc.npy"),
-            gchi_aux_q_r_sum.channel,
+            os.path.join(config.output.output_path, f"chi_{chi_phys_q_r.channel.value}_loc.npy"),
+            chi_phys_q_r.channel,
             num_vn_dimensions=0,
         ).to_full_niw_range()
-        gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(
-            gchi_aux_q_r_sum, chi_r_loc.mat.sum() / config.sys.beta
+        chi_phys_q_r, lambda_r = lc.perform_single_lambda_correction(
+            chi_phys_q_r, chi_r_loc.mat.sum() / config.sys.beta
         )
         del chi_r_loc
         logger.log_info(
-            f"Lambda correction 'spch' applied. Lambda for {gchi_aux_q_r_sum.channel.value} channel is: {lambda_r:.6f}."
+            f"Lambda correction for the {chi_phys_q_r.channel.value} channel applied with lambda = {lambda_r:.6f}."
         )
-        return gchi_aux_q_r_sum
+        return chi_phys_q_r
 
     # sp lambda correction only performed for magn channel
-    if gchi_aux_q_r_sum.channel == SpinChannel.MAGN:
-        logger.log_info(f"Performing 'sp' lambda correction for magn channel.")
-        gchi_aux_q_dens_sum = FourPoint.load(
+    if chi_phys_q_r.channel == SpinChannel.MAGN:
+        logger.log_info(f"Performing lambda correction for magn channel.")
+        chi_phys_q_dens = FourPoint.load(
             os.path.join(config.output.output_path, f"chi_phys_q_dens.npy"),
             SpinChannel.DENS,
             num_vn_dimensions=0,
@@ -257,15 +266,17 @@ def perform_lambda_correction(gchi_aux_q_r_sum: FourPoint) -> FourPoint:
             for channel in [SpinChannel.DENS, SpinChannel.MAGN]
         ]
 
-        chi_magn_loc_sum = 1 / config.sys.beta * np.sum(chi_dens_loc.mat + chi_magn_loc.mat) - 1 / (
-            config.sys.beta * config.lattice.q_grid.nk_tot
-        ) * np.sum(gchi_aux_q_dens_sum.mat)
-        gchi_aux_q_r_sum, lambda_r = lc.perform_single_lambda_correction(gchi_aux_q_r_sum, chi_magn_loc_sum)
+        chi_magn_loc_sum = (chi_dens_loc.mat + chi_magn_loc.mat).sum() - 1 / config.lattice.q_grid.nk_tot * (
+            config.lattice.q_grid.irrk_count[:, None, None, None, None, None] * chi_phys_q_dens.mat
+        ).sum()
+        chi_phys_q_r, lambda_r = lc.perform_single_lambda_correction(
+            chi_phys_q_r, 1 / config.sys.beta * chi_magn_loc_sum
+        )
         logger.log_info(f"Lambda correction 'sp' applied. Lambda for magn channel is: {lambda_r:.6f}.")
-    return gchi_aux_q_r_sum
+    return chi_phys_q_r
 
 
-def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, full_q_list: np.ndarray) -> SelfEnergy:
+def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, my_full_q_list: np.ndarray) -> SelfEnergy:
     r"""
     Returns
     .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
@@ -279,7 +290,7 @@ def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, full_q_
     wn = MFHelper.wn(config.box.niw_core)
     path = np.einsum_path("aijdv,xyzadv->xyzijv", kernel[0, ..., 0, :], mat, optimize=True)[1]
 
-    for idx_q, q in enumerate(full_q_list):
+    for idx_q, q in enumerate(my_full_q_list):
         shifted_mat = np.roll(giwk.mat, [-i for i in q], axis=(0, 1, 2))
         for idx_w, wn_i in enumerate(wn):
             g_qk = shifted_mat[..., giwk.niv - config.box.niv_core - wn_i : giwk.niv + config.box.niv_core - wn_i]
@@ -421,6 +432,9 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
 
+        if comm.rank == 0:
+            count_nonzero_orbital_entries(kernel, "kernel")
+
         giwk = giwk.cut_niv(config.box.niw_core + config.box.niv_core)
 
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
@@ -445,10 +459,13 @@ def calculate_self_energy_q(
         sigma_new += delta_sigma
         sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)
 
+        if comm.rank == 0:
+            count_nonzero_orbital_entries(sigma_new, "sigma_new")
+
         old_mu = config.sys.mu
         if comm.rank == 0:
             config.sys.mu = update_mu(
-                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_new.fit_smom()[0]
+                config.sys.mu, config.sys.n, giwk_full.ek, sigma_new.mat, config.sys.beta, sigma_dmft.fit_smom()[0]
             )  # maybe sigma_new.fit_smom()[0]
 
         config.sys.mu = comm.bcast(config.sys.mu)

@@ -57,7 +57,7 @@ def extract_g2_general(group_string: str, indices: list, file: h5py.File) -> tup
     # since we are SU(2) symmetric, we only have to pick out the elements where the spin is either
     # [0,0,0,0] or [1,1,1,1] for uu component, [0,0,1,1] or [1,1,0,0] for ud component and [0,1,1,0] or [1,0,0,1] for ud_bar component
     g2_uuuu, g2_dddd, g2_dduu, g2_uudd, g2_uddu, g2_duud = (
-        np.zeros((n_bands, n_bands, n_bands, n_bands, 2 * niw + 1, 2 * niv, 2 * niv), dtype=np.complex128)
+        np.zeros((n_bands, n_bands, n_bands, n_bands, 2 * niw + 1, 2 * niv, 2 * niv), dtype=np.complex64)
         for _ in range(6)
     )
 

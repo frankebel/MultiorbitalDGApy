@@ -1,37 +1,34 @@
 import itertools
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-folder = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc70_vs150/"
+folder = (
+    "/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter_lower_statistics/LDGA_Nk256_Nq256_wc60_vc40_vs20/"
+)
 iteration = "1"
+
+filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter_lower_statistics/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
+filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
-    siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
-    # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
-    siw_dga_nonlocal = np.load(f"{folder}/sigma_dga_iteration_{iteration}.npy")
-    siw_paul = np.load("/home/julpe/Desktop/sigma_paul.npy")
-    siw_diff = np.abs(siw_dga_nonlocal - siw_paul)
-    # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
+    siw_oneband = np.load(filename_oneband)
+    siw_twoband = np.load(filename_twoband)
 
-    niv = siw_dga_nonlocal.shape[-1] // 2
+    niv = siw_oneband.shape[-1] // 2
 
-    siw_dmft = siw_dmft[..., niv : niv + 80]
-    # siw_dga_local = siw_dga_local[..., niv:]
-    siw_dga_nonlocal = np.reshape(siw_dga_nonlocal, (16, 16, 1) + siw_dga_nonlocal.shape[1:])
-    siw_dga_nonlocal = siw_dga_nonlocal[kx, ky, 0, 0, 0, niv - 60 : niv + 60]
-    # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    niv_paul = siw_paul.shape[-1] // 2
-    siw_paul = siw_paul[kx, ky, 0, niv_paul - 60 : niv_paul + 60]
+    siw_oneband = np.reshape(siw_oneband, (16, 16, 1) + siw_oneband.shape[1:])
+    siw_oneband = siw_oneband[kx, ky, 0, 0, 0, niv : niv + 80]
+    siw_twoband = np.reshape(siw_twoband, (16, 16, 1) + siw_twoband.shape[1:])
+    siw_twoband = siw_twoband[kx, ky, 0, 0, 0, niv : niv + 80]
 
     plt.figure()
-    plt.plot(siw_dga_nonlocal.real, label="real, dga")
-    plt.plot(siw_dga_nonlocal.imag, label="imag, dga")
-    plt.plot(siw_diff.real, label="real, dga_fit")
-    plt.plot(siw_diff.imag, label="imag, dga_fit")
-    plt.plot(siw_paul.real, label="real, paul")
-    plt.plot(siw_paul.imag, label="imag, paul")
+    plt.plot(siw_oneband.real, label="real, oneband")
+    plt.plot(siw_oneband.imag, label="imag, oneband")
+    plt.plot(siw_twoband.real, label="real, twoband")
+    plt.plot(siw_twoband.imag, label="imag, twoband")
     plt.tight_layout()
     plt.legend()
     plt.grid()
@@ -39,37 +36,19 @@ def show_self_energy_kx_ky(kx: int, ky: int):
 
 
 def show_mean_self_energy(save: bool, path: str):
-    # siw_dmft = np.load(f"{folder}/sigma_dmft.npy")[0, 0, 0, 0, 0]
-    # siw_dga_local = np.load(f"{folder}/siw_sde_full.npy")
-    siw_oneband = np.load(
-        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100/sigma_dga_iteration_1.npy"
-    )
-    siw_twoband = np.load(
-        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100_twoband/sigma_dga_iteration_1.npy"
-    )
-    # siw_dga_nonlocal_fit = np.load(f"{folder}/sigma_dga_fitted.npy")
-
-    mu_history1 = np.load(
-        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100/mu_history.npy"
-    )
-    mu_history2 = np.load(
-        f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc70_vs100_twoband/mu_history.npy"
-    )
+    siw_oneband = np.load(filename_oneband)
+    siw_twoband = np.load(filename_twoband)
 
     niv = siw_oneband.shape[-1] // 2
 
-    # siw_dmft = siw_dmft[..., niv : niv + 80]
-    # siw_dga_local = siw_dga_local[..., niv:]
     siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=0)[0, 0]
-    # siw_dga_nonlocal_fit = np.mean(siw_dga_nonlocal_fit[..., niv : niv + 50], axis=0)[0, 0]
-    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[1, 1]
+    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[0, 0]
 
     plt.figure()
     plt.plot(siw_oneband.real, label="real, 1-band")
     plt.plot(siw_oneband.imag, label="imag, 1-band")
     plt.plot(siw_twoband.real, label="real, 2-band")
     plt.plot(siw_twoband.imag, label="imag, 2-band")
-    # plt.ylim(-2.5, 4)
     plt.xlabel(r"$\nu_n$")
     plt.ylabel(r"$\Sigma(\nu_n)$")
     plt.tight_layout()
@@ -83,39 +62,35 @@ def show_mean_self_energy(save: bool, path: str):
 
 
 def show_self_energy_2d():
-    siw_dga_nonlocal_minus = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_15/sigma_dga_iteration_1.npy"
-    )
-    siw_dga_nonlocal_plus = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc140_vc80_vs50_14/sigma_dga_iteration_1.npy"
-    )
+    siw_oneband = np.load(filename_oneband)
+    siw_twoband = np.load(filename_twoband)
 
-    niv = siw_dga_nonlocal_minus.shape[-1] // 2
-    siw_dga_nonlocal_minus = np.reshape(siw_dga_nonlocal_minus, (16, 16, 1) + siw_dga_nonlocal_minus.shape[1:])
-    siw_dga_nonlocal_minus = siw_dga_nonlocal_minus[..., 0, 0, 0, niv]
+    niv = siw_oneband.shape[-1] // 2
+    siw_oneband = np.reshape(siw_oneband, (16, 16, 1) + siw_oneband.shape[1:])
+    siw_oneband = siw_oneband[..., 0, 0, 0, niv]
 
-    siw_dga_nonlocal_plus = np.reshape(siw_dga_nonlocal_plus, (16, 16, 1) + siw_dga_nonlocal_plus.shape[1:])
-    siw_dga_nonlocal_plus = siw_dga_nonlocal_plus[..., 0, 0, 0, niv]
+    siw_twoband = np.reshape(siw_twoband, (16, 16, 1) + siw_twoband.shape[1:])
+    siw_twoband = siw_twoband[..., 0, 0, 0, niv]
 
     fig, axes = plt.subplots(2, 3, figsize=(10, 10))  # 2x3 grid
 
     # First column: with -np.min()
-    im1 = axes[0, 0].matshow(siw_dga_nonlocal_minus.real, cmap="viridis")
-    axes[0, 0].set_title("Real, -np.min()")
+    im1 = axes[0, 0].matshow(siw_oneband.real, cmap="viridis")
+    axes[0, 0].set_title("Real, oneband")
 
-    im2 = axes[1, 0].matshow(siw_dga_nonlocal_minus.imag, cmap="viridis")
-    axes[1, 0].set_title("Imag, -np.min()")
+    im2 = axes[1, 0].matshow(siw_oneband.imag, cmap="viridis")
+    axes[1, 0].set_title("Imag, oneband")
 
     # Second row: with +np.min()
-    im3 = axes[0, 1].matshow(siw_dga_nonlocal_plus.real, cmap="viridis")
-    axes[0, 1].set_title("Real, +np.min()")
+    im3 = axes[0, 1].matshow(siw_twoband.real, cmap="viridis")
+    axes[0, 1].set_title("Real, twoband")
 
-    im4 = axes[1, 1].matshow(siw_dga_nonlocal_plus.imag, cmap="viridis")
-    axes[1, 1].set_title("Imag, +np.min()")
+    im4 = axes[1, 1].matshow(siw_twoband.imag, cmap="viridis")
+    axes[1, 1].set_title("Imag, twoband")
 
-    im5 = axes[0, 2].matshow(np.abs(siw_dga_nonlocal_minus - siw_dga_nonlocal_plus).real, cmap="viridis")
+    im5 = axes[0, 2].matshow(np.abs(siw_oneband - siw_twoband).real, cmap="viridis")
     axes[0, 2].set_title("Real, Difference")
-    im6 = axes[1, 2].matshow(np.abs(siw_dga_nonlocal_minus - siw_dga_nonlocal_plus).imag, cmap="viridis")
+    im6 = axes[1, 2].matshow(np.abs(siw_oneband - siw_twoband).imag, cmap="viridis")
     axes[1, 2].set_title("Imag, Difference")
 
     fig.colorbar(im1, ax=axes[0, 0], aspect=15, fraction=0.08, location="right", pad=0.05)
@@ -133,7 +108,7 @@ def show_self_energy_2d():
 
 
 def show_mu_history():
-    mu_history = np.load(f"{folder}/mu_history.npy")
+    mu_history = np.load(os.path.join(folder, "mu_history.npy"))
 
     plt.figure()
     plt.plot(mu_history)
@@ -162,29 +137,26 @@ def get_worm_components(num_bands: int) -> list[int]:
     for o in orbs:
         for s in spins:
             component_indices.append(int(component2index_general(num_bands, o, s)))
-    return component_indices
+    return sorted(component_indices)
 
 
 if __name__ == "__main__":
-    n_bands = 2
-    indices = get_worm_components(n_bands)
-    # print(sorted(indices))
+    # n_bands = 2
+    # indices = get_worm_components(n_bands)
+    # print(indices)
     # print(len(indices))
-    """
-    for i in range(1, 101):
-        iteration = i
-        show_mean_self_energy(save=True, path="/home/julpe/Desktop/plots")
-    """
+
     show_mean_self_energy(False, "")
     # show_self_energy_2d()
-    # show_self_energy_kx_ky(7, 7)
+    # show_self_energy_kx_ky(4, 0)
     # show_mu_history()
 
-    # gamma_with_st_sing = np.load("/home/julpe/Desktop/gamma_with_st_sing.npy")
-    # gamma_with_ud_sing = np.load("/home/julpe/Desktop/gamma_with_ud_sing.npy")
-
-    # gamma_with_st_trip = np.load("/home/julpe/Desktop/gamma_with_st_trip.npy")
-    # gamma_with_ud_trip = np.load("/home/julpe/Desktop/gamma_with_ud_trip.npy")
-
-    # assert np.allclose(gamma_with_st_sing, gamma_with_ud_sing)
-    # assert np.allclose(gamma_with_st_trip, gamma_with_ud_trip)
+    # ek_1 = np.load(
+    #    f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc40_vs20/ek.npy"
+    # )
+    # ek_2 = np.load(
+    #    f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc40_vs20/ek.npy"
+    # )
+    # diff = np.sum(2 * ek_1[..., 0, 0] - ek_2[..., 0, 0] - ek_2[..., 1, 1])
+    # test = np.sum(ek_2[..., 1, 0] + ek_2[..., 0, 1])
+    # print(diff, test)

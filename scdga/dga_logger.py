@@ -46,7 +46,7 @@ class DgaLogger:
         self._logger.log(level, f"{self.current_time} | {self.total_elapsed_time} | {message}")
 
     def log_debug(self, message: str):
-        self.log(" ::DEBUG:: " + message, level=logging.DEBUG)
+        self.log("::DEBUG:: " + message, level=logging.DEBUG)
 
     def log_info(self, message: str):
         self.log(message, level=logging.INFO)

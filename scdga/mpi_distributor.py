@@ -115,6 +115,7 @@ class MpiDistributor:
         tot_shape = (self.ntasks,) + rank_result.shape[1:]
         tot_result = np.empty(tot_shape, rank_result.dtype)
         other_dims = np.prod(rank_result.shape[1:])
+        rank_result = np.ascontiguousarray(rank_result, dtype=rank_result.dtype)
         self.comm.Gatherv(rank_result, [tot_result, self.sizes * other_dims], root=root)
         return tot_result
 

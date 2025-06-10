@@ -22,7 +22,7 @@ def apply_lambda(chi_r: np.ndarray, lambda_: float) -> np.ndarray:
 
 def find_lambda(
     chi_r_mat: np.ndarray,
-    chi_r_loc_sum: float,
+    chi_r_loc_sum: complex,
     lambda_start: float,
     delta: float = 0.1,
     eps: float = 1e-7,
@@ -32,12 +32,13 @@ def find_lambda(
     Finds the lambda for the correction of the physical susceptibility by an iterative scheme (similar to newton).
     """
     lambda_: float = lambda_start + delta
+    factor = 1 / config.sys.beta / config.lattice.q_grid.nk_tot
 
     for _ in range(maxiter):
         chi_lam = apply_lambda(chi_r_mat, lambda_)
-        chir_sum = chi_lam.sum(axis=-1).mean() / config.sys.beta
+        chir_sum = (config.lattice.q_grid.irrk_count[:, None] * chi_lam).sum() * factor
         f_lam = chir_sum - chi_r_loc_sum
-        fp_lam = -(chi_lam**2).sum(axis=-1).mean() / config.sys.beta
+        fp_lam = -(config.lattice.q_grid.irrk_count[:, None] * chi_lam**2).sum() * factor
         lambda_new = lambda_ - (f_lam / fp_lam).real
 
         if abs(f_lam.real) < eps:
@@ -52,13 +53,13 @@ def find_lambda(
     return lambda_
 
 
-def perform_single_lambda_correction(chi_r: FourPoint, chi_r_loc_sum: np.ndarray) -> tuple[FourPoint, float]:
+def perform_single_lambda_correction(chi_r: FourPoint, chi_r_loc_sum: complex) -> tuple[FourPoint, float]:
     """
     Performs the lambda correction on the physical susceptibility for a single spin-channel. Returns (i) the corrected
     susceptibility in the irreducible BZ and half niw range and (ii) lambda as a tuple.
     """
-    chi_r = chi_r.to_full_niw_range().map_to_full_bz(config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk)
+    chi_r = chi_r.to_full_niw_range()
     chi_r_mat = chi_r.compress_q_dimension().mat.squeeze()
     lambda_r = find_lambda(chi_r_mat, chi_r_loc_sum, get_lambda_start(chi_r_mat))
-    chi_r.mat = apply_lambda(chi_r_mat, lambda_r)[config.lattice.q_grid.irrk_ind][:, None, None, None, None, :]
+    chi_r.mat = apply_lambda(chi_r_mat, lambda_r)[:, None, None, None, None, :]
     return chi_r.to_half_niw_range(), lambda_r

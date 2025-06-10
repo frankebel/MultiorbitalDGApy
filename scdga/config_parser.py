@@ -178,6 +178,7 @@ class ConfigParser:
         conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
         conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "random")
         conf.subfolder_name = self._try_parse(eliashberg_section, "subfolder_name", "Eliashberg")
+        conf.include_local_part = self._try_parse(eliashberg_section, "include_local_part", True)
 
         return conf
 

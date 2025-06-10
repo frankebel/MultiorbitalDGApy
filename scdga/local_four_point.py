@@ -313,6 +313,16 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 full_niv_range=self.full_niv_range,
             )
 
+        if self.num_vn_dimensions == 1 or other.num_vn_dimensions == 1:
+            einsum_str = {
+                (1, 1): "abcdwv,dcefwv->abefwv",
+                (1, 2): "abcdwv,dcefwvp->abefwvp" if left_hand_side else "abcdwvp,dcefwp->abefwvp",
+                (2, 1): "abcdwvp,dcefwp->abefwvp" if left_hand_side else "abcdwv,dcefwvp->abefwvp",
+            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
+            new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+            max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
+            return LocalFourPoint(new_mat, channel, self.num_wn_dimensions, max_vn_dim, False, self.full_niv_range)
+
         self_full_niw_range = self.full_niw_range
         other_full_niw_range = other.full_niw_range
 

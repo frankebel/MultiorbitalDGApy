@@ -1,5 +1,4 @@
 import os
-from copy import deepcopy
 
 import mpi4py.MPI as MPI
 import numpy as np
@@ -7,6 +6,7 @@ import scipy as sp
 
 import scdga.config as config
 from scdga.bubble_gen import BubbleGenerator
+from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.four_point import FourPoint
 from scdga.gap_function import GapFunction
 from scdga.greens_function import GreensFunction
@@ -30,19 +30,6 @@ def delete_files(filepath: str, *args) -> None:
                 os.remove(full_path)
             except OSError:
                 config.logger.log_info(f"Error deleting file: {name}.")
-
-
-def gather_save_scatter(f_q_r: FourPoint, file_path: str, mpi_dist_irrk: MpiDistributor) -> FourPoint:
-    """
-    Gather the vertex function from all ranks, save it to a file, and scatter it back to the original ranks.
-    """
-    f_q_r.mat = mpi_dist_irrk.gather(f_q_r.mat)
-
-    if mpi_dist_irrk.my_rank == 0:
-        f_q_r.save(output_dir=file_path, name=f"f_{f_q_r.channel.value}_irrq")
-
-    f_q_r.mat = mpi_dist_irrk.scatter(f_q_r.mat)
-    return f_q_r
 
 
 def create_full_vertex_q_r(
@@ -143,12 +130,8 @@ def create_full_vertex_q_r_pp_w0(
             f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
         sub_comm.Barrier()
     sub_comm.Free()
-    logger.log_info(f"Full momentum-dependent ladder-vertex ({channel.value}let) calculated.")
-    logger.log_memory_usage(f"Full vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)
-
-    if config.output.save_fq:
-        f_q_r = gather_save_scatter(f_q_r, config.output.output_path, mpi_dist_irrk)
-        config.logger.log_info(f"Saved full {f_q_r.channel.value} vertex in the irreducible BZ to file.")
+    logger.log_info(f"Full ladder-vertex ({channel.value}) calculated.")
+    logger.log_memory_usage(f"Full ladder-vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)
 
     return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
 
@@ -198,6 +181,8 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     eigenvalue and corresponding eigenvector in two separate lists, one for the lambdas, one for the gaps.
     """
     logger = config.logger
+
+    logger.log_info(f"Starting to solve the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.")
 
     gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(
         config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk
@@ -277,6 +262,8 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
         gaps, [GapFunction(gap_max[..., 0].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)], axis=0
     )
 
+    logger.log_info(f"Finished solving the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.")
+
     return lambdas, gaps
 
 
@@ -338,36 +325,37 @@ def solve(
 
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
-    niv_pp = min(config.box.niw_core // 3, config.box.niv_core // 3)
+    if config.eliashberg.include_local_part:
+        niv_pp = min(config.box.niw_core // 3, config.box.niv_core // 3)
+    else:
+        niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
 
     f_dens_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, niv_pp, mpi_dist_irrk)
-    logger.log_info("Calculated full density vertex in pp notation.")
     f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
-    logger.log_info("Calculated full magnetic vertex in pp notation.")
+
+    if comm.rank == 0:
+        count_nonzero_orbital_entries(f_dens_pp, "f_dens_pp")
+        count_nonzero_orbital_entries(f_magn_pp, "f_magn_pp")
+
+    if config.output.save_fq:
+        for f_pp, name in [(f_dens_pp, "f_irrq_dens_pp"), (f_magn_pp, "f_irrq_magn_pp")]:
+            f_pp.mat = mpi_dist_irrk.gather(f_pp.mat)
+            if comm.rank == 0:
+                f_pp.save(output_dir=config.output.output_path, name=name)
+            f_pp.mat = mpi_dist_irrk.scatter(f_pp.mat)
+        config.logger.log_info("Saved full ladder-vertices (dens & magn) in the irreducible BZ to file.")
 
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     mpi_dist_irrk.delete_file()
 
     gamma_sing_pp = 0.5 * f_dens_pp - 1.5 * f_magn_pp
     gamma_sing_pp.channel = SpinChannel.SING
-    logger.log_info("Calculated full singlet pairing vertex in pp notation.")
-
-    if config.eliashberg.save_pairing_vertex:
-        gamma_sing_pp = gather_save_scatter(gamma_sing_pp, config.output.eliashberg_path, mpi_dist_irrk)
-        config.logger.log_info(
-            f"Saved {gamma_sing_pp.channel.value}let pairing vertex in pp notation in the irreducible BZ to file."
-        )
+    logger.log_info("Calculated full ladder-vertex (singlet) in pp notation.")
 
     gamma_trip_pp = 0.5 * f_dens_pp + 0.5 * f_magn_pp
     gamma_trip_pp.channel = SpinChannel.TRIP
     del f_dens_pp, f_magn_pp
-    logger.log_info("Calculated full triplet pairing vertex in pp notation.")
-
-    if config.eliashberg.save_pairing_vertex:
-        gamma_trip_pp = gather_save_scatter(gamma_trip_pp, config.output.eliashberg_path, mpi_dist_irrk)
-        config.logger.log_info(
-            f"Saved {gamma_trip_pp.channel.value}let pairing vertex in pp notation in the irreducible BZ to file."
-        )
+    logger.log_info("Calculated full ladder-vertex (triplet) in pp notation.")
 
     gamma_sing_pp.mat = mpi_dist_irrk.gather(gamma_sing_pp.mat)
     gamma_trip_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
@@ -376,40 +364,55 @@ def solve(
         gchi0_q0_pp = BubbleGenerator.create_generalized_chi0_pp_w0(giwk_dga, niv_pp)
         logger.log_info("Created the bare bubble susceptibility in pp notation.")
 
-        f_dens_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_dens_loc.npy"), SpinChannel.DENS)
-        f_magn_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN)
-        f_ud_loc_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
+        if config.eliashberg.include_local_part:
+            f_dens_loc = LocalFourPoint.load(
+                os.path.join(config.output.output_path, f"f_dens_loc.npy"), SpinChannel.DENS
+            )
+            f_magn_loc = LocalFourPoint.load(
+                os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN
+            )
+            f_ud_loc_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
+            logger.log_info(f"Calculated full local UD vertex in pp notation.")
 
-        gamma_sing_pp -= f_ud_loc_pp
-        gamma_trip_pp -= f_ud_loc_pp
-        logger.log_info(f"Calculated full singlet and triplet vertices in pp notation.")
+            gamma_sing_pp -= f_ud_loc_pp
+            gamma_trip_pp -= f_ud_loc_pp
 
-        gchi_dens_loc = LocalFourPoint.load(
-            os.path.join(config.output.output_path, f"gchi_dens_loc.npy"), SpinChannel.DENS
-        ).change_frequency_notation_ph_to_pp()
-        gchi_magn_loc = LocalFourPoint.load(
-            os.path.join(config.output.output_path, f"gchi_magn_loc.npy"), SpinChannel.MAGN
-        ).change_frequency_notation_ph_to_pp()
+            gchi_dens_loc = LocalFourPoint.load(
+                os.path.join(config.output.output_path, f"gchi_dens_loc.npy"), SpinChannel.DENS
+            ).change_frequency_notation_ph_to_pp()
+            gchi_magn_loc = LocalFourPoint.load(
+                os.path.join(config.output.output_path, f"gchi_magn_loc.npy"), SpinChannel.MAGN
+            ).change_frequency_notation_ph_to_pp()
 
-        phi_sing_loc_pp = create_local_reducible_pp_diagrams(
-            giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.SING
-        )
-        phi_trip_loc_pp = create_local_reducible_pp_diagrams(
-            giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.TRIP
-        )
-        phi_ud_loc_pp = 0.5 * (phi_sing_loc_pp + phi_trip_loc_pp)
+            phi_sing_loc_pp = create_local_reducible_pp_diagrams(
+                giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.SING
+            )
+            phi_trip_loc_pp = create_local_reducible_pp_diagrams(
+                giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.TRIP
+            )
+            phi_ud_loc_pp = 0.5 * (phi_sing_loc_pp + phi_trip_loc_pp)
+            logger.log_info("Created the local reducible singlet and triplet pairing diagrams.")
 
-        gamma_sing_pp -= phi_ud_loc_pp
-        gamma_trip_pp -= phi_ud_loc_pp
-        del f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc
-        logger.log_info("Created the local reducible singlet and triplet pairing diagrams.")
+            gamma_sing_pp -= phi_ud_loc_pp
+            gamma_trip_pp -= phi_ud_loc_pp
+            del f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc
 
-        logger.log_info("Starting to solve the Eliashberg equation for the singlet channel.")
+        count_nonzero_orbital_entries(gamma_sing_pp, "gamma_sing_pp")
+        count_nonzero_orbital_entries(gamma_trip_pp, "gamma_trip_pp")
+
+        if config.eliashberg.save_pairing_vertex:
+            gamma_sing_pp.save(
+                output_dir=config.output.eliashberg_path, name=f"gamma_irrq_{gamma_sing_pp.channel.value}_pp"
+            )
+            gamma_trip_pp.save(
+                output_dir=config.output.eliashberg_path, name=f"gamma_irrq_{gamma_trip_pp.channel.value}_pp"
+            )
+            config.logger.log_info(
+                f"Saved singlet and triplet pairing vertices in pp notation in the irreducible BZ to file."
+            )
+
         lambdas_sing, gaps_sing = solve_eliashberg_lanczos(gamma_sing_pp, gchi0_q0_pp)
-        logger.log_info("Finished solving the Eliashberg equation for the singlet channel.")
-        logger.log_info("Starting to solve the Eliashberg equation for the triplet channel.")
         lambdas_trip, gaps_trip = solve_eliashberg_lanczos(gamma_trip_pp, gchi0_q0_pp)
-        logger.log_info("Finished solving the Eliashberg equation for the triplet channel.")
     else:
         lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
 

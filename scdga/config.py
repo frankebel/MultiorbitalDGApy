@@ -94,6 +94,7 @@ class EliashbergConfig:
         self.epsilon: float = 1e-4
         self.symmetry: str = "d-wave"
         self.subfolder_name: str = "Eliashberg"
+        self.include_local_part: bool = True
 
 
 class LambdaCorrectionConfig:
