@@ -1,5 +1,6 @@
 import scdga.config as config
 from scdga.bubble_gen import BubbleGenerator
+from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.greens_function import GreensFunction
 from scdga.interaction import LocalInteraction
 from scdga.local_four_point import LocalFourPoint
@@ -57,6 +58,11 @@ def create_gamma_r_with_shell_correction(
     """
     chi_tilde_shell = (gchi0.invert() + 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel)).invert()
     chi_tilde_core_inv = chi_tilde_shell.cut_niv(config.box.niv_core).invert()
+
+    count_nonzero_orbital_entries(gchi_r.invert(), "gchi_r again")
+    count_nonzero_orbital_entries(chi_tilde_core_inv, "chi_tilde_core_inv")
+    count_nonzero_orbital_entries(gchi_r.invert() - chi_tilde_core_inv, "difference")
+
     return config.sys.beta**2 * (gchi_r.invert() - chi_tilde_core_inv) + u_loc.as_channel(gchi_r.channel)
 
 
@@ -185,6 +191,9 @@ def perform_local_schwinger_dyson(
     """
     gchi0 = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
     gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert().take_vn_diagonal()
+
+    count_nonzero_orbital_entries(gchi0, "gchi0")
+    count_nonzero_orbital_entries(gchi0_inv_core, "gchi0_inv")
 
     gamma_d, gchi_d_sum, vrg_d, f_d, gchi_d = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
     gamma_m, gchi_m_sum, vrg_m, f_m, gchi_m = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)

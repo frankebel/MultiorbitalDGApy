@@ -337,7 +337,7 @@ def solve(
         count_nonzero_orbital_entries(f_dens_pp, "f_dens_pp")
         count_nonzero_orbital_entries(f_magn_pp, "f_magn_pp")
 
-    if config.output.save_fq:
+    if config.eliashberg.save_fq:
         for f_pp, name in [(f_dens_pp, "f_irrq_dens_pp"), (f_magn_pp, "f_irrq_magn_pp")]:
             f_pp.mat = mpi_dist_irrk.gather(f_pp.mat)
             if comm.rank == 0:
@@ -395,7 +395,16 @@ def solve(
 
             gamma_sing_pp -= phi_ud_loc_pp
             gamma_trip_pp -= phi_ud_loc_pp
-            del f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc
+            del (
+                f_dens_loc,
+                f_magn_loc,
+                f_ud_loc_pp,
+                gchi_dens_loc,
+                gchi_magn_loc,
+                phi_sing_loc_pp,
+                phi_trip_loc_pp,
+                phi_ud_loc_pp,
+            )
 
         count_nonzero_orbital_entries(gamma_sing_pp, "gamma_sing_pp")
         count_nonzero_orbital_entries(gamma_trip_pp, "gamma_trip_pp")

@@ -90,6 +90,7 @@ class EliashbergConfig:
     def __init__(self):
         self.perform_eliashberg: bool = True
         self.save_pairing_vertex: bool = True
+        self.save_fq: bool = False
         self.n_eig: int = 2
         self.epsilon: float = 1e-4
         self.symmetry: str = "d-wave"
@@ -165,7 +166,6 @@ class OutputConfig:
         self.plotting_path: str = "./Plots/"
         self.plotting_subfolder_name: str = "Plots"
         self.eliashberg_path: str = "./Eliashberg/"
-        self.save_fq: bool = False
 
 
 logger: DgaLogger

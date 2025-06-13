@@ -516,6 +516,27 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.full_niv_range,
         )
 
+    def to_full_niw_range(self):
+        """
+        Converts the object to the full bosonic frequency range in-place.
+        """
+        if self.num_wn_dimensions == 0 or self.full_niw_range:
+            return self
+
+        niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
+        ind = np.arange(1, self.current_shape[niw_axis])
+        freq_axis = niw_axis
+        if self.num_vn_dimensions == 1:
+            freq_axis = niw_axis, -1
+        if self.num_vn_dimensions == 2:
+            freq_axis = niw_axis, -2, -1
+        other = np.einsum("abcd...->dcba...", np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)))
+        self.mat = np.concatenate((other, self.mat), axis=niw_axis)
+        del other
+        self.update_original_shape()
+        self._full_niw_range = True
+        return self
+
     def change_frequency_notation_ph_to_pp(self) -> "LocalFourPoint":
         r"""
         Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.

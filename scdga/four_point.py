@@ -393,12 +393,15 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
             self.compress_q_dimension()
 
-            einsum_str_map = {
-                0: f"qabijw,{q_prefix}jief->qabefw" if left_hand_side else f"{q_prefix}abij,qjiefw->qabefw",
-                1: f"qabijwv,{q_prefix}jief->qabefwv" if left_hand_side else f"{q_prefix}abij,qjiefwv->qabefwv",
-                2: f"qabijwvp,{q_prefix}jief->qabefwvp" if left_hand_side else f"{q_prefix}abij,qjiefwvp->qabefwvp",
-            }
-            einsum_str = einsum_str_map.get(self.num_vn_dimensions)
+            left_orbs = "abij"
+            right_orbs = "jief"
+            final_orbs = "abef"
+            suffix = {0: "w", 1: "wv", 2: "wvp"}.get(self.num_vn_dimensions, "")
+            einsum_str = (
+                f"q{left_orbs}{suffix},{q_prefix}{right_orbs}->q{final_orbs}{suffix}"
+                if left_hand_side
+                else f"{q_prefix}{left_orbs},q{right_orbs}{suffix}->q{final_orbs}{suffix}"
+            )
 
             return FourPoint(
                 (
@@ -419,26 +422,29 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         is_local = not isinstance(other, FourPoint)
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
-        if self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0:
+        if self.num_vn_dimensions in (0, 1) or other.num_vn_dimensions in (0, 1):
             q_prefix = "" if is_local else "q"
 
             self.compress_q_dimension()
             if not is_local:
                 other = other.compress_q_dimension()
 
-            # special case if one of two (Local)FourPoint objects has no fermionic frequency dimensions
-            # straightforward contraction is saving memory as we do not have to add fermionic frequency dimensions
-            einsum_str = {
-                (0, 2): (
-                    f"qabcdw,{q_prefix}dcefwvp->qabefwvp" if left_hand_side else f"{q_prefix}abcdwvp,dcefw->qabefwvp"
-                ),
-                (0, 1): f"qabcdw,{q_prefix}dcefwv->qabefwv" if left_hand_side else f"{q_prefix}abcdwv,dcefw->qabefwv",
-                (0, 0): f"qabcdw,{q_prefix}dcefw->qabefw" if left_hand_side else f"{q_prefix}abcdw,dcefw->qabefw",
-                (1, 0): f"qabcdwv,{q_prefix}dcefw->qabefwv" if left_hand_side else f"{q_prefix}abcdw,dcefwv->qabefwv",
-                (2, 0): (
-                    f"qabcdwvp,{q_prefix}dcefw->qabefwvp" if left_hand_side else f"{q_prefix}abcdw,dcefwvp->qabefwvp"
-                ),
-            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
+            # special cases if both objects do not have two fermionic frequency dimensions each. Straightforward
+            # contraction is saving memory as we do not have to add fermionic frequency dimensions to artificially
+            # create compound indices
+            left_orbs = "abcd"
+            right_orbs = "dcef"
+            final_orbs = "abef"
+            suffix_map = {0: "w", 1: "wv", 2: "wvp"}
+            suffix_self = suffix_map.get(self.num_vn_dimensions, "w")
+            suffix_other = suffix_map.get(other.num_vn_dimensions, "w")
+            suffix_final = suffix_map.get(max(self.num_vn_dimensions, other.num_vn_dimensions), "w")
+
+            einsum_str = (
+                f"q{left_orbs}{suffix_self},{q_prefix}{right_orbs}{suffix_other}->q{final_orbs}{suffix_final}"
+                if left_hand_side
+                else f"{q_prefix}{left_orbs}{suffix_other},q{right_orbs}{suffix_self}->q{final_orbs}{suffix_final}"
+            )
 
             return FourPoint(
                 np.einsum(einsum_str, self.mat, other.mat, optimize=True),
@@ -450,18 +456,6 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
                 self.full_niv_range,
                 self.has_compressed_q_dimension,
                 self.frequency_notation,
-            )
-
-        if self.num_vn_dimensions == 1 or other.num_vn_dimensions == 1:
-            einsum_str = {
-                (1, 1): "qabcdwv,qdcefwv->qabefwv",
-                (1, 2): "qabcdwv,qdcefwvp->qabefwvp" if left_hand_side else "qabcdwvp,qdcefwp->qabefwvp",
-                (2, 1): "qabcdwvp,qdcefwp->qabefwvp" if left_hand_side else "qabcdwv,qdcefwvp->qabefwvp",
-            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
-            new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True)
-            max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
-            return FourPoint(
-                new_mat, channel, self.nq, self.num_wn_dimensions, max_vn_dim, False, self.full_niv_range, True
             )
 
         is_self_full_niw_range = self.full_niw_range
@@ -494,6 +488,30 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.has_compressed_q_dimension,
             self.frequency_notation,
         ).to_full_indices(self.original_shape)
+
+    def to_full_niw_range(self):
+        """
+        Converts the object to the full bosonic frequency range in-place.
+        """
+        if self.num_wn_dimensions == 0 or self.full_niw_range:
+            return self
+
+        niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
+        ind = np.arange(1, self.current_shape[niw_axis])
+        freq_axis = niw_axis
+        if self.num_vn_dimensions == 1:
+            freq_axis = niw_axis, -1
+        if self.num_vn_dimensions == 2:
+            freq_axis = niw_axis, -2, -1
+        other = np.einsum(
+            "qabcd...->qdcba..." if self.has_compressed_q_dimension else "xyzabcd...->xyzdcba...",
+            np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)),
+        )
+        self.mat = np.concatenate((other, self.mat), axis=niw_axis)
+        del other
+        self.update_original_shape()
+        self._full_niw_range = True
+        return self
 
     def rotate_orbitals(self, theta: float = np.pi):
         r"""

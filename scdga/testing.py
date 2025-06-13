@@ -9,7 +9,7 @@ folder = (
 )
 iteration = "1"
 
-filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter_lower_statistics/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
+filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
 filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
 
 
@@ -141,8 +141,7 @@ def get_worm_components(num_bands: int) -> list[int]:
 
 
 if __name__ == "__main__":
-    # n_bands = 2
-    # indices = get_worm_components(n_bands)
+    # indices = get_worm_components(num_bands=3)
     # print(indices)
     # print(len(indices))
 

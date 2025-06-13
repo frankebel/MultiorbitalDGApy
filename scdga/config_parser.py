@@ -137,7 +137,6 @@ class ConfigParser:
         conf.plotting_subfolder_name = self._try_parse(output_section, "plotting_subfolder_name", "Plots")
         conf.save_quantities = self._try_parse(output_section, "save_quantities", True)
         conf.output_path = self._try_parse(output_section, "output_path", "./")
-        conf.save_fq = self._try_parse(output_section, "save_fq", False)
 
         if not conf.output_path or conf.output_path == "":
             config.logger.log_info(
@@ -174,6 +173,7 @@ class ConfigParser:
 
         conf.perform_eliashberg = self._try_parse(eliashberg_section, "perform_eliashberg", False)
         conf.save_pairing_vertex = self._try_parse(eliashberg_section, "save_pairing_vertex", False)
+        conf.save_fq = self._try_parse(eliashberg_section, "save_fq", False)
         conf.n_eig = self._try_parse(eliashberg_section, "n_eig", 2)
         conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
         conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "random")

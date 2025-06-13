@@ -35,7 +35,7 @@ def count_nonzero_orbital_entries(obj: IHaveMat, obj_name: str) -> int:
         return -1
     if isinstance(obj, (FourPoint, LocalFourPoint, LocalInteraction)):
         return _count_nonzero_orbital_entries(obj, obj_name, num_orbital_dimensions=4)
-    elif isinstance(obj, SelfEnergy) or isinstance(obj, GreensFunction):
+    elif isinstance(obj, (SelfEnergy, GreensFunction)):
         return _count_nonzero_orbital_entries(obj, obj_name, num_orbital_dimensions=2)
     else:
         raise TypeError(f"Unsupported object type: {type(obj)}")
