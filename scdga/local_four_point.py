@@ -210,15 +210,16 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         self.update_original_shape()
 
+        w_dim = self.original_shape[4]
         if self.num_vn_dimensions == 0:  # [o1,o2,o3,o4,w]
-            self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(2 * self.niw + 1, self.n_bands**2, self.n_bands**2)
+            self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(w_dim, self.n_bands**2, self.n_bands**2)
             return self
 
         if self.num_vn_dimensions == 1:  # [o1,o2,o3,o4,w,v]
             self.extend_vn_to_diagonal()
 
         self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
-            2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
+            w_dim, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
         )
         return self
 
@@ -236,16 +237,17 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             raise ValueError("Number of bosonic frequency dimensions must be 1.")
 
         self.original_shape = shape if shape is not None else self.original_shape
+        w_dim = self.original_shape[4]
 
         if self.num_vn_dimensions == 0:  # original was [o1,o2,o3,o4,w]
-            self.mat = self.mat.reshape((2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions).transpose(
+            self.mat = self.mat.reshape((w_dim,) + (self.n_bands,) * self.num_orbital_dimensions).transpose(
                 1, 2, 3, 4, 0
             )
             return self
 
         compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
-        self.mat = self.mat.reshape((2 * self.niw + 1,) + compound_index_shape * 2).transpose(1, 2, 4, 5, 0, 3, 6)
+        self.mat = self.mat.reshape((w_dim,) + compound_index_shape * 2).transpose(1, 2, 4, 5, 0, 3, 6)
 
         if self.num_vn_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)

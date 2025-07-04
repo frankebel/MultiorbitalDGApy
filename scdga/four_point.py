@@ -162,9 +162,10 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.mat = self.mat.reshape(self.nq_tot, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv)
             return self
 
+        w_dim = self.current_shape[5]
         if self.num_vn_dimensions == 0:  # [q, o1, o2, o3, o4, w]
             self.mat = self.mat.transpose(0, 5, 1, 2, 3, 4).reshape(
-                self.nq_tot, 2 * self.niw + 1, self.n_bands**2, self.n_bands**2
+                self.nq_tot, w_dim, self.n_bands**2, self.n_bands**2
             )  # reshaping to [q,w,o1,o2,o3,o4] and then collecting {o1,o2} and {o3,o4} into two indices
             return self
 
@@ -173,7 +174,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         # [q, o1, o2, o3, o4, w, v, vp]
         self.mat = self.mat.transpose(0, 5, 1, 2, 6, 3, 4, 7).reshape(
-            self.nq_tot, 2 * self.niw + 1, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
+            self.nq_tot, w_dim, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
         )  # reshaping to [q,w,o1,o2,v,o3,o4,vp] and then collecting {o1,o2,v} and {o3,o4,vp} into two indices
 
         return self
@@ -203,17 +204,18 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             raise ValueError("Number of bosonic frequency dimensions must be 1.")
 
         self.original_shape = shape if shape is not None else self.original_shape
+        w_dim = self.original_shape[5] if self.has_compressed_q_dimension else self.original_shape[7]
 
         if self.num_vn_dimensions == 0:  # original was [q,o1,o2,o3,o4,w]
             self.mat = self.mat.reshape(
-                (self.nq_tot,) + (2 * self.niw + 1,) + (self.n_bands,) * self.num_orbital_dimensions
+                (self.nq_tot,) + (w_dim,) + (self.n_bands,) * self.num_orbital_dimensions
             ).transpose(0, 2, 3, 4, 5, 1)
             self._has_compressed_momentum_dimension = True
             return self
 
         compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
-        self.mat = self.mat.reshape((self.nq_tot,) + (2 * self.niw + 1,) + compound_index_shape * 2).transpose(
+        self.mat = self.mat.reshape((self.nq_tot,) + (w_dim,) + compound_index_shape * 2).transpose(
             0, 2, 3, 5, 6, 1, 4, 7
         )
 
