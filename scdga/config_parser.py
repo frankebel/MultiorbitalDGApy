@@ -159,7 +159,7 @@ class ConfigParser:
         conf.mixing = self._try_parse(sc_section, "mixing", 0.2)
         conf.mixing_strategy = self._try_parse(sc_section, "mixing_strategy", "linear")
         conf.mixing_history_length = self._try_parse(sc_section, "mixing_history_length", 3)
-        conf.use_poly_fit = self._try_parse(sc_section, "use_poly_fit", True)
+        conf.use_poly_fit = self._try_parse(sc_section, "use_poly_fit", False)
         conf.previous_sc_path = self._try_parse(sc_section, "previous_sc_path", "./")
 
         return conf
@@ -175,7 +175,7 @@ class ConfigParser:
         conf.save_pairing_vertex = self._try_parse(eliashberg_section, "save_pairing_vertex", False)
         conf.save_fq = self._try_parse(eliashberg_section, "save_fq", False)
         conf.n_eig = self._try_parse(eliashberg_section, "n_eig", 2)
-        conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-4)
+        conf.epsilon = self._try_parse(eliashberg_section, "epsilon", 1e-6)
         conf.symmetry = self._try_parse(eliashberg_section, "symmetry", "random")
         conf.subfolder_name = self._try_parse(eliashberg_section, "subfolder_name", "Eliashberg")
         conf.include_local_part = self._try_parse(eliashberg_section, "include_local_part", True)

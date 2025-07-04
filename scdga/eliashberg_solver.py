@@ -86,6 +86,35 @@ def create_full_vertex_q_r(
     return f_q_r
 
 
+def create_full_vertex_q_r2(channel: SpinChannel, niv_pp: int, mpi_distributor: MpiDistributor) -> FourPoint:
+    r"""
+    Calculates the full vertex function in either the density or magnetic channel using
+    .. math:: F^q_r = F^\omega_r [ 1- \chi_0^{nl,q} F^\omega_r]^{-1}
+    """
+    f_r_loc = LocalFourPoint.load(
+        os.path.join(config.output.output_path, f"f_{channel.value}_loc.npy"), channel=channel
+    )  # .cut_niv(config.box.niv_core)
+    gchi0_loc = LocalFourPoint.load(
+        os.path.join(config.output.output_path, "gchi0_loc.npy"), num_vn_dimensions=1
+    )  # .cut_niv(config.box.niv_core)
+    gchi0_q = FourPoint.load(
+        os.path.join(config.output.output_path, f"gchi0_q_rank_{mpi_distributor.comm.rank}.npy"),
+        num_vn_dimensions=1,
+    )  # .cut_niv(config.box.niv_core)
+
+    f_q_r = (
+        f_r_loc
+        @ (
+            FourPoint.identity(
+                gchi0_q.n_bands, config.box.niw_core, config.box.niv_full, gchi0_q.nq_tot, config.lattice.nq
+            )
+            - (gchi0_q - gchi0_loc) @ f_r_loc
+        ).invert()
+    ).cut_niv(config.box.niv_core)
+    del f_r_loc, gchi0_q, gchi0_loc
+    return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
+
+
 def transform_vertex_ph_to_pp_w0(
     f_q_r: LocalFourPoint, niv_pp: int, channel: SpinChannel = SpinChannel.NONE
 ) -> LocalFourPoint | FourPoint:
@@ -224,43 +253,31 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
 
     mat = sp.sparse.linalg.LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv)
     logger.log_info(
-        f"Starting Lanczos method to retrieve largest{"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"} "
+        f"Starting Lanczos method to retrieve largest {"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"}"
         f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"}."
     )
 
-    lambda_max, gap_max = sp.sparse.linalg.eigsh(mat, k=1, tol=config.eliashberg.epsilon, v0=gap0, which="LA")
-    logger.log_info("Finished Lanczos method for the largest eigenvalue.")
-    logger.log_info(f"Maximum eigenvalue for {gamma_q_r_pp.channel.value}let channel is {lambda_max[0]:.6f}.")
+    lambdas, gaps = sp.sparse.linalg.eigsh(
+        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, which="LA"
+    )
+    logger.log_info(
+        f"Finished Lanczos method for the largest {"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"} "
+        f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"}."
+    )
+
+    order = lambdas.argsort()[::-1]  # sort eigenvalues in descending order
+    lambdas = lambdas[order]
+    gaps = gaps[:, order]
 
     logger.log_info(
-        f"Starting Lanczos method to retrieve the {config.eliashberg.n_eig} eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} "
-        f"closest to one and their corresponding "
-        f"eigenvector{"" if config.eliashberg.n_eig == 1 else "s"} using shift-invert mode."
-    )
-    lambdas, gaps = sp.sparse.linalg.eigsh(
-        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, sigma=1.0
-    )
-    logger.log_info(
-        f"Finished Lanczos method for the {gamma_q_r_pp.channel.value}let channel for "
-        f"the superconducting eigenvalues and gap functions."
-    )
-    idx = np.abs(lambdas - 1).argsort()
-    lambdas = lambdas[idx]
-    gaps = gaps[:, idx]
-    logger.log_info(
-        f"Superconducting eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} for the {gamma_q_r_pp.channel.value}let "
-        f"channel are: {', '.join(f'{lam:.6f}' for lam in lambdas)}."
+        f"Largest {config.eliashberg.n_eig} eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} for the "
+        f"{gamma_q_r_pp.channel.value}let channel are: {', '.join(f'{lam:.6f}' for lam in lambdas)}."
     )
 
     gaps = [
         GapFunction(gaps[..., i].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)
         for i in range(config.eliashberg.n_eig)
     ]
-
-    lambdas = np.append(lambdas, lambda_max)
-    gaps = np.append(
-        gaps, [GapFunction(gap_max[..., 0].reshape(gap_shape), gamma_q_r_pp.channel, gamma_q_r_pp.nq)], axis=0
-    )
 
     logger.log_info(f"Finished solving the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.")
 
@@ -330,7 +347,10 @@ def solve(
     else:
         niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
 
+    # f_dens_pp = create_full_vertex_q_r2(SpinChannel.DENS, niv_pp, mpi_dist_irrk)
     f_dens_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, niv_pp, mpi_dist_irrk)
+
+    # f_magn_pp = create_full_vertex_q_r2(SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
     f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
 
     if comm.rank == 0:

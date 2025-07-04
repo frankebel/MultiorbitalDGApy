@@ -10,7 +10,7 @@ folder = (
 iteration = "1"
 
 filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
-filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
+filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
@@ -145,9 +145,9 @@ if __name__ == "__main__":
     # print(indices)
     # print(len(indices))
 
-    show_mean_self_energy(False, "")
+    # show_mean_self_energy(False, "")
     # show_self_energy_2d()
-    # show_self_energy_kx_ky(4, 0)
+    show_self_energy_kx_ky(1, 0)
     # show_mu_history()
 
     # ek_1 = np.load(

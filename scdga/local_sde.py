@@ -136,6 +136,14 @@ def create_vertex_functions(
     logger.log_info(f"Local generalized susceptibility chi^wvv' ({gchi_r.channel.value}) done.")
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
+
+    """
+    for i, j, k, l in np.ndindex(gamma_r.mat.shape[:4]):
+        if (i == 0 and j == 0 and k == 0 and l == 0) or (i == 1 and j == 1 and k == 1 and l == 1):
+            continue
+        gamma_r[i, j, k, l] = 0.0
+    """
+
     gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")
 
@@ -190,6 +198,12 @@ def perform_local_schwinger_dyson(
     Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d.
     """
     gchi0 = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
+
+    """
+    if config.eliashberg.perform_eliashberg:
+        gchi0.save(name="gchi0_loc", output_dir=config.output.output_path)
+    """
+
     gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert().take_vn_diagonal()
 
     count_nonzero_orbital_entries(gchi0, "gchi0")

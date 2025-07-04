@@ -396,6 +396,12 @@ def calculate_self_energy_q(
         gchi0_q = BubbleGenerator.create_generalized_chi0_q(
             giwk_full, config.box.niw_core, config.box.niv_full, my_irr_q_list
         )
+
+        """
+        if config.eliashberg.perform_eliashberg:
+            gchi0_q.save(name=f"gchi0_q_rank_{comm.rank}", output_dir=config.output.output_path)
+        """
+
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
