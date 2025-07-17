@@ -1,5 +1,6 @@
 import itertools
 import os
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,8 +10,8 @@ folder = (
 )
 iteration = "1"
 
-filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085_B12_5_low_iter/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
-filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc60_vc40_vs20/sigma_dga_iteration_1.npy"
+filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs20/siw_dga_local.npy"
+filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc40_vs20/siw_dga_local.npy"
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
@@ -41,14 +42,16 @@ def show_mean_self_energy(save: bool, path: str):
 
     niv = siw_oneband.shape[-1] // 2
 
-    siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=0)[0, 0]
-    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[0, 0]
+    siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=0)[0, 0, 0, 0]
+    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[0, 0, 0, 0]
 
     plt.figure()
-    plt.plot(siw_oneband.real, label="real, 1-band")
-    plt.plot(siw_oneband.imag, label="imag, 1-band")
-    plt.plot(siw_twoband.real, label="real, 2-band")
-    plt.plot(siw_twoband.imag, label="imag, 2-band")
+    plt.plot(siw_oneband.real, label="real, DMFT from 1-band")
+    plt.plot(siw_oneband.imag, label="imag, DMFT from 1-band")
+    plt.plot(siw_twoband.real, label="real, DMFT from 2-band")
+    plt.plot(siw_twoband.imag, label="imag, DMFT from 2-band")
+    # plt.plot(siw_oneband.real - siw_twoband.real, label="real, difference")
+    # plt.plot(siw_oneband.imag - siw_twoband.imag, label="imag, difference")
     plt.xlabel(r"$\nu_n$")
     plt.ylabel(r"$\Sigma(\nu_n)$")
     plt.tight_layout()
@@ -145,9 +148,9 @@ if __name__ == "__main__":
     # print(indices)
     # print(len(indices))
 
-    # show_mean_self_energy(False, "")
+    show_mean_self_energy(False, "")
     # show_self_energy_2d()
-    show_self_energy_kx_ky(1, 0)
+    # show_self_energy_kx_ky(1, 0)
     # show_mu_history()
 
     # ek_1 = np.load(

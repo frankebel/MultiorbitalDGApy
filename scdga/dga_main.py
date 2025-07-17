@@ -79,7 +79,9 @@ def execute_dga_routine():
         logger.log_info("Plotted g2 (dens) and g2 (magn).")
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
+    # ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)[..., 0, 0][..., None, None]
     g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek)
+    # g_loc.mat = g_loc.mat[..., 0, 0, :][..., None, None, :]
     u_loc = config.lattice.hamiltonian.get_local_u()
     v_nonloc = config.lattice.hamiltonian.get_vq(config.lattice.q_grid)
 

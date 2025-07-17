@@ -63,6 +63,9 @@ def create_gamma_r_with_shell_correction(
     count_nonzero_orbital_entries(chi_tilde_core_inv, "chi_tilde_core_inv")
     count_nonzero_orbital_entries(gchi_r.invert() - chi_tilde_core_inv, "difference")
 
+    gchi_r.invert().save(output_dir=config.output.output_path, name=f"gchi_{gchi_r.channel.value}_inverted")
+    chi_tilde_core_inv.extend_vn_to_diagonal().save(output_dir=config.output.output_path, name=f"chi_tilde_core_inv")
+
     return config.sys.beta**2 * (gchi_r.invert() - chi_tilde_core_inv) + u_loc.as_channel(gchi_r.channel)
 
 

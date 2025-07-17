@@ -394,6 +394,9 @@ def solve(
             f_ud_loc_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
             logger.log_info(f"Calculated full local UD vertex in pp notation.")
 
+            if config.output.save_quantities:
+                f_ud_loc_pp.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_pp")
+
             gamma_sing_pp -= f_ud_loc_pp
             gamma_trip_pp -= f_ud_loc_pp
 
@@ -412,6 +415,11 @@ def solve(
             )
             phi_ud_loc_pp = 0.5 * (phi_sing_loc_pp + phi_trip_loc_pp)
             logger.log_info("Created the local reducible singlet and triplet pairing diagrams.")
+
+            if config.output.save_quantities:
+                phi_sing_loc_pp.save(output_dir=config.output.eliashberg_path, name="phi_sing_loc_pp")
+                phi_trip_loc_pp.save(output_dir=config.output.eliashberg_path, name="phi_trip_loc_pp")
+                phi_ud_loc_pp.save(output_dir=config.output.eliashberg_path, name="phi_ud_loc_pp")
 
             gamma_sing_pp -= phi_ud_loc_pp
             gamma_trip_pp -= phi_ud_loc_pp
