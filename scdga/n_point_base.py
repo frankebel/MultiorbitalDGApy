@@ -44,7 +44,7 @@ class IHaveMat(ABC):
         """
         Sets the underlying matrix.
         """
-        self._mat = value.astype(np.complex128)
+        self._mat = value.astype(np.complex64)
 
     @property
     def current_shape(self) -> tuple:

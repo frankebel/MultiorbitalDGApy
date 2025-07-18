@@ -302,10 +302,10 @@ def create_local_reducible_pp_diagrams(
 
     gchi0 = BubbleGenerator.create_generalized_chi0(
         giwk_dmft, config.box.niw_core, config.box.niv_core
-    ).change_frequency_notation_ph_to_pp()
+    )  # .change_frequency_notation_ph_to_pp()
 
-    f_dens_loc = f_dens_loc.cut_niv(config.box.niv_core).change_frequency_notation_ph_to_pp()
-    f_magn_loc = f_magn_loc.cut_niv(config.box.niv_core).change_frequency_notation_ph_to_pp()
+    f_dens_loc = f_dens_loc.cut_niv(config.box.niv_core)  # .change_frequency_notation_ph_to_pp()
+    f_magn_loc = f_magn_loc.cut_niv(config.box.niv_core)  # .change_frequency_notation_ph_to_pp()
     logger.log_info("Loaded full local density and magnetic vertices and transformed them to pp notation.")
 
     f_r_loc = 0.5 * f_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * f_magn_loc
@@ -323,9 +323,10 @@ def create_local_reducible_pp_diagrams(
     logger.log_info(f"Constructed local {channel.value}let irreducible diagrams.")
 
     phi_r_loc = 1.0 / config.sys.beta**2 * (f_r_loc - gamma_r_loc)
-    phi_r_loc.mat = phi_r_loc.mat[..., phi_r_loc.mat.shape[-3] // 2, :, :]  # we need w=0,v,v'
+    phi_r_loc = phi_r_loc.change_frequency_notation_ph_to_pp()
+    phi_r_loc.mat = phi_r_loc.mat[..., phi_r_loc.current_shape[-3] // 2, :, :]  # we need w=0,v,v'
     phi_r_loc.update_original_shape()
-    return phi_r_loc
+    return phi_r_loc.to_half_niw_range()
 
 
 def solve(
@@ -391,21 +392,29 @@ def solve(
             f_magn_loc = LocalFourPoint.load(
                 os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN
             )
-            f_ud_loc_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
+            f_ud_loc_fs_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
             logger.log_info(f"Calculated full local UD vertex in pp notation.")
 
             if config.output.save_quantities:
-                f_ud_loc_pp.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_pp")
+                f_ud_loc_fs_pp.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_fs_pp")
 
-            gamma_sing_pp -= f_ud_loc_pp
-            gamma_trip_pp -= f_ud_loc_pp
+                f_ud_loc_pp = (
+                    (0.5 * f_dens_loc - 0.5 * f_magn_loc)
+                    .cut_niv(config.box.niv_core)
+                    .change_frequency_notation_ph_to_pp()
+                )
+                f_ud_loc_pp.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_pp")
+                del f_ud_loc_pp
+
+            gamma_sing_pp -= f_ud_loc_fs_pp
+            gamma_trip_pp -= f_ud_loc_fs_pp
 
             gchi_dens_loc = LocalFourPoint.load(
                 os.path.join(config.output.output_path, f"gchi_dens_loc.npy"), SpinChannel.DENS
-            ).change_frequency_notation_ph_to_pp()
+            )  # .change_frequency_notation_ph_to_pp()
             gchi_magn_loc = LocalFourPoint.load(
                 os.path.join(config.output.output_path, f"gchi_magn_loc.npy"), SpinChannel.MAGN
-            ).change_frequency_notation_ph_to_pp()
+            )  # .change_frequency_notation_ph_to_pp()
 
             phi_sing_loc_pp = create_local_reducible_pp_diagrams(
                 giwk_dmft, f_dens_loc, f_magn_loc, gchi_dens_loc, gchi_magn_loc, SpinChannel.SING
@@ -426,7 +435,7 @@ def solve(
             del (
                 f_dens_loc,
                 f_magn_loc,
-                f_ud_loc_pp,
+                f_ud_loc_fs_pp,
                 gchi_dens_loc,
                 gchi_magn_loc,
                 phi_sing_loc_pp,
