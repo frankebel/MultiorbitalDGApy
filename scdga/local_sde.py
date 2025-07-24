@@ -27,17 +27,12 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFo
 def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
     r"""
     Returns the product of two Green's functions
-    .. math:: B_{0;lmm'l'}^{vv'} = G_{lm}^{v} G_{m'l'}^{vv'}.
+    .. math:: B_{0;lmm'l'}^{vv'} = G_{lm}^{v} G_{m'l'}^{v'}.
     """
     if niv_slice == -1:
         niv_slice = g_loc.niv
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
-    g_left_mat = g_loc_slice_mat[:, :, None, None, :, None] * np.eye(g_loc.n_bands)[:, :, None, None, None, None]
-    g_right_mat = (
-        np.swapaxes(g_loc_slice_mat, 0, 1)[None, None, :, :, None, :]
-        * np.eye(g_loc.n_bands)[None, None, :, :, None, None]
-    )
-    return g_left_mat * g_right_mat
+    return g_loc_slice_mat[:, :, None, None, :, None] * g_loc_slice_mat[None, None, :, :, None, :]
 
 
 def create_gamma_r(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
@@ -59,7 +54,7 @@ def create_gamma_r_with_shell_correction(
     chi_tilde_shell = (gchi0.invert() + 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel)).invert()
     chi_tilde_core_inv = chi_tilde_shell.cut_niv(config.box.niv_core).invert()
 
-    count_nonzero_orbital_entries(gchi_r.invert(), "gchi_r again")
+    count_nonzero_orbital_entries(gchi_r.invert(), "gchi_r inv")
     count_nonzero_orbital_entries(chi_tilde_core_inv, "chi_tilde_core_inv")
     count_nonzero_orbital_entries(gchi_r.invert() - chi_tilde_core_inv, "difference")
 
@@ -202,10 +197,8 @@ def perform_local_schwinger_dyson(
     """
     gchi0 = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
 
-    """
     if config.eliashberg.perform_eliashberg:
         gchi0.save(name="gchi0_loc", output_dir=config.output.output_path)
-    """
 
     gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert().take_vn_diagonal()
 

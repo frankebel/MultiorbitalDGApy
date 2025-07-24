@@ -212,13 +212,13 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         w_dim = self.original_shape[4]
         if self.num_vn_dimensions == 0:  # [o1,o2,o3,o4,w]
-            self.mat = self.mat.transpose(4, 0, 1, 2, 3).reshape(w_dim, self.n_bands**2, self.n_bands**2)
+            self.mat = self.mat.transpose(4, 0, 1, 3, 2).reshape(w_dim, self.n_bands**2, self.n_bands**2)
             return self
 
         if self.num_vn_dimensions == 1:  # [o1,o2,o3,o4,w,v]
             self.extend_vn_to_diagonal()
 
-        self.mat = self.mat.transpose(4, 0, 1, 5, 2, 3, 6).reshape(
+        self.mat = self.mat.transpose(4, 0, 1, 5, 3, 2, 6).reshape(
             w_dim, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
         )
         return self
@@ -239,17 +239,18 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         self.original_shape = shape if shape is not None else self.original_shape
         w_dim = self.original_shape[4]
 
-        if self.num_vn_dimensions == 0:  # original was [o1,o2,o3,o4,w]
+        if self.num_vn_dimensions == 0:  # original was [o1,o2,o4,o3,w]
             self.mat = self.mat.reshape((w_dim,) + (self.n_bands,) * self.num_orbital_dimensions).transpose(
-                1, 2, 3, 4, 0
+                1, 2, 4, 3, 0
             )
             return self
 
         compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
-        self.mat = self.mat.reshape((w_dim,) + compound_index_shape * 2).transpose(1, 2, 4, 5, 0, 3, 6)
+        # original was [o1,o2,o4,o3,w,v,v']
+        self.mat = self.mat.reshape((w_dim,) + compound_index_shape * 2).transpose(1, 2, 5, 4, 0, 3, 6)
 
-        if self.num_vn_dimensions == 1:  # original was [o1,o2,o3,o4,w,v]
+        if self.num_vn_dimensions == 1:  # original was [o1,o2,o4,o3,w,v]
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         return self
 
@@ -562,6 +563,87 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.frequency_notation = FrequencyNotation.PP
         copy.update_original_shape()
         return copy
+
+    def change_frequency_notation_ph_to_pp_v2(self) -> "LocalFourPoint":
+        r"""
+        Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
+        The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
+        """
+        if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
+            raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
+
+        copy = deepcopy(self)
+
+        if copy.frequency_notation == FrequencyNotation.PP:
+            return copy
+
+        copy = copy.to_full_niw_range().to_full_niv_range()
+
+        if copy.num_vn_dimensions == 1:
+            copy = copy.extend_vn_to_diagonal()
+
+        niw_pp, niv_pp = copy.niw // 3, min(copy.niw // 3, copy.niv // 3)
+
+        x_idx, y_idx, z_idx = np.meshgrid(
+            np.arange(2 * niw_pp + 1), np.arange(2 * niv_pp), np.arange(2 * niv_pp), indexing="ij"
+        )
+        i_idx = y_idx + z_idx - x_idx
+
+        copy.mat = copy.mat[..., i_idx, y_idx, z_idx]
+        copy.frequency_notation = FrequencyNotation.PP
+        copy.update_original_shape()
+        return copy
+
+    def change_frequency_notation_ph_to_pp_v3(self) -> "LocalFourPoint":
+        r"""
+        Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
+        The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
+        """
+        if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
+            raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
+
+        copy = deepcopy(self)
+
+        if copy.frequency_notation == FrequencyNotation.PP:
+            return copy
+
+        copy = copy.to_full_niw_range().to_full_niv_range()
+
+        if copy.num_vn_dimensions == 1:
+            copy = copy.extend_vn_to_diagonal()
+
+        x_vals = copy.niw + 1 + MFHelper.wn(copy.niw)
+        y_vals = copy.niv + MFHelper.vn(copy.niv)
+        z_vals = copy.niv + MFHelper.vn(copy.niv)
+        xg, yg, zg = np.meshgrid(x_vals, y_vals, z_vals, indexing="ij")
+
+        i = yg + zg - xg
+        valid = (i >= 0) & (i < len(x_vals))
+        x_valid = xg[valid]
+        y_valid = yg[valid]
+        z_valid = zg[valid]
+        i_valid = i[valid]
+
+        # Get values from original array
+        values = copy.mat[..., i_valid, y_valid, z_valid]
+
+        # Get bounding box
+        coords = np.stack([x_valid, y_valid, z_valid], axis=1)
+        mins = coords.min(axis=0)
+        maxs = coords.max(axis=0)
+        shape = maxs - mins + 1
+
+        # Create dense array
+        dense_array = np.empty(shape, dtype=copy.mat.dtype)
+        x_new = x_valid - mins[0]
+        y_new = y_valid - mins[1]
+        z_new = z_valid - mins[2]
+        dense_array[x_new, y_new, z_new] = values
+        copy.mat[:, :, :, :] = dense_array
+        copy.frequency_notation = FrequencyNotation.PP
+        copy.update_original_shape()
+        niw_pp, niv_pp = copy.niw // 3, min(copy.niw // 3, copy.niv // 3)
+        return copy.cut_niw_and_niv(niw_pp, niv_pp)
 
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """

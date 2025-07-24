@@ -164,18 +164,18 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
 
         w_dim = self.current_shape[5]
         if self.num_vn_dimensions == 0:  # [q, o1, o2, o3, o4, w]
-            self.mat = self.mat.transpose(0, 5, 1, 2, 3, 4).reshape(
+            self.mat = self.mat.transpose(0, 5, 1, 2, 4, 3).reshape(
                 self.nq_tot, w_dim, self.n_bands**2, self.n_bands**2
-            )  # reshaping to [q,w,o1,o2,o3,o4] and then collecting {o1,o2} and {o3,o4} into two indices
+            )  # reshaping to [q,w,o1,o2,o4,o3] and then collecting {o1,o2} and {o4,o3} into two indices
             return self
 
         if self.num_vn_dimensions == 1:  # [q, o1, o2, o3, o4, w, v]
             self.extend_vn_to_diagonal()
 
         # [q, o1, o2, o3, o4, w, v, vp]
-        self.mat = self.mat.transpose(0, 5, 1, 2, 6, 3, 4, 7).reshape(
+        self.mat = self.mat.transpose(0, 5, 1, 2, 6, 4, 3, 7).reshape(
             self.nq_tot, w_dim, self.n_bands**2 * 2 * self.niv, self.n_bands**2 * 2 * self.niv
-        )  # reshaping to [q,w,o1,o2,v,o3,o4,vp] and then collecting {o1,o2,v} and {o3,o4,vp} into two indices
+        )  # reshaping to [q,w,o1,o2,v,o4,o3,vp] and then collecting {o1,o2,v} and {o4,o3,vp} into two indices
 
         return self
 
@@ -206,20 +206,21 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         self.original_shape = shape if shape is not None else self.original_shape
         w_dim = self.original_shape[5] if self.has_compressed_q_dimension else self.original_shape[7]
 
-        if self.num_vn_dimensions == 0:  # original was [q,o1,o2,o3,o4,w]
+        if self.num_vn_dimensions == 0:  # original was [q,o1,o2,o4,o3,w]
             self.mat = self.mat.reshape(
                 (self.nq_tot,) + (w_dim,) + (self.n_bands,) * self.num_orbital_dimensions
-            ).transpose(0, 2, 3, 4, 5, 1)
+            ).transpose(0, 2, 3, 5, 4, 1)
             self._has_compressed_momentum_dimension = True
             return self
 
         compound_index_shape = (self.n_bands, self.n_bands, 2 * self.niv)
 
+        # original was [q,o1,o2,o4,o3,w,v,v']
         self.mat = self.mat.reshape((self.nq_tot,) + (w_dim,) + compound_index_shape * 2).transpose(
-            0, 2, 3, 5, 6, 1, 4, 7
+            0, 2, 3, 6, 5, 1, 4, 7
         )
 
-        if self.num_vn_dimensions == 1:  # original was [q,o1,o2,o3,o4,w,v]
+        if self.num_vn_dimensions == 1:  # original was [q,o1,o2,o4,o3,w,v]
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         return self
 

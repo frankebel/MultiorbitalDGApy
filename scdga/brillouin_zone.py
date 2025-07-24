@@ -303,6 +303,13 @@ class KGrid:
         ind_z = np.arange(0, self.nk[2])
         return np.array(np.meshgrid(ind_x, ind_y, ind_z, indexing="ij"))
 
+    @property
+    def kmesh_list(self):
+        """
+        List of {kx,ky,kz}
+        """
+        return self.kmesh.reshape((3, -1))
+
     def set_k_axes(self) -> None:
         """
         Set the k-axes for the full BZ.

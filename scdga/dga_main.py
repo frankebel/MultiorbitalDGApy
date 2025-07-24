@@ -70,6 +70,7 @@ def execute_dga_routine():
 
     if config.output.save_quantities and comm.rank == 0:
         sigma_dmft.save(name="sigma_dmft", output_dir=config.output.output_path)
+        g_dmft.save(name="g_dmft", output_dir=config.output.output_path)
         logger.log_info("Saved sigma_dmft as numpy file.")
 
     if config.output.do_plotting and comm.rank == 0:
@@ -81,6 +82,7 @@ def execute_dga_routine():
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     # ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)[..., 0, 0][..., None, None]
     g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek)
+    g_loc.save(output_dir=config.output.output_path, name="g_loc")
     # g_loc.mat = g_loc.mat[..., 0, 0, :][..., None, None, :]
     u_loc = config.lattice.hamiltonian.get_local_u()
     v_nonloc = config.lattice.hamiltonian.get_vq(config.lattice.q_grid)

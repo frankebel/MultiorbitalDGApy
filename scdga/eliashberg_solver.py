@@ -53,7 +53,7 @@ def create_full_vertex_q_r(
     del gchi0_q_inv, gchi_aux_q_r
     logger.log_info(f"Calculated first part of full {f_q_r.channel.value} vertex.")
 
-    delete_files(config.output.eliashberg_path, f"gchi_aux_q_{channel.value}_rank_{comm.rank}.npy")
+    # delete_files(config.output.eliashberg_path, f"gchi_aux_q_{channel.value}_rank_{comm.rank}.npy")
 
     vrg_q_r = FourPoint.load(
         os.path.join(config.output.eliashberg_path, f"vrg_q_{channel.value}_rank_{comm.rank}.npy"),
@@ -77,11 +77,13 @@ def create_full_vertex_q_r(
 
     logger.log_info(f"Calculated second part of full {f_q_r.channel.value} vertex.")
 
+    """
     delete_files(
         config.output.eliashberg_path,
         f"vrg_q_{channel.value}_rank_{comm.rank}.npy",
         f"gchi_aux_q_{channel.value}_sum_rank_{comm.rank}.npy",
     )
+    """
 
     return f_q_r
 
@@ -366,7 +368,7 @@ def solve(
             f_pp.mat = mpi_dist_irrk.scatter(f_pp.mat)
         config.logger.log_info("Saved full ladder-vertices (dens & magn) in the irreducible BZ to file.")
 
-    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
+    # delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     mpi_dist_irrk.delete_file()
 
     gamma_sing_pp = 0.5 * f_dens_pp - 1.5 * f_magn_pp
@@ -401,7 +403,7 @@ def solve(
                 f_ud_loc_pp = (
                     (0.5 * f_dens_loc - 0.5 * f_magn_loc)
                     .cut_niv(config.box.niv_core)
-                    .change_frequency_notation_ph_to_pp()
+                    .change_frequency_notation_ph_to_pp_v2()
                 )
                 f_ud_loc_pp.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_pp")
                 del f_ud_loc_pp

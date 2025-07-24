@@ -10,8 +10,66 @@ folder = (
 )
 iteration = "1"
 
-filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs20/siw_dga_local.npy"
-filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal/LDGA_Nk256_Nq256_wc60_vc40_vs20/siw_dga_local.npy"
+filename_oneband = f"/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk1024_Nq1024_wc70_vc40_vs0/sigma_dga.npy"
+filename_twoband = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk1024_Nq1024_wc60_vc70_vs150/sigma_dga.npy"
+
+
+def show_self_energy_convergence():
+    filename_oneband = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk{}_Nq{}_wc60_vc40_vs0/sigma_dga.npy"
+    filename_twoband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk{}_Nq{}_wc60_vc40_vs0/sigma_dga.npy"
+
+    sums_real = []
+    sums_imag = []
+    kx_values = [16, 20, 24, 28, 32, 36, 40, 48, 56, 64]
+
+    for kx in kx_values:
+        siw_oneband = np.load(filename_oneband.format(kx * kx, kx * kx))[..., 0, 0, :]
+        siw_twoband = np.load(filename_twoband.format(kx * kx, kx * kx))[..., 0, 0, :]
+
+        niv = siw_oneband.shape[-1] // 2
+
+        siw_oneband = siw_oneband[..., niv - 40 : niv + 40]
+        siw_twoband = siw_twoband[..., niv - 40 : niv + 40]
+
+        sums_real.append(np.sum(np.abs(siw_oneband.real - siw_twoband.real)) / (kx * kx))
+        sums_imag.append(np.sum(np.abs(siw_oneband.imag - siw_twoband.imag)) / (kx * kx))
+
+    plt.figure()
+    plt.plot(sums_real, label="Real part difference")
+    plt.plot(sums_imag, label="Imaginary part difference")
+    plt.xlabel("kx (and ky)")
+    plt.xticks(ticks=[i for i in range(len(kx_values))], labels=kx_values)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def show_self_energies():
+    filename_oneband = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk{}_Nq{}_wc60_vc40_vs0/sigma_dga.npy"
+    filename_twoband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk{}_Nq{}_wc60_vc40_vs0/sigma_dga.npy"
+
+    kx_values = [16, 20, 24, 28, 32, 36, 40, 48, 56, 64]
+
+    for kx in kx_values:
+        siw_oneband = np.load(filename_oneband.format(kx * kx, kx * kx))[..., 0, 0, :]
+        siw_twoband = np.load(filename_twoband.format(kx * kx, kx * kx))[..., 0, 0, :]
+
+        niv = siw_oneband.shape[-1] // 2
+
+        siw_oneband = siw_oneband[..., niv : niv + 40]
+        siw_twoband = siw_twoband[..., niv : niv + 40]
+
+        plt.figure()
+        plt.plot(np.min(siw_oneband.real, axis=(0, 1, 2)), label="Real, oneband")
+        plt.plot(np.min(siw_oneband.imag, axis=(0, 1, 2)), label="Imag, oneband")
+        plt.plot(np.min(siw_twoband.real, axis=(0, 1, 2)), label="Real, twoband")
+        plt.plot(np.min(siw_twoband.imag, axis=(0, 1, 2)), label="Imag, twoband")
+        plt.xlabel(r"$\nu_n$")
+        plt.ylabel(r"$\Sigma(\nu_n)$")
+        # plt.xticks(ticks=[i for i in range(len(kx_values))], labels=kx_values)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
 
 def show_self_energy_kx_ky(kx: int, ky: int):
@@ -42,14 +100,14 @@ def show_mean_self_energy(save: bool, path: str):
 
     niv = siw_oneband.shape[-1] // 2
 
-    siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=0)[0, 0, 0, 0]
-    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=0)[0, 0, 0, 0]
+    siw_oneband = np.mean(siw_oneband[..., niv : niv + 80], axis=(0, 1, 2))[0, 0]
+    siw_twoband = np.mean(siw_twoband[..., niv : niv + 80], axis=(0, 1, 2))[0, 0]
 
     plt.figure()
-    plt.plot(siw_oneband.real, label="real, DMFT from 1-band")
-    plt.plot(siw_oneband.imag, label="imag, DMFT from 1-band")
-    plt.plot(siw_twoband.real, label="real, DMFT from 2-band")
-    plt.plot(siw_twoband.imag, label="imag, DMFT from 2-band")
+    plt.plot(siw_oneband.real, label="real, 1-band")
+    plt.plot(siw_oneband.imag, label="imag, 1-band")
+    plt.plot(siw_twoband.real, label="real, 2-band")
+    plt.plot(siw_twoband.imag, label="imag, 2-band")
     # plt.plot(siw_oneband.real - siw_twoband.real, label="real, difference")
     # plt.plot(siw_oneband.imag - siw_twoband.imag, label="imag, difference")
     plt.xlabel(r"$\nu_n$")
@@ -148,7 +206,10 @@ if __name__ == "__main__":
     # print(indices)
     # print(len(indices))
 
-    show_mean_self_energy(False, "")
+    # show_self_energy_convergence()
+    show_self_energies()
+
+    # show_mean_self_energy(False, "")
     # show_self_energy_2d()
     # show_self_energy_kx_ky(1, 0)
     # show_mu_history()

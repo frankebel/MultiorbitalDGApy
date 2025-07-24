@@ -128,7 +128,9 @@ def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q: FourPoint,
     )
 
 
-def calculate_kernel_r_q(vrg_q_r, gchi_aux_q_r_sum, v_nonloc, u_loc):
+def calculate_kernel_r_q(
+    vrg_q_r: FourPoint, gchi_aux_q_r_sum: FourPoint, v_nonloc: Interaction, u_loc: LocalInteraction
+):
     r"""
     Returns the kernel for the self-energy calculation.
     .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
@@ -169,7 +171,7 @@ def calculate_sigma_kernel_r_q(
     if config.eliashberg.perform_eliashberg:
         gchi_aux_q_r.save(
             name=f"gchi_aux_q_{gchi_aux_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
-            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+            output_dir=config.output.eliashberg_path,
         )
 
     vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_inv)
@@ -182,7 +184,7 @@ def calculate_sigma_kernel_r_q(
     if config.eliashberg.perform_eliashberg:
         vrg_q_r.save(
             name=f"vrg_q_{vrg_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
-            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+            output_dir=config.output.eliashberg_path,
         )
 
     chi_phys_q_r = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
@@ -213,7 +215,7 @@ def calculate_sigma_kernel_r_q(
     if config.eliashberg.perform_eliashberg:
         chi_phys_q_r.save(
             name=f"gchi_aux_q_{chi_phys_q_r.channel.value}_sum_rank_{mpi_dist_irrq.comm.rank}",
-            output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+            output_dir=config.output.eliashberg_path,
         )
 
     return calculate_kernel_r_q(vrg_q_r, chi_phys_q_r, v_nonloc, u_loc)
@@ -392,22 +394,25 @@ def calculate_self_energy_q(
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
         # giwk_full.mat = giwk_full.mat[..., 0, 0, :][..., None, None, :]
+        giwk_full.save(output_dir=config.output.output_path, name="g_dga")
 
         logger.log_memory_usage("giwk", giwk_full, comm.size)
         gchi0_q = BubbleGenerator.create_generalized_chi0_q(
             giwk_full, config.box.niw_core, config.box.niv_full, my_irr_q_list
         )
 
-        """
         if config.eliashberg.perform_eliashberg:
             gchi0_q.save(name=f"gchi0_q_rank_{comm.rank}", output_dir=config.output.output_path)
-        """
 
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
         f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn_loc.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
+
+        if config.output.save_quantities:
+            kernel.save(name=f"kernel_dc_rank_{comm.rank}", output_dir=config.output.output_path)
+
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
 
@@ -422,7 +427,7 @@ def calculate_self_energy_q(
         if config.eliashberg.perform_eliashberg:
             gchi0_q_core_inv.save(
                 name=f"gchi0_q_inv_rank_{comm.rank}",
-                output_dir=os.path.join(config.output.output_path, config.eliashberg.subfolder_name),
+                output_dir=config.output.eliashberg_path,
             )
 
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
@@ -445,6 +450,9 @@ def calculate_self_energy_q(
         giwk = giwk.cut_niv(config.box.niw_core + config.box.niv_core)
 
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
+        if config.output.save_quantities:
+            kernel.save(name="kernel", output_dir=config.output.output_path)
+
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
