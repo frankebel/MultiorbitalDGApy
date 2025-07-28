@@ -127,27 +127,27 @@ def show_self_energy_2d():
     siw_twoband = np.load(filename_twoband)
 
     niv = siw_oneband.shape[-1] // 2
-    siw_oneband = np.reshape(siw_oneband, (16, 16, 1) + siw_oneband.shape[1:])
+    # siw_oneband = np.reshape(siw_oneband, (16, 16, 1) + siw_oneband.shape[1:])
     siw_oneband = siw_oneband[..., 0, 0, 0, niv]
 
-    siw_twoband = np.reshape(siw_twoband, (16, 16, 1) + siw_twoband.shape[1:])
+    # siw_twoband = np.reshape(siw_twoband, (16, 16, 1) + siw_twoband.shape[1:])
     siw_twoband = siw_twoband[..., 0, 0, 0, niv]
 
     fig, axes = plt.subplots(2, 3, figsize=(10, 10))  # 2x3 grid
 
     # First column: with -np.min()
     im1 = axes[0, 0].matshow(siw_oneband.real, cmap="viridis")
-    axes[0, 0].set_title("Real, oneband")
+    axes[0, 0].set_title("Real, twoband with all gamma entries")
 
     im2 = axes[1, 0].matshow(siw_oneband.imag, cmap="viridis")
-    axes[1, 0].set_title("Imag, oneband")
+    axes[1, 0].set_title("Imag, twoband with all gamma entries")
 
     # Second row: with +np.min()
     im3 = axes[0, 1].matshow(siw_twoband.real, cmap="viridis")
-    axes[0, 1].set_title("Real, twoband")
+    axes[0, 1].set_title("Real, twoband with only some gamma entries")
 
     im4 = axes[1, 1].matshow(siw_twoband.imag, cmap="viridis")
-    axes[1, 1].set_title("Imag, twoband")
+    axes[1, 1].set_title("Imag, twoband with only some gamma entries")
 
     im5 = axes[0, 2].matshow(np.abs(siw_oneband - siw_twoband).real, cmap="viridis")
     axes[0, 2].set_title("Real, Difference")
@@ -207,7 +207,53 @@ if __name__ == "__main__":
     # print(len(indices))
 
     # show_self_energy_convergence()
-    show_self_energies()
+    # show_self_energies()
+
+    """
+    filename_oneband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc30_vc20_vs0_all_gamma/sigma_dga.npy"
+    filename_twoband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc30_vc20_vs0_some_gamma_{}/sigma_dga.npy"
+
+    for i in range(1, 4):
+        filename_twoband = filename_twoband.format(i)
+
+        show_self_energy_2d()
+
+        siw_1 = np.load(filename_oneband)[..., 0, 0, 1000 : 1000 + 40]
+        siw_2 = np.load(filename_twoband)[..., 0, 0, 1000 : 1000 + 40]
+
+        siw_1 = np.max(siw_1, axis=(0, 1, 2))
+        siw_2 = np.max(siw_2, axis=(0, 1, 2))
+
+        plt.figure()
+
+        plt.figure()
+        plt.plot(siw_1.real, label="real, all gamma")
+        plt.plot(siw_1.imag, label="imag, all gamma")
+        plt.plot(siw_2.real, label="real, some gamma")
+        plt.plot(siw_2.imag, label="imag, some gamma")
+        plt.tight_layout()
+        plt.legend()
+        plt.show()
+    """
+
+    for kx in [16, 20, 24, 28, 32, 36, 40, 48, 56, 64]:
+        filename_oneband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk{}_Nq{}_wc60_vc70_vs0/sigma_dga.npy"
+        filename_twoband = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk{}_Nq{}_wc60_vc70_vs0/sigma_dga.npy"
+
+        siw_1 = np.load(filename_oneband.format(kx * kx, kx * kx))[..., 0, 0, 1000 : 1000 + 40]
+        siw_2 = np.load(filename_twoband.format(kx * kx, kx * kx))[..., 0, 0, 1000 : 1000 + 40]
+
+        siw_1 = np.mean(siw_1, axis=(0, 1, 2))
+        siw_2 = np.mean(siw_2, axis=(0, 1, 2))
+
+        plt.figure()
+        plt.plot(siw_1.real, label="real, all gamma")
+        plt.plot(siw_1.imag, label="imag, all gamma")
+        plt.plot(siw_2.real, label="real, some gamma")
+        plt.plot(siw_2.imag, label="imag, some gamma")
+        plt.tight_layout()
+        plt.legend()
+        plt.show()
 
     # show_mean_self_energy(False, "")
     # show_self_energy_2d()

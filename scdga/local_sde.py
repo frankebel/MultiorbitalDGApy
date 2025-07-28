@@ -31,8 +31,15 @@ def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
     """
     if niv_slice == -1:
         niv_slice = g_loc.niv
+
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
-    return g_loc_slice_mat[:, :, None, None, :, None] * g_loc_slice_mat[None, None, :, :, None, :]
+
+    g_left_mat = g_loc_slice_mat[:, :, None, None, :, None] * np.eye(g_loc.n_bands)[:, :, None, None, None, None]
+    g_right_mat = (
+        np.swapaxes(g_loc_slice_mat, 0, 1)[None, None, :, :, None, :]
+        * np.eye(g_loc.n_bands)[None, None, :, :, None, None]
+    )
+    return g_left_mat * g_right_mat
 
 
 def create_gamma_r(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
@@ -134,13 +141,6 @@ def create_vertex_functions(
     logger.log_info(f"Local generalized susceptibility chi^wvv' ({gchi_r.channel.value}) done.")
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
-
-    """
-    for i, j, k, l in np.ndindex(gamma_r.mat.shape[:4]):
-        if (i == 0 and j == 0 and k == 0 and l == 0) or (i == 1 and j == 1 and k == 1 and l == 1):
-            continue
-        gamma_r[i, j, k, l] = 0.0
-    """
 
     gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")

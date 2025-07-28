@@ -16,8 +16,14 @@ class BubbleGenerator:
         wn = MFHelper.wn(niw)
 
         niv_range = np.arange(-niv, niv)
-        g_left_mat = g_loc.mat[:, None, None, :, None, g_loc.niv - niv : g_loc.niv + niv]
-        g_right_mat = g_loc.mat[None, :, :, None, g_loc.niv + niv_range[None, :] - wn[:, None]]
+        g_left_mat = (
+            g_loc.mat[:, None, None, :, None, g_loc.niv - niv : g_loc.niv + niv]
+            * np.eye(g_loc.n_bands)[None, :, :, None, None, None]
+        )
+        g_right_mat = (
+            g_loc.mat[None, :, :, None, g_loc.niv + niv_range[None, :] - wn[:, None]]
+            * np.eye(g_loc.n_bands)[:, None, None, :, None, None]
+        )
         return LocalFourPoint(-config.sys.beta * g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1)
 
     @staticmethod
@@ -29,11 +35,13 @@ class BubbleGenerator:
 
         gchi0_q = np.zeros((len(q_list),) + (giwk.n_bands,) * 4 + (len(wn), 2 * niv), dtype=giwk.mat.dtype)
 
-        g_left_mat = giwk.mat[:, :, :, :, None, None, :, giwk.niv - niv : giwk.niv + niv]
+        eye_left = np.eye(giwk.n_bands)[None, None, None, None, :, :, None, None]
+        eye_right = np.eye(giwk.n_bands)[None, None, None, :, None, None, :, None]
 
+        g_left_mat = giwk.mat[:, :, :, :, None, None, :, giwk.niv - niv : giwk.niv + niv] * eye_left
         g_right = giwk.transpose_orbitals().mat
         for idx_q, q in enumerate(q_list):
-            g_right_mat = np.roll(g_right, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :]
+            g_right_mat = np.roll(g_right, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :] * eye_right
 
             for idx_w, wn_i in enumerate(wn):
                 start = giwk.niv - niv - wn_i
@@ -41,7 +49,6 @@ class BubbleGenerator:
                 gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat[..., start:end], axis=(0, 1, 2))
 
         gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
-
         return FourPoint(
             gchi0_q, SpinChannel.NONE, config.lattice.nq, 1, 1, full_niw_range=False, has_compressed_q_dimension=True
         )
@@ -55,8 +62,11 @@ class BubbleGenerator:
         """
         g = giwk.cut_niv(niv_pp).compress_q_dimension()
 
-        g_left_mat = g.mat[:, :, None, None, :, :]
-        g_right_mat = np.conj(g.mat)[:, None, :, :, None, :]
+        eye_left = np.eye(g.n_bands)[None, None, :, :, None, None]
+        eye_right = np.eye(g.n_bands)[None, :, None, None, :, None]
+
+        g_left_mat = g.mat[:, :, None, None, :, :] * eye_left
+        g_right_mat = np.conj(g.mat)[:, None, :, :, None, :] * eye_right
         gchi0_q = g_left_mat * g_right_mat
 
         return FourPoint(gchi0_q, SpinChannel.NONE, config.lattice.nq, 0, 1, has_compressed_q_dimension=True)
