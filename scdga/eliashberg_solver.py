@@ -49,12 +49,12 @@ def create_full_vertex_q_r(
         os.path.join(config.output.output_path, f"gamma_{channel.value}_loc.npy"), channel=channel
     )
     logger.log_info(f"Loaded gchi0_q_inv and gamma_{gamma_r.channel.value}_loc from files.")
-    gchi_aux_q_r = nonlocal_sde.create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
+    f_q_r = nonlocal_sde.create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
     logger.log_info(f"Calculated auxiliary gchi_{channel.value}_q.")
     del gamma_r
 
-    f_q_r = config.sys.beta**2 * (gchi0_q_inv - gchi0_q_inv @ gchi_aux_q_r @ gchi0_q_inv)
-    del gchi0_q_inv, gchi_aux_q_r
+    f_q_r = config.sys.beta**2 * (gchi0_q_inv - gchi0_q_inv @ f_q_r @ gchi0_q_inv)
+    del gchi0_q_inv
     logger.log_info(f"Calculated first part of full {channel.value} vertex.")
 
     vrg_q_r = FourPoint.load(
@@ -70,11 +70,8 @@ def create_full_vertex_q_r(
     logger.log_info(f"Loaded vrg_q_{channel.value} and gchi_aux_q_{channel.value}_sum from files.")
 
     u = u_loc.as_channel(channel) + v_nonloc.as_channel(channel)
-    u_vrg_mul = u @ (vrg_q_r * vrg_q_r)
-    del vrg_q_r
-    f_q_r += u_vrg_mul - u @ gchi_aux_q_r_sum @ u_vrg_mul
-    del u, u_vrg_mul, gchi_aux_q_r_sum
-
+    f_q_r += u @ (vrg_q_r * vrg_q_r) - u @ gchi_aux_q_r_sum @ (u @ (vrg_q_r * vrg_q_r))
+    del u, gchi_aux_q_r_sum, vrg_q_r
     logger.log_info(f"Calculated second part of full {f_q_r.channel.value} vertex.")
 
     delete_files(
