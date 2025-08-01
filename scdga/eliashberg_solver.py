@@ -57,8 +57,6 @@ def create_full_vertex_q_r(
     del gchi0_q_inv, gchi_aux_q_r
     logger.log_info(f"Calculated first part of full {channel.value} vertex.")
 
-    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
-
     vrg_q_r = FourPoint.load(
         os.path.join(config.output.eliashberg_path, f"vrg_q_{channel.value}_rank_{comm.rank}.npy"),
         channel=channel,

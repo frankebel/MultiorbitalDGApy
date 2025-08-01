@@ -340,7 +340,6 @@ def read_last_n_sigmas_from_files(n: int, output_path: str = "./", previous_sc_p
 
 def calculate_self_energy_q(
     comm: MPI.Comm,
-    giwk: GreensFunction,
     gamma_dens: LocalFourPoint,
     gamma_magn: LocalFourPoint,
     u_loc: LocalInteraction,
@@ -386,7 +385,7 @@ def calculate_self_energy_q(
         logger.log_info(f"Starting iteration {current_iter}.")
         logger.log_info("----------------------------------------")
 
-        giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, giwk.ek)
+        giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, config.lattice.hamiltonian.get_ek())
         # giwk_full.mat = giwk_full.mat[..., 0, 0, :][..., None, None, :]
         giwk_full.save(output_dir=config.output.output_path, name="g_dga")
 
@@ -430,18 +429,17 @@ def calculate_self_energy_q(
         kernel += calculate_sigma_kernel_r_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
+        del gamma_dens
         logger.log_info("Calculated kernel for density channel.")
 
         kernel += 3 * calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
-        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
+        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, gamma_magn
         logger.log_info("Calculated kernel for magnetic channel.")
 
         if comm.rank == 0:
             count_nonzero_orbital_entries(kernel, "kernel")
-
-        giwk = giwk.cut_niv(config.box.niw_core + config.box.niv_core)
 
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if config.output.save_quantities:
