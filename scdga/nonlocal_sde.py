@@ -168,12 +168,6 @@ def calculate_sigma_kernel_r_q(
     if mpi_dist_irrq.comm.rank == 0:
         count_nonzero_orbital_entries(gchi_aux_q_r, f"gchi_aux_q_{gchi_aux_q_r.channel.value}")
 
-    if config.eliashberg.perform_eliashberg:
-        gchi_aux_q_r.save(
-            name=f"gchi_aux_q_{gchi_aux_q_r.channel.value}_rank_{mpi_dist_irrq.comm.rank}",
-            output_dir=config.output.eliashberg_path,
-        )
-
     vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)

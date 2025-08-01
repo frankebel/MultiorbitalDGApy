@@ -1,3 +1,5 @@
+import itertools
+
 import scdga.config as config
 from scdga.bubble_gen import BubbleGenerator
 from scdga.debug_util import count_nonzero_orbital_entries
@@ -34,11 +36,8 @@ def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
 
     g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
 
-    g_left_mat = g_loc_slice_mat[:, :, None, None, :, None] * np.eye(g_loc.n_bands)[:, :, None, None, None, None]
-    g_right_mat = (
-        np.swapaxes(g_loc_slice_mat, 0, 1)[None, None, :, :, None, :]
-        * np.eye(g_loc.n_bands)[None, None, :, :, None, None]
-    )
+    g_left_mat = g_loc_slice_mat[:, :, None, None, :, None]
+    g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, None, :, :, None, :]
     return g_left_mat * g_right_mat
 
 
@@ -141,6 +140,12 @@ def create_vertex_functions(
     logger.log_info(f"Local generalized susceptibility chi^wvv' ({gchi_r.channel.value}) done.")
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
+
+    """
+    for i, j, k, l in itertools.product(range(gamma_r.n_bands), repeat=4):
+        if not i == j == k == l:
+            gamma_r.mat[i, j, k, l] = 0.0 + 0.0j
+    """
 
     gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")

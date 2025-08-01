@@ -209,6 +209,16 @@ if __name__ == "__main__":
     # show_self_energy_convergence()
     # show_self_energies()
 
+    mu_history_1 = np.load(
+        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk4096_Nq4096_wc60_vc70_vs0/mu_history.npy"
+    )
+    mu_history_2 = np.load(
+        "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk4096_Nq4096_wc60_vc70_vs0/mu_history.npy"
+    )
+
+    print(mu_history_1)
+    print(mu_history_2)
+
     """
     filename_oneband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc30_vc20_vs0_all_gamma/sigma_dga.npy"
     filename_twoband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc30_vc20_vs0_some_gamma_{}/sigma_dga.npy"
@@ -235,10 +245,10 @@ if __name__ == "__main__":
         plt.legend()
         plt.show()
     """
-
+    """
     for kx in [16, 20, 24, 28, 32, 36, 40, 48, 56, 64]:
-        filename_oneband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk{}_Nq{}_wc60_vc70_vs0/sigma_dga.npy"
-        filename_twoband = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk{}_Nq{}_wc60_vc70_vs0/sigma_dga.npy"
+        filename_twoband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk{}_Nq{}_wc60_vc70_vs0/sigma_dga.npy"
+        filename_oneband = "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk{}_Nq{}_wc60_vc70_vs0/sigma_dga.npy"
 
         siw_1 = np.load(filename_oneband.format(kx * kx, kx * kx))[..., 0, 0, 1000 : 1000 + 40]
         siw_2 = np.load(filename_twoband.format(kx * kx, kx * kx))[..., 0, 0, 1000 : 1000 + 40]
@@ -247,13 +257,64 @@ if __name__ == "__main__":
         siw_2 = np.mean(siw_2, axis=(0, 1, 2))
 
         plt.figure()
-        plt.plot(siw_1.real, label="real, all gamma")
-        plt.plot(siw_1.imag, label="imag, all gamma")
-        plt.plot(siw_2.real, label="real, some gamma")
-        plt.plot(siw_2.imag, label="imag, some gamma")
+        plt.plot(siw_1.real, label="real, oneband")
+        plt.plot(siw_1.imag, label="imag, oneband")
+        plt.plot(siw_2.real, label="real, twoband")
+        plt.plot(siw_2.imag, label="imag, twoband")
         plt.tight_layout()
         plt.legend()
         plt.show()
+    """
+
+    """
+    siw_1 = (
+        np.load("/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk2304_Nq2304_wc60_vc40_vs0/sigma_dga.npy")
+    )
+    siw_2 = np.load(
+        "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk2304_Nq2304_wc60_vc40_vs0/sigma_dga.npy"
+    )
+
+    siw_1 = siw_1[..., 0, 0, 1000 : 1000 + 40]
+    siw_2_1 = siw_2[..., 0, 0, 1000 : 1000 + 40]
+    siw_2_2 = siw_2[..., 1, 1, 1000 : 1000 + 40]
+
+    diff_1 = np.sum(np.abs(siw_1.real - siw_2_1.real))
+    diff_2 = np.sum(np.abs(siw_1.imag - siw_2_1.imag))
+    diff_3 = np.sum(np.abs(siw_1.real - siw_2_2.real))
+    diff_4 = np.sum(np.abs(siw_1.imag - siw_2_2.imag))
+
+    print(diff_1, diff_2, diff_3, diff_4)
+
+    diff_1 = np.mean(siw_1.real - siw_2_1.real, axis=(0, 1, 2))
+    diff_2 = np.mean(siw_1.imag - siw_2_1.imag, axis=(0, 1, 2))
+    diff_3 = np.mean(siw_1.real - siw_2_2.real, axis=(0, 1, 2))
+    diff_4 = np.mean(siw_1.imag - siw_2_2.imag, axis=(0, 1, 2))
+
+    plt.figure()
+    plt.plot(diff_1, label="real, oneband - twoband 1")
+    plt.plot(diff_2, label="imag, oneband - twoband 1")
+    plt.plot(diff_3, label="real, oneband - twoband 2")
+    plt.plot(diff_4, label="imag, oneband - twoband 2")
+    plt.xlabel(r"$\nu_n$")
+    plt.ylabel(r"$\Sigma(\nu_n)$")
+    plt.tight_layout()
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    plt.figure()
+    plt.plot(np.mean(siw_1.real, axis=(0, 1, 2)), label="real, oneband")
+    plt.plot(np.mean(siw_1.imag, axis=(0, 1, 2)), label="imag, oneband")
+    plt.plot(np.mean(siw_2_1.real, axis=(0, 1, 2)), label="real, twoband 1")
+    plt.plot(np.mean(siw_2_1.imag, axis=(0, 1, 2)), label="imag, twoband 1")
+    plt.plot(np.mean(siw_2_2.real, axis=(0, 1, 2)), label="real, twoband 2")
+    plt.plot(np.mean(siw_2_2.imag, axis=(0, 1, 2)), label="imag, twoband 2")
+    plt.xlabel(r"$\nu_n$")
+    plt.ylabel(r"$\Sigma(\nu_n)$")
+    plt.tight_layout()
+    plt.legend()
+    plt.grid()
+    plt.show()
 
     # show_mean_self_energy(False, "")
     # show_self_energy_2d()
@@ -269,3 +330,4 @@ if __name__ == "__main__":
     # diff = np.sum(2 * ek_1[..., 0, 0] - ek_2[..., 0, 0] - ek_2[..., 1, 1])
     # test = np.sum(ek_2[..., 1, 0] + ek_2[..., 0, 1])
     # print(diff, test)
+    """

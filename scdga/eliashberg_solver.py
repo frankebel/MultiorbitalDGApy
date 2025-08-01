@@ -5,6 +5,7 @@ import numpy as np
 import scipy as sp
 
 import scdga.config as config
+from scdga import nonlocal_sde
 from scdga.bubble_gen import BubbleGenerator
 from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.four_point import FourPoint
@@ -44,16 +45,19 @@ def create_full_vertex_q_r(
     gchi0_q_inv = FourPoint.load(
         os.path.join(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy"), num_vn_dimensions=1
     )
-    gchi_aux_q_r = FourPoint.load(
-        os.path.join(config.output.eliashberg_path, f"gchi_aux_q_{channel.value}_rank_{comm.rank}.npy"), channel=channel
+    gamma_r = LocalFourPoint.load(
+        os.path.join(config.output.output_path, f"gamma_{channel.value}_loc.npy"), channel=channel
     )
-    logger.log_info(f"Loaded gchi0_q_inv and gchi_aux_q_{gchi_aux_q_r.channel.value} from files.")
+    logger.log_info(f"Loaded gchi0_q_inv and gamma_{gamma_r.channel.value}_loc from files.")
+    gchi_aux_q_r = nonlocal_sde.create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
+    logger.log_info(f"Calculated auxiliary gchi_{channel.value}_q.")
+    del gamma_r
 
     f_q_r = config.sys.beta**2 * (gchi0_q_inv - gchi0_q_inv @ gchi_aux_q_r @ gchi0_q_inv)
     del gchi0_q_inv, gchi_aux_q_r
-    logger.log_info(f"Calculated first part of full {f_q_r.channel.value} vertex.")
+    logger.log_info(f"Calculated first part of full {channel.value} vertex.")
 
-    delete_files(config.output.eliashberg_path, f"gchi_aux_q_{channel.value}_rank_{comm.rank}.npy")
+    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
 
     vrg_q_r = FourPoint.load(
         os.path.join(config.output.eliashberg_path, f"vrg_q_{channel.value}_rank_{comm.rank}.npy"),
@@ -65,9 +69,7 @@ def create_full_vertex_q_r(
         channel=channel,
         num_vn_dimensions=0,
     )
-    logger.log_info(
-        f"Loaded vrg_q_{vrg_q_r.channel.value} and gchi_aux_q_{gchi_aux_q_r_sum.channel.value}_sum from files."
-    )
+    logger.log_info(f"Loaded vrg_q_{channel.value} and gchi_aux_q_{channel.value}_sum from files.")
 
     u = u_loc.as_channel(channel) + v_nonloc.as_channel(channel)
     u_vrg_mul = u @ (vrg_q_r * vrg_q_r)
