@@ -13,6 +13,7 @@ from scdga.self_energy import SelfEnergy
 
 def _count_nonzero_orbital_entries(obj, obj_name: str, num_orbital_dimensions: int) -> int:
     count = 0
+    return count
     indices = itertools.product(range(config.sys.n_bands), repeat=num_orbital_dimensions)
     for idx in indices:
         val = (

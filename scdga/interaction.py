@@ -35,6 +35,20 @@ class LocalInteraction(IHaveMat, IHaveChannel):
 
         return LocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
 
+    def rotate_orbitals(self, theta: float = np.pi):
+        r"""
+        Rotates the orbitals of the local interaction around the angle :math:`\theta`. :math:`\theta` must be given in
+        radians and the number of orbitals needs to be 2.
+        """
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
+
+        copy = deepcopy(self)
+        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
+        copy.mat = np.einsum("pi,qj,rk,sl,pqrs->ijkl", np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        return copy
+
     def as_channel(self, channel: SpinChannel) -> "LocalInteraction":
         """
         Returns the spin combination for a given channel.
@@ -159,6 +173,20 @@ class Interaction(LocalInteraction, IAmNonLocal):
         return Interaction(
             np.einsum(permutation, self.mat, optimize=True), self.channel, self.nq, self.has_compressed_q_dimension
         )
+
+    def rotate_orbitals(self, theta: float = np.pi):
+        r"""
+        Rotates the orbitals of the interaction around the angle :math:`\theta`. :math:`\theta` must be given in
+        radians and the number of orbitals needs to be 2.
+        """
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
+
+        copy = deepcopy(self)
+        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
+        copy.mat = np.einsum("pi,qj,rk,sl,...pqrs->...ijkl", np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        return copy
 
     def as_channel(self, channel: SpinChannel) -> "Interaction":
         """

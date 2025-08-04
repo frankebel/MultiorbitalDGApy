@@ -1,4 +1,6 @@
 import gc
+import time
+import weakref
 from abc import ABC
 from copy import deepcopy
 from enum import Enum
@@ -134,6 +136,13 @@ class IHaveMat(ABC):
         """
         del self._mat
         gc.collect()
+
+        def on_finalize():
+            pass
+
+        finalizer = weakref.finalize(self, on_finalize)
+        while not finalizer.alive:
+            time.sleep(0.1)
 
     def update_original_shape(self):
         """

@@ -50,7 +50,7 @@ def create_full_vertex_q_r(
     )
     logger.log_info(f"Loaded gchi0_q_inv and gamma_{gamma_r.channel.value}_loc from files.")
     f_q_r = nonlocal_sde.create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
-    logger.log_info(f"Calculated auxiliary gchi_{channel.value}_q.")
+    logger.log_info(f"Non-Local auxiliary susceptibility ({channel.value}) calculated.")
     del gamma_r
 
     f_q_r = config.sys.beta**2 * (gchi0_q_inv - gchi0_q_inv @ f_q_r @ gchi0_q_inv)
@@ -363,7 +363,7 @@ def solve(
             f_pp.mat = mpi_dist_irrk.scatter(f_pp.mat)
         config.logger.log_info("Saved full ladder-vertices (dens & magn) in the irreducible BZ to file.")
 
-    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
+    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy", f"gchi0_q_rank_{comm.rank}.npy")
     mpi_dist_irrk.delete_file()
 
     gamma_sing_pp = 0.5 * f_dens_pp - 1.5 * f_magn_pp
