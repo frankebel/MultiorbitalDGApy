@@ -90,13 +90,12 @@ def create_auxiliary_chi_r_q_sum(
     return bse_sum
 
 
-def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
+def create_vrg_r_q(gchi_aux_q_r_sum: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
     r"""
     Returns the three-leg vertex
     .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
-    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
     return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum)
 
 
@@ -161,14 +160,20 @@ def calculate_sigma_kernel_r_q(
     """
     logger = config.logger
 
-    gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
-    logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
-    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, mpi_dist_irrq.comm.size)
+    gchi_aux_q_r_sum = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc).sum_over_vn(
+        config.sys.beta, axis=(-1,)
+    )
+    logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value}) calculated.")
+    logger.log_memory_usage(
+        f"Gchi_aux ({gchi_aux_q_r_sum.channel.value})",
+        gchi_aux_q_r_sum,
+        mpi_dist_irrq.comm.size * 2 * config.box.niv_core,
+    )
 
     if mpi_dist_irrq.comm.rank == 0:
-        count_nonzero_orbital_entries(gchi_aux_q_r, f"gchi_aux_q_{gchi_aux_q_r.channel.value}")
+        count_nonzero_orbital_entries(gchi_aux_q_r_sum, f"gchi_aux_q_{gchi_aux_q_r_sum.channel.value}")
 
-    vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_inv)
+    vrg_q_r = create_vrg_r_q(gchi_aux_q_r_sum, gchi0_q_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
 
@@ -181,8 +186,8 @@ def calculate_sigma_kernel_r_q(
             output_dir=config.output.eliashberg_path,
         )
 
-    chi_phys_q_r = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
-    del gchi_aux_q_r
+    chi_phys_q_r = gchi_aux_q_r_sum.sum_over_all_vn(config.sys.beta)
+    del gchi_aux_q_r_sum
 
     chi_phys_q_r = create_generalized_chi_q_with_shell_correction(
         chi_phys_q_r, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
@@ -385,6 +390,12 @@ def calculate_self_energy_q(
         logger.log_info(f"Starting iteration {current_iter}.")
         logger.log_info("----------------------------------------")
 
+        """
+        giwk_full = GreensFunction.get_g_full(
+            sigma_old.rotate_orbitals(theta=-np.pi / 2), config.sys.mu, config.lattice.hamiltonian.get_ek()
+        ).rotate_orbitals(theta=np.pi / 2)
+        """
+
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, config.lattice.hamiltonian.get_ek())
         # giwk_full.mat = giwk_full.mat[..., 0, 0, :][..., None, None, :]
         giwk_full.save(output_dir=config.output.output_path, name="g_dga")
@@ -402,10 +413,6 @@ def calculate_self_energy_q(
 
         f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn_loc.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
-
-        if config.output.save_quantities:
-            kernel.save(name=f"kernel_dc_rank_{comm.rank}", output_dir=config.output.output_path)
-
         del f_1dens_3magn
         logger.log_info("Calculated double-counting kernel.")
 
@@ -442,9 +449,6 @@ def calculate_self_energy_q(
             count_nonzero_orbital_entries(kernel, "kernel")
 
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
-        if config.output.save_quantities:
-            kernel.save(name="kernel", output_dir=config.output.output_path)
-
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
@@ -464,7 +468,7 @@ def calculate_self_energy_q(
         # This is done to minimize noise. We remove some fluctuations from dmft that are included in the local self-energy
         # calculated in this code and add the smooth dmft self-energy
         sigma_new += delta_sigma
-        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)
+        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)  # .rotate_orbitals(theta=-np.pi / 2)
 
         if comm.rank == 0:
             count_nonzero_orbital_entries(sigma_new, "sigma_new")
