@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import scdga.config as config
 from scdga.gap_function import GapFunction
@@ -207,15 +208,16 @@ def plot_nu_nup(
 
 def plot_two_point_kx_ky(
     obj: LocalNPoint | IAmNonLocal,
-    kx: float,
-    ky: float,
+    kx: np.ndarray,
+    ky: np.ndarray,
     pi_shift: bool = True,
+    title: str = "",
     name: str = "",
     orbs: np.ndarray | list | tuple = (0, 0),
     output_dir="./",
     cmap="RdBu",
     scatter=None,
-    do_save: bool = True,
+    save: bool = True,
     show: bool = False,
 ):
     if len(orbs) != 2:
@@ -225,25 +227,49 @@ def plot_two_point_kx_ky(
 
     niv = mat.shape[-1] // 2
     mat = mat[:, :, 0, orbs[0], orbs[1], niv]
+    mat = np.concatenate([mat, mat[0:1, :, ...]], axis=0)
+    mat = np.concatenate([mat, mat[:, 0:1, ...]], axis=1)
+
     fig, axes = plt.subplots(ncols=2, figsize=(7, 3), dpi=500)
     axes = axes.flatten()
     im1 = axes[0].pcolormesh(kx, ky, mat.T.real, cmap=cmap)
     im2 = axes[1].pcolormesh(kx, ky, mat.T.imag, cmap=cmap)
-    axes[0].set_title(r"$\Re$")
-    axes[1].set_title(r"$\Im$")
+    axes[0].set_title(r"$\Re$" + title)
+    axes[1].set_title(r"$\Im$" + title)
+
+    tick_vals = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]
+    tick_labels = [r"$-\pi$", r"$-\frac{\pi}{2}$", r"$0$", r"$\frac{\pi}{2}$", r"$\pi$"]
+
     for ax in axes:
         ax.set_xlabel(r"$k_x$")
-        ax.set_ylabel(r"$k_y$")
         ax.set_aspect("equal")
         add_afzb(ax=ax, kx=kx, ky=ky, lw=1.0, marker="")
-    fig.suptitle(name)
-    fig.colorbar(im1, ax=(axes[0]), aspect=15, fraction=0.08, location="right", pad=0.05)
-    fig.colorbar(im2, ax=(axes[1]), aspect=15, fraction=0.08, location="right", pad=0.05)
+        ax.set_xticks(tick_vals)
+        ax.set_xticklabels(tick_labels)
+        ax.set_yticks(tick_vals)
+    axes[0].set_ylabel(r"$k_y$")
+    axes[1].set_ylabel("")
+    axes[0].set_yticklabels(tick_labels)
+    axes[1].set_yticklabels([""] * len(tick_labels))
+
+    divider1 = make_axes_locatable(axes[0])
+    cax1 = divider1.append_axes("right", size="5%", pad=0.1)  # 5% width, 10% padding
+    divider2 = make_axes_locatable(axes[1])
+    cax2 = divider2.append_axes("right", size="5%", pad=0.1)  # 5% width, 10% padding
+
+    # fig.suptitle(title)
+    vmin1, vmax1 = im1.get_clim()
+    vmin2, vmax2 = im2.get_clim()
+
+    fig.colorbar(im1, cax=cax1, ticks=np.linspace(vmin1, vmax1, 5))
+    fig.colorbar(im2, cax=cax2, ticks=np.linspace(vmin2, vmax2, 5))
+
     if scatter is not None:
         for ax in axes:
             colours = plt.cm.get_cmap(cmap)(np.linspace(0, 1, np.shape(scatter)[0]))
             ax.scatter(scatter[:, 0], scatter[:, 1], marker="o", c=colours)
-    if do_save:
+    plt.tight_layout()
+    if save:
         plt.savefig(os.path.join(output_dir, f"{name}.png"))
     if show:
         plt.show()
@@ -256,6 +282,7 @@ def plot_two_point_kx_ky_with_fs_points(
     kx: float,
     ky: float,
     pi_shift: bool = True,
+    title: str = "",
     name: str = "",
     orbs: np.ndarray | list | tuple = (0, 0),
     output_dir="./",
@@ -268,7 +295,7 @@ def plot_two_point_kx_ky_with_fs_points(
     n_fs = np.shape(fs_ind)[0]
     fs_ind = fs_ind[: n_fs // 2]
     fs_points = np.stack((config.lattice.k_grid.kx[fs_ind[:, 0]], config.lattice.k_grid.ky[fs_ind[:, 1]]), axis=1)
-    plot_two_point_kx_ky(obj, kx, ky, pi_shift, name, orbs, output_dir, cmap, fs_points, do_save, show)
+    plot_two_point_kx_ky(obj, kx, ky, pi_shift, title, name, orbs, output_dir, cmap, fs_points, do_save, show)
 
 
 def plot_gap_function(
@@ -296,16 +323,36 @@ def plot_gap_function(
     axes = axes.flatten()
     im1 = axes[0].pcolormesh(kx, ky, gap[..., 0].T.real, cmap=cmap)
     im2 = axes[1].pcolormesh(kx, ky, gap[..., 1].T.real, cmap=cmap)
-    axes[0].set_title(r"$\nu_{n=0}=\frac{\pi}{\beta}$")
-    axes[1].set_title(r"$\nu_{n=-1}=-\frac{\pi}{\beta}$")
+    axes[0].set_title(f"$\\Delta^{{k_x k_y k_z=0;\\nu=\\frac{{\\pi}}{{\\beta}}}}_{{{obj.channel.value[0]}}}$")
+    axes[1].set_title(f"$\\Delta^{{k_x k_y k_z=0;\\nu=-\\frac{{\\pi}}{{\\beta}}}}_{{{obj.channel.value[0]}}}$")
+
+    tick_vals = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]
+    tick_labels = [r"$-\pi$", r"$-\frac{\pi}{2}$", r"$0$", r"$\frac{\pi}{2}$", r"$\pi$"]
+
     for ax in axes:
         ax.set_xlabel(r"$k_x$")
-        ax.set_ylabel(r"$k_y$")
         ax.set_aspect("equal")
         add_afzb(ax=ax, kx=kx, ky=ky, lw=1.0, marker="")
-    fig.suptitle(f"{obj.channel.value}let")
-    fig.colorbar(im1, ax=(axes[0]), aspect=15, fraction=0.08, location="right", pad=0.05)
-    fig.colorbar(im2, ax=(axes[1]), aspect=15, fraction=0.08, location="right", pad=0.05)
+        ax.set_xticks(tick_vals)
+        ax.set_xticklabels(tick_labels)
+        ax.set_yticks(tick_vals)
+    axes[0].set_ylabel(r"$k_y$")
+    axes[1].set_ylabel("")
+    axes[0].set_yticklabels(tick_labels)
+    axes[1].set_yticklabels([""] * len(tick_labels))
+
+    divider1 = make_axes_locatable(axes[0])
+    cax1 = divider1.append_axes("right", size="5%", pad=0.1)  # 5% width, 10% padding
+    divider2 = make_axes_locatable(axes[1])
+    cax2 = divider2.append_axes("right", size="5%", pad=0.1)  # 5% width, 10% padding
+
+    # fig.suptitle(title)
+    vmin1, vmax1 = im1.get_clim()
+    vmin2, vmax2 = im2.get_clim()
+
+    fig.colorbar(im1, cax=cax1, ticks=np.linspace(vmin1, vmax1, 5))
+    fig.colorbar(im2, cax=cax2, ticks=np.linspace(vmin2, vmax2, 5))
+
     if scatter is not None:
         for ax in axes:
             colours = plt.cm.get_cmap(cmap)(np.linspace(0, 1, np.shape(scatter)[0]))

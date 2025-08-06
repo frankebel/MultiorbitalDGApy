@@ -71,7 +71,7 @@ def create_full_vertex_q_r(
 
     u = u_loc.as_channel(channel) + v_nonloc.as_channel(channel)
     f_q_r += u @ (vrg_q_r * vrg_q_r) - u @ gchi_aux_q_r_sum @ (u @ (vrg_q_r * vrg_q_r))
-    del u, gchi_aux_q_r_sum, vrg_q_r
+    del gchi_aux_q_r_sum, vrg_q_r
     logger.log_info(f"Calculated second part of full {f_q_r.channel.value} vertex.")
 
     delete_files(
@@ -144,20 +144,18 @@ def create_full_vertex_q_r_pp_w0(
     """
     logger = config.logger
 
-    n_groups = 2
-    group_size = max(mpi_dist_irrk.comm.size // n_groups, 1)
+    group_size = max(mpi_dist_irrk.comm.size // 2, 1)
     color = mpi_dist_irrk.comm.rank // group_size
+    sub_comm = mpi_dist_irrk.comm.Split(color, mpi_dist_irrk.comm.rank)
 
-    # we are splitting the comm into three groups to calculate the full vertex only for a small subset of the
-    # irreducible BZ at a time to save memory.
-    logger.log_info(f"Calculating full ladder-vertex ({channel.value}) in PP notation.")
     f_q_r = None
-    for i in range(n_groups + 1):
-        if color == i:
+    for i in range(sub_comm.size):
+        if sub_comm.rank == i:
             f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
             f_q_r = transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
-        mpi_dist_irrk.comm.Barrier()
-    mpi_dist_irrk.comm.Barrier()
+        sub_comm.Barrier()
+    sub_comm.Free()
+
     logger.log_info(f"Full ladder-vertex ({channel.value}) calculated.")
     logger.log_memory_usage(f"Full ladder-vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)
 
@@ -352,6 +350,11 @@ def solve(
     # f_magn_pp = create_full_vertex_q_r2(SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
     f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
 
+    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
+    delete_files(config.output.output_path, f"gchi0_q_rank_{comm.rank}.npy")
+
+    mpi_dist_irrk.comm.Barrier()
+
     if comm.rank == 0:
         count_nonzero_orbital_entries(f_dens_pp, "f_dens_pp")
         count_nonzero_orbital_entries(f_magn_pp, "f_magn_pp")
@@ -364,7 +367,6 @@ def solve(
             f_pp.mat = mpi_dist_irrk.scatter(f_pp.mat)
         config.logger.log_info("Saved full ladder-vertices (dens & magn) in the irreducible BZ to file.")
 
-    delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy", f"gchi0_q_rank_{comm.rank}.npy")
     mpi_dist_irrk.delete_file()
 
     gamma_sing_pp = 0.5 * f_dens_pp - 1.5 * f_magn_pp

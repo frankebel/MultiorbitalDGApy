@@ -2,7 +2,9 @@ import itertools as it
 import logging
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import font_manager
 from mpi4py import MPI
 
 import scdga.config as config
@@ -19,6 +21,8 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
 def execute_dga_routine():
+    configure_matplotlib()
+
     comm = MPI.COMM_WORLD
 
     config_parser = ConfigParser().parse_config(comm)
@@ -244,11 +248,25 @@ def execute_dga_routine():
         del sigma_fit
 
     if config.output.do_plotting and comm.rank == 0:
-        kx, ky = config.lattice.k_grid.kx_shift, config.lattice.k_grid.ky_shift
-        plotting.plot_two_point_kx_ky(sigma_dga, kx, ky, name="Sigma_dga_kz0", output_dir=config.output.plotting_path)
+        kx, ky = config.lattice.k_grid.kx_shift_closed, config.lattice.k_grid.ky_shift_closed
+        plotting.plot_two_point_kx_ky(
+            sigma_dga,
+            kx,
+            ky,
+            title=r"$\Sigma_{D\Gamma A}^{k_xk_y k_z=0;\nu=0}$",
+            name="Sigma_dga_kz0",
+            output_dir=config.output.plotting_path,
+        )
         logger.log_info("Plotted non-local self-energy as a function of kx and ky.")
 
-        plotting.plot_two_point_kx_ky(giwk_dga, kx, ky, name="Giwk_dga_kz0", output_dir=config.output.plotting_path)
+        plotting.plot_two_point_kx_ky(
+            giwk_dga,
+            kx,
+            ky,
+            title=r"$G_{D\Gamma A}^{k_x k_y k_z=0;\nu=0}$",
+            name="Giwk_dga_kz0",
+            output_dir=config.output.plotting_path,
+        )
         logger.log_info("Plotted non-local Green's function as a function of kx and ky.")
 
     logger.log_info("DGA routine finished.")
@@ -289,6 +307,25 @@ def execute_dga_routine():
 
     logger.log_info("Exiting ...")
     MPI.Finalize()
+
+
+def configure_matplotlib():
+    fonts = [s for s in font_manager.findSystemFonts() if "euler" in s.lower()]
+    if len(fonts) == 0:
+        return
+    font_path = fonts[0]
+    font_manager.fontManager.addfont(font_path)
+    prop = font_manager.FontProperties(fname=font_path)
+    plt.rc("axes", unicode_minus=False)
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = prop.get_name()
+    plt.rcParams["font.size"] = 12
+    plt.rcParams["mathtext.fontset"] = "custom"
+    plt.rcParams["axes.titlesize"] = 12
+    plt.rcParams["text.usetex"] = False
+    plt.rcParams["mathtext.rm"] = prop.get_name()
+    plt.rcParams["mathtext.it"] = prop.get_name()
+    plt.rcParams["mathtext.bf"] = prop.get_name()
 
 
 if __name__ == "__main__":

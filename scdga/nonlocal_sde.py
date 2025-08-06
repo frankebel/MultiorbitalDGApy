@@ -160,9 +160,19 @@ def calculate_sigma_kernel_r_q(
     """
     logger = config.logger
 
-    gchi_aux_q_r_sum = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc).sum_over_vn(
-        config.sys.beta, axis=(-1,)
-    )
+    group_size = max(mpi_dist_irrq.comm.size // 2, 1)
+    color = mpi_dist_irrq.comm.rank // group_size
+    sub_comm = mpi_dist_irrq.comm.Split(color, mpi_dist_irrq.comm.rank)
+
+    gchi_aux_q_r_sum = None
+    for i in range(sub_comm.size):
+        if sub_comm.rank == i:
+            gchi_aux_q_r_sum = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc).sum_over_vn(
+                config.sys.beta, axis=(-1,)
+            )
+        sub_comm.Barrier()
+    sub_comm.Free()
+    mpi_dist_irrq.comm.Barrier()
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value}) calculated.")
     logger.log_memory_usage(
         f"Gchi_aux ({gchi_aux_q_r_sum.channel.value})",
