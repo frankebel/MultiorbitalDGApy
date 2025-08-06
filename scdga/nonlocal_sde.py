@@ -385,16 +385,16 @@ def calculate_self_energy_q(
     delta_sigma = sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
     mu_history = [config.sys.mu]
 
+    theta = 0
+
     for current_iter in range(starting_iter + 1, starting_iter + config.self_consistency.max_iter + 1):
         logger.log_info("----------------------------------------")
         logger.log_info(f"Starting iteration {current_iter}.")
         logger.log_info("----------------------------------------")
 
-        """
-        giwk_full = GreensFunction.get_g_full(
-            sigma_old.rotate_orbitals(theta=-np.pi / 2), config.sys.mu, config.lattice.hamiltonian.get_ek()
-        ).rotate_orbitals(theta=np.pi / 2)
-        """
+        # giwk_full = GreensFunction.get_g_full(
+        #    sigma_old.rotate_orbitals(theta=-theta), config.sys.mu, config.lattice.hamiltonian.get_ek()
+        # ).rotate_orbitals(theta=theta)
 
         giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, config.lattice.hamiltonian.get_ek())
         # giwk_full.mat = giwk_full.mat[..., 0, 0, :][..., None, None, :]
@@ -468,7 +468,7 @@ def calculate_self_energy_q(
         # This is done to minimize noise. We remove some fluctuations from dmft that are included in the local self-energy
         # calculated in this code and add the smooth dmft self-energy
         sigma_new += delta_sigma
-        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)  # .rotate_orbitals(theta=-np.pi / 2)
+        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)  # .rotate_orbitals(theta=-theta)
 
         if comm.rank == 0:
             count_nonzero_orbital_entries(sigma_new, "sigma_new")

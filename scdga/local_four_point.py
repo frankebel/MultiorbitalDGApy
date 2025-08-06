@@ -676,6 +676,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
         copy.mat = np.einsum("pi,qj,rk,sl,pqrs...->ijkl...", np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        copy.mat[np.abs(copy.mat) < 1e-13] = 0
         return copy
 
     @staticmethod

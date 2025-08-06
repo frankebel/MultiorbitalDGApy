@@ -144,22 +144,24 @@ def create_full_vertex_q_r_pp_w0(
     """
     logger = config.logger
 
-    group_size = max(mpi_dist_irrk.comm.size // 3, 1)
+    n_groups = 2
+    group_size = max(mpi_dist_irrk.comm.size // n_groups, 1)
     color = mpi_dist_irrk.comm.rank // group_size
-    sub_comm = mpi_dist_irrk.comm.Split(color, mpi_dist_irrk.comm.rank)
 
     # we are splitting the comm into three groups to calculate the full vertex only for a small subset of the
     # irreducible BZ at a time to save memory.
+    logger.log_info(f"Calculating full ladder-vertex ({channel.value}) in PP notation.")
     f_q_r = None
-    for i in range(sub_comm.size):
-        if sub_comm.rank == i:
+    for i in range(n_groups + 1):
+        if color == i:
             f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
-        sub_comm.Barrier()
-    sub_comm.Free()
+            f_q_r = transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
+        mpi_dist_irrk.comm.Barrier()
+    mpi_dist_irrk.comm.Barrier()
     logger.log_info(f"Full ladder-vertex ({channel.value}) calculated.")
     logger.log_memory_usage(f"Full ladder-vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)
 
-    return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
+    return f_q_r
 
 
 def get_initial_gap_function(shape: tuple, channel: SpinChannel) -> np.ndarray:
@@ -319,8 +321,7 @@ def create_local_reducible_pp_diagrams(
     gamma_r_loc = config.sys.beta**2 * (4 * (gchi_r_loc - sign * gchi0).invert() + 2 * sign * gchi0.invert())
     logger.log_info(f"Constructed local {channel.value}let irreducible diagrams.")
 
-    phi_r_loc = 1.0 / config.sys.beta**2 * (f_r_loc - gamma_r_loc)
-    phi_r_loc = phi_r_loc.change_frequency_notation_ph_to_pp()
+    phi_r_loc = 1.0 / config.sys.beta**2 * (f_r_loc - gamma_r_loc).change_frequency_notation_ph_to_pp()
     phi_r_loc.mat = phi_r_loc.mat[..., phi_r_loc.current_shape[-3] // 2, :, :]  # we need w=0,v,v'
     phi_r_loc.update_original_shape()
     return phi_r_loc.to_half_niw_range()

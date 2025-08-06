@@ -142,9 +142,11 @@ def create_vertex_functions(
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
 
     """
+    gamma_r = gamma_r.rotate_orbitals(theta=-np.pi / 3)
     for i, j, k, l in itertools.product(range(gamma_r.n_bands), repeat=4):
         if not i == j == k == l:
             gamma_r.mat[i, j, k, l] = 0.0 + 0.0j
+    gamma_r = gamma_r.rotate_orbitals(theta=np.pi / 3)
     """
 
     gchi0 = gchi0.take_vn_diagonal()

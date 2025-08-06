@@ -532,6 +532,7 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             else "pi,qj,rk,sl,xyzpqrs...->xyzijkl..."
         )
         copy.mat = np.einsum(einsum_str, np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        copy.mat[np.abs(copy.mat) < 1e-13] = 0
         return copy
 
     @staticmethod
