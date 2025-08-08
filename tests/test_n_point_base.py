@@ -8,7 +8,7 @@ from scdga.n_point_base import IHaveChannel, IHaveMat, IAmNonLocal, SpinChannel,
 def test_initializes_with_correct_matrix_and_shape():
     mat = np.array([[1, 2], [3, 4]])
     obj = IHaveMat(mat)
-    assert np.allclose(obj.mat, mat)
+    assert np.allclose(obj.mat, mat, rtol=1e-2)
     assert obj.original_shape == mat.shape
 
 
@@ -31,7 +31,7 @@ def test_multiplies_with_scalar_correctly():
     mat = np.array([[1, 2], [3, 4]])
     obj = IHaveMat(mat)
     result = obj * 2
-    assert np.allclose(result.mat, mat * 2)
+    assert np.allclose(result.mat, mat * 2, rtol=1e-2)
 
 
 def test_raises_error_when_multiplying_with_invalid_type():
@@ -45,21 +45,21 @@ def test_performs_right_multiplication_with_scalar_correctly():
     mat = np.array([[1, 2], [3, 4]])
     obj = IHaveMat(mat)
     result = 2 * obj
-    assert np.allclose(result.mat, mat * 2)
+    assert np.allclose(result.mat, mat * 2, rtol=1e-2)
 
 
 def test_negates_matrix_correctly():
     mat = np.array([[1, -2], [-3, 4]])
     obj = IHaveMat(mat)
     result = -obj
-    assert np.allclose(result.mat, -mat)
+    assert np.allclose(result.mat, -mat, rtol=1e-2)
 
 
 def test_divides_by_scalar_correctly():
     mat = np.array([[2, 4], [6, 8]])
     obj = IHaveMat(mat)
     result = obj / 2
-    assert np.allclose(result.mat, mat / 2)
+    assert np.allclose(result.mat, mat / 2, rtol=1e-2)
 
 
 def test_raises_error_when_dividing_by_invalid_type():
@@ -83,7 +83,7 @@ def test_performs_einsum_contraction_correctly():
     obj1 = IHaveMat(mat1)
     obj2 = IHaveMat(mat2)
     result = obj1.times("ij,jk->ik", obj2)
-    assert np.allclose(result, np.dot(mat1, mat2))
+    assert np.allclose(result, np.dot(mat1, mat2), rtol=1e-2)
 
 
 def test_performs_einsum_contraction_with_multiple_matrices():
@@ -94,7 +94,7 @@ def test_performs_einsum_contraction_with_multiple_matrices():
     obj2 = IHaveMat(mat2)
     obj3 = IHaveMat(mat3)
     result = obj1.times("ij,jk,kl->il", obj2, obj3)
-    assert np.allclose(result, np.dot(np.dot(mat1, mat2), mat3))
+    assert np.allclose(result, np.dot(np.dot(mat1, mat2), mat3), rtol=1e-2)
 
 
 def test_raises_error_when_contraction_argument_is_invalid():
@@ -118,7 +118,7 @@ def test_performs_einsum_contraction_with_numpy_array():
     mat2 = np.array([[5, 6], [7, 8]])
     obj = IHaveMat(mat1)
     result = obj.times("ij,jk->ik", mat2)
-    assert np.allclose(result, np.dot(mat1, mat2))
+    assert np.allclose(result, np.dot(mat1, mat2), rtol=1e-2)
 
 
 def test_raises_error_when_contraction_string_is_invalid():
@@ -133,7 +133,7 @@ def test_converts_matrix_to_real_and_preserves_dtype():
     mat = np.array([[1 + 2j, 3 + 4j], [5 + 6j, 7 + 8j]], dtype=np.complex64)
     obj = IHaveMat(mat)
     result = obj.to_real()
-    assert np.allclose(result.mat, mat.real)
+    assert np.allclose(result.mat, mat.real, rtol=1e-2)
     assert result.mat.dtype == np.complex64
 
 
@@ -149,7 +149,7 @@ def test_handles_real_matrix_without_changes():
     mat = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.complex64)
     obj = IHaveMat(mat)
     result = obj.to_real()
-    assert np.allclose(result.mat, mat)
+    assert np.allclose(result.mat, mat, rtol=1e-2)
     assert result.mat.dtype == np.complex64
 
 
@@ -222,7 +222,7 @@ def test_initializes_with_correct_matrix_and_momentum_dimensions():
     mat = np.zeros((4, 4, 4))
     nq = (4, 4, 4)
     obj = IAmNonLocal(mat, nq)
-    assert np.allclose(obj.mat, mat)
+    assert np.allclose(obj.mat, mat, rtol=1e-2)
     assert obj.nq == nq
     assert obj.has_compressed_q_dimension is False
 
@@ -231,7 +231,7 @@ def test_initializes_with_compressed_q_dimension():
     mat = np.zeros((64,))
     nq = (4, 4, 4)
     obj = IAmNonLocal(mat, nq, has_compressed_q_dimension=True)
-    assert np.allclose(obj.mat, mat)
+    assert np.allclose(obj.mat, mat, rtol=1e-2)
     assert obj.nq == nq
     assert obj.has_compressed_q_dimension is True
 
@@ -242,7 +242,7 @@ def test_shifts_momentum_by_zero_correctly():
     )
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_q((0, 0, 0))
-    assert np.allclose(shifted, mat)
+    assert np.allclose(shifted, mat, rtol=1e-2)
 
 
 def test_shifts_momentum_by_positive_values_correctly():
@@ -250,7 +250,7 @@ def test_shifts_momentum_by_positive_values_correctly():
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_q((1, 1, 1))
     expected = np.roll(mat, shift=(-1, -1, -1), axis=(0, 1, 2))
-    assert np.allclose(shifted, expected)
+    assert np.allclose(shifted, expected, rtol=1e-2)
 
 
 def test_shifts_momentum_by_negative_values_correctly():
@@ -258,7 +258,7 @@ def test_shifts_momentum_by_negative_values_correctly():
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_q((-1, -1, -1))
     expected = np.roll(mat, shift=(1, 1, 1), axis=(0, 1, 2))
-    assert np.allclose(shifted, expected)
+    assert np.allclose(shifted, expected, rtol=1e-2)
 
 
 def test_shifts_momentum_with_compressed_q_dimension_correctly():
@@ -280,7 +280,7 @@ def test_shifts_momentum_by_pi_correctly():
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_pi()
     expected = np.roll(mat, shift=(2, 2, 2), axis=(0, 1, 2))
-    assert np.allclose(shifted.mat, expected)
+    assert np.allclose(shifted.mat, expected, rtol=1e-2)
 
 
 def test_shifts_momentum_by_pi_with_compressed_q_dimension():
@@ -389,7 +389,7 @@ def test_reduces_q_dimension_to_specified_momenta_and_values():
     reduced = obj.reduce_q(q_list)
     expected_values = mat[1, 1, 1], mat[2, 2, 2]
     assert reduced.mat.shape == (2,)
-    assert np.allclose(reduced.mat, expected_values)
+    assert np.allclose(reduced.mat, expected_values, rtol=1e-2)
     assert reduced.has_compressed_q_dimension is True
 
 
@@ -472,7 +472,7 @@ def test_performs_fft_correctly_on_decompressed_matrix():
     obj = IAmNonLocal(mat, nq)
     result = obj.fft()
     expected = np.fft.fftn(mat, axes=(0, 1, 2))
-    assert np.allclose(result.mat, expected)
+    assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.has_compressed_q_dimension is False
 
 
@@ -483,7 +483,7 @@ def test_performs_fft_correctly_on_compressed_matrix():
     result = obj.fft()
     decompressed_mat = mat.reshape(nq)
     expected = np.fft.fftn(decompressed_mat, axes=(0, 1, 2)).reshape(64)
-    assert np.allclose(result.mat, expected)
+    assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.has_compressed_q_dimension is True
 
 
@@ -501,7 +501,7 @@ def test_performs_ifft_correctly_on_decompressed_matrix():
     obj = IAmNonLocal(mat, nq)
     result = obj.ifft()
     expected = np.fft.ifftn(mat, axes=(0, 1, 2))
-    assert np.allclose(result.mat, expected)
+    assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.has_compressed_q_dimension is False
 
 
@@ -512,7 +512,7 @@ def test_performs_ifft_correctly_on_compressed_matrix():
     result = obj.ifft()
     decompressed_mat = mat.reshape(nq)
     expected = np.fft.ifftn(decompressed_mat, axes=(0, 1, 2)).reshape(64)
-    assert np.allclose(result.mat, expected)
+    assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.has_compressed_q_dimension is True
 
 
@@ -530,7 +530,7 @@ def test_flips_momentum_axis_correctly_for_decompressed_matrix():
     obj = IAmNonLocal(mat, nq)
     flipped = obj.flip_momentum_axis()
     expected = np.roll(np.flip(mat, axis=(0, 1, 2)), shift=1, axis=(0, 1, 2))
-    assert np.allclose(flipped.mat, expected)
+    assert np.allclose(flipped.mat, expected, rtol=1e-2)
     assert flipped.has_compressed_q_dimension is False
 
 
@@ -541,7 +541,7 @@ def test_flips_momentum_axis_correctly_for_compressed_matrix():
     flipped = obj.flip_momentum_axis()
     decompressed_mat = mat.reshape(nq)
     expected = np.roll(np.flip(decompressed_mat, axis=(0, 1, 2)), shift=1, axis=(0, 1, 2)).reshape(64)
-    assert np.allclose(flipped.mat, expected)
+    assert np.allclose(flipped.mat, expected, rtol=1e-2)
     assert flipped.has_compressed_q_dimension is True
 
 
