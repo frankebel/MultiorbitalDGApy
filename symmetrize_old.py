@@ -75,7 +75,7 @@ def ask_for_input():
         Nbands.append(int(input("    Number of correlated bands: ")))
         for i in range(Nbands[ineq]):
             conf["sym"][ineq].append(
-                list(map(int, input("    Band {}: symmetric bands (seperated by spaces): ".format(i + 1)).split()))
+                list(map(int, input("    Band {}: symmetric bands (separated by spaces): ".format(i + 1)).split()))
             )
     conf["Nbands"] = Nbands
     filename_sym = input("Outputfile for symmetrized data: ")
@@ -253,7 +253,7 @@ def read_and_add(
     elif channel == "magn":
         prefactor = 4.0
     else:
-        print("unkown channel")
+        print("unknown channel")
         sys.exit()
 
     if target == "1freq_b":
@@ -306,7 +306,7 @@ def main(conf):
     check_sym(**conf)
     f1 = h5py.File(conf["infile"], "r")
 
-    if conf["target"] == "1freq_f":  # we do this completely seperate since we only have to do sume numpy magic
+    if conf["target"] == "1freq_f":  # we do this completely separate since we only have to do sume numpy magic
         copyfile(conf["infile"], conf["outfile"])
         f2 = h5py.File(conf["outfile"], "r+")
         for ineq in range(conf["nineq"]):

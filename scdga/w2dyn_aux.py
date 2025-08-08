@@ -121,7 +121,7 @@ class W2dynG4iwFile:
         # the next lines determine the size of g2, i.e. niw and niv
         channel_group_string = f"/ineq-{ineq:03}/{name}"
         niw_full = len(self._file[channel_group_string].keys())
-        # 00000 is the first element. If it does not exist, there are no bosonic frequenices in the G2 and that would be weird
+        # 00000 is the first element. If it does not exist, there are no bosonic frequencies in the G2 and that would be weird
         first_index = int(next(iter(self._file[f"{channel_group_string}/00000"])))
         niv_full = len(
             self._file[f"{channel_group_string}/00000/{first_index:05}/value"][()]
