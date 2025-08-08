@@ -131,6 +131,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         Symmetrize with respect to (v,v'). This is justified for SU(2) symmetric systems. (Thesis Rohringer p. 72)
         """
+        if self.num_vn_dimensions != 2:
+            raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
+
         self.mat = 0.5 * (self.mat + np.swapaxes(self.mat, -1, -2))
         return self
 
@@ -281,7 +284,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 2: "abijwvp,jief->abefwvp" if left_hand_side else "abij,jiefwvp->abefwvp",
             }.get(self.num_vn_dimensions)
             return LocalFourPoint(
-                np.einsum(einsum_str, self.mat, other.mat, optimize=True),
+                np.einsum(einsum_str, self.mat, other.mat, optimize=True) if left_hand_side else np.einsum(einsum_str, other.mat, self.mat, optimize=True),
                 self.channel,
                 self.num_wn_dimensions,
                 self.num_vn_dimensions,
@@ -322,7 +325,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 (1, 2): "abcdwv,dcefwvp->abefwvp" if left_hand_side else "abcdwvp,dcefwp->abefwvp",
                 (2, 1): "abcdwvp,dcefwp->abefwvp" if left_hand_side else "abcdwv,dcefwvp->abefwvp",
             }.get((self.num_vn_dimensions, other.num_vn_dimensions))
-            new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+            new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True) if left_hand_side else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
             max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
             return LocalFourPoint(new_mat, channel, self.num_wn_dimensions, max_vn_dim, False, self.full_niv_range)
 

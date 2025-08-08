@@ -385,18 +385,29 @@ def test_does_not_extend_frequency_dimensions_when_both_have_one_fermionic_dimen
     assert result_other.mat.shape == (4, 4, 4, 4)
 
 
-def test_raises_error_when_calling_to_half_niw_range():
+def test_returns_self_when_already_in_full_bosonic_range():
     mat = np.zeros((4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1)
-    with pytest.raises(NotImplementedError):
-        obj.to_half_niw_range()
+    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
+    result = obj.to_full_niw_range()
+    assert result is obj
+    assert result.mat.shape == mat.shape
 
 
-def test_raises_error_when_calling_to_full_niw_range():
-    mat = np.zeros((4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1)
-    with pytest.raises(NotImplementedError):
-        obj.to_full_niw_range()
+def test_converts_to_half_bosonic_range_correctly():
+    mat = np.random.rand(4, 4, 21, 20) + 1j * np.random.rand(4, 4, 21, 20)
+    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
+    result = obj.to_half_niw_range()
+    assert result is obj
+    assert result.mat.shape == (4, 4, 11, 20)
+    assert np.allclose(result.mat, np.take(mat, np.arange(10, 21), axis=-2), rtol=1e-2)
+
+
+def test_returns_self_when_already_in_half_bosonic_range():
+    mat = np.random.rand(4, 4, 11, 10)
+    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=False)
+    result = obj.to_half_niw_range()
+    assert result is obj
+    assert result.mat.shape == mat.shape
 
 
 def test_saves_matrix_calls_to_full_niw_range_when_full_range():

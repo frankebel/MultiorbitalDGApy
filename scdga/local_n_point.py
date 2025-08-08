@@ -174,11 +174,27 @@ class LocalNPoint(IHaveMat):
         self.update_original_shape()
         return self
 
-    def to_half_niw_range(self):
-        raise NotImplementedError("This method should be implemented in subclasses.")
-
     def to_full_niw_range(self):
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        """
+        Converts the object to the full bosonic frequency range in-place.
+        """
+        if self.num_wn_dimensions == 0 or self.full_niw_range:
+            return self
+        pass
+
+    def to_half_niw_range(self):
+        """
+        Converts the object to the half bosonic frequency range in-place.
+        """
+        if self.num_wn_dimensions == 0 or not self.full_niw_range:
+            return self
+
+        axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
+        ind = np.arange(self.current_shape[axis] // 2, self.current_shape[axis])
+        self.mat = np.take(self.mat, ind, axis=axis)
+        self.update_original_shape()
+        self._full_niw_range = False
+        return self
 
     def to_full_niv_range(self):
         """
