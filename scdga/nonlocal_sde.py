@@ -424,6 +424,7 @@ def calculate_self_energy_q(
         f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn_loc.npy"))
         kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
         del f_1dens_3magn
+        comm.Barrier()
         logger.log_info("Calculated double-counting kernel.")
 
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
@@ -447,12 +448,14 @@ def calculate_self_energy_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
         del gamma_dens
+        comm.Barrier()
         logger.log_info("Calculated kernel for density channel.")
 
         kernel += 3 * calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, gamma_magn
+        comm.Barrier()
         logger.log_info("Calculated kernel for magnetic channel.")
 
         if comm.rank == 0:

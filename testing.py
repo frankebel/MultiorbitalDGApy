@@ -202,6 +202,24 @@ def get_worm_components(num_bands: int) -> list[int]:
 
 
 if __name__ == "__main__":
+    """
+    from matplotlib import font_manager
+
+    fonts = [s for s in font_manager.findSystemFonts() if "euler" in s.lower()]
+    if len(fonts) == 0:
+        raise FileNotFoundError("No Euler fonts found. Please install the Euler fonts to use this script.")
+    font_path = fonts[0]
+    font_manager.fontManager.addfont(font_path)
+    prop = font_manager.FontProperties(fname=font_path)
+    plt.rc("axes", unicode_minus=False)
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = prop.get_name()
+    plt.rcParams["font.size"] = 12
+    plt.rcParams["mathtext.fontset"] = "custom"
+    plt.rcParams["axes.titlesize"] = 12
+    plt.rcParams["text.usetex"] = False
+    """
+
     # indices = get_worm_components(num_bands=3)
     # print(indices)
     # print(len(indices))
@@ -209,6 +227,7 @@ if __name__ == "__main__":
     # show_self_energy_convergence()
     # show_self_energies()
 
+    """
     mu_history_1 = np.load(
         "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk4096_Nq4096_wc60_vc70_vs0/mu_history.npy"
     )
@@ -218,6 +237,58 @@ if __name__ == "__main__":
 
     print(mu_history_1)
     print(mu_history_2)
+    """
+
+    theta_fraction = 3
+    theta_str = f"pi_{theta_fraction}"
+    theta_val = np.pi / theta_fraction
+
+    file1 = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc60_vc40_vs0_theta_0_rot_back/sigma_dga.npy"
+    file2 = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc60_vc40_vs0_theta_{theta_str}_rot_back/sigma_dga.npy"
+    file3 = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc60_vc40_vs0_theta_{theta_str}_rot_back/sigma_dmft.npy"
+    file4 = f"/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc60_vc40_vs0_theta_{theta_str}_rot_back/siw_dga_local.npy"
+
+    siw_not_rotated = np.load(file1)
+    siw_rotated_and_back = np.load(file2)
+    siw_dmft_rotated = np.load(file3)
+    siw_local_rotated = np.load(file4)
+
+    o1 = 0
+    o2 = 1
+
+    def rotate_sigma(sigma: np.ndarray, theta):
+        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        return np.einsum("pi,qj,xyzpq...->xyzij...", np.conj(r.T), r, sigma)
+
+    # siw_dmft_rotated = rotate_sigma(siw_dmft_rotated, -theta_val)
+    # siw_local_rotated = rotate_sigma(siw_local_rotated, theta_val)
+
+    siw_not_rotated = siw_not_rotated[..., o1, o2, 1000 : 1000 + 40]
+    siw_rotated_and_back = siw_rotated_and_back[..., o1, o2, 1000 : 1000 + 40]
+    siw_dmft_rotated = siw_dmft_rotated[0, 0, 0, o1, o2, 1000 : 1000 + 40]
+    siw_local_rotated = siw_local_rotated[0, 0, 0, o1, o2, 40:]
+
+    diff = np.sum(np.abs(siw_not_rotated.real - siw_rotated_and_back.real))
+    print(f"Difference in real part: {diff}")
+
+    siw_not_rotated = siw_not_rotated[0, 0, 0]  # np.sum(siw_1, axis=(0, 1, 2))
+    siw_rotated_and_back = siw_rotated_and_back[0, 0, 0]  # np.sum(siw_2, axis=(0, 1, 2))
+
+    plt.figure()
+    plt.plot(siw_not_rotated.real, label="real, not rotated")
+    # plt.plot(siw_not_rotated.imag, label="imag, not rotated")
+    plt.plot(siw_rotated_and_back.real, label="real, rotated")
+    # plt.plot(siw_rotated_and_back.imag, label="imag, rotated")
+    # plt.plot(siw_dmft_rotated.real, label="real, DMFT rotated")
+    # plt.plot(siw_dmft_rotated.imag, label="imag, DMFT rotated")
+    # plt.plot(siw_local_rotated.real + 0.1, label="real, local rotated")
+    # plt.plot(siw_local_rotated.imag + 0.1, label="imag, local rotated")
+    plt.xlabel(r"$\nu_n$")
+    plt.ylabel(r"$\Sigma(\nu_n)$")
+    plt.tight_layout()
+    plt.legend()
+    plt.grid()
+    plt.show()
 
     """
     filename_oneband = "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/LDGA_Nk256_Nq256_wc30_vc20_vs0_all_gamma/sigma_dga.npy"

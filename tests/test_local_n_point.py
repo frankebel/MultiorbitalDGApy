@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 from unittest.mock import patch
 
+from scdga.local_four_point import LocalFourPoint
 from scdga.local_n_point import LocalNPoint
+from scdga.n_point_base import SpinChannel
 
 
 def test_initializes_with_valid_parameters():
@@ -246,114 +248,6 @@ def test_compresses_correctly_with_two_fermionic_dimensions():
     assert np.allclose(result.mat[..., 3], 4)
 
 
-def test_raises_no_error_when_converting_to_full_range_with_no_bosonic_dimensions():
-    mat = np.zeros((4, 4))
-    obj = LocalNPoint(mat, 2, 0, 1)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert result.mat.shape == mat.shape
-
-
-def test_returns_self_when_already_in_full_bosonic_range():
-    mat = np.zeros((4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert result.mat.shape == mat.shape
-
-
-def test_converts_to_full_bosonic_range_correctly_with_no_fermionic_dimensions():
-    mat = np.zeros((4, 4, 5))
-    obj = LocalNPoint(mat, 2, 1, 0, full_niw_range=False)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 9)
-
-
-def test_converts_to_full_bosonic_range_correctly_with_one_fermionic_dimension():
-    mat = np.zeros((4, 4, 5, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=False)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 9, 10)
-
-
-def test_converts_to_full_bosonic_range_correctly_with_two_fermionic_dimensions():
-    mat = np.zeros((4, 4, 5, 10, 10))
-    obj = LocalNPoint(mat, 2, 1, 2, full_niw_range=False)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 9, 10, 10)
-
-
-def test_checks_complex_conjugation_and_flip_with_no_fermionic_dimensions():
-    mat = np.random.random((4, 4, 5)) + 1j * np.random.random((4, 4, 5))
-    obj = LocalNPoint(mat, 2, 1, 0, full_niw_range=False)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 9)
-    assert np.allclose(result.mat[..., 4:], mat)
-    assert np.allclose(result.mat[..., :4], np.conj(np.flip(mat[..., 1:], axis=-1)))
-
-
-def test_checks_complex_conjugation_and_flip_with_one_fermionic_dimension():
-    mat = np.random.random((4, 4, 5, 10)) + 1j * np.random.random((4, 4, 5, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=False)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert np.allclose(result.mat[..., 4:, :], mat)
-    assert np.allclose(result.mat[..., :4, :], np.conj(np.flip(mat[..., 1:, :], axis=(-2, -1))))
-
-
-def test_checks_complex_conjugation_and_flip_with_two_fermionic_dimensions():
-    mat = np.random.random((4, 4, 5, 10, 10)) + 1j * np.random.random((4, 4, 5, 10, 10))
-    obj = LocalNPoint(mat, 2, 1, 2, full_niw_range=False)
-    result = obj.to_full_niw_range()
-    assert result is obj
-    assert np.allclose(result.mat[..., 4:, :, :], mat)
-    assert np.allclose(result.mat[..., :4, :, :], np.conj(np.flip(mat[..., 1:, :, :], axis=(-3, -2, -1))))
-
-
-def test_raises_error_when_converting_to_half_range_with_no_bosonic_dimensions():
-    mat = np.zeros((4, 4, 4))
-    obj = LocalNPoint(mat, 2, 0, 1, full_niw_range=True)
-    result = obj.to_half_niw_range()
-    assert result is obj
-    assert result.mat.shape == mat.shape
-
-
-def test_returns_self_when_already_in_half_bosonic_range():
-    mat = np.zeros((4, 4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=False)
-    result = obj.to_half_niw_range()
-    assert result is obj
-    assert result.mat.shape == mat.shape
-
-
-def test_converts_to_half_bosonic_range_correctly_with_no_fermionic_dimensions():
-    mat = np.zeros((4, 4, 9))
-    obj = LocalNPoint(mat, 2, 1, 0, full_niw_range=True)
-    result = obj.to_half_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 5)
-
-
-def test_converts_to_half_bosonic_range_correctly_with_one_fermionic_dimension():
-    mat = np.zeros((4, 4, 9, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
-    result = obj.to_half_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 5, 10)
-
-
-def test_converts_to_half_bosonic_range_correctly_with_two_fermionic_dimensions():
-    mat = np.zeros((4, 4, 9, 10, 10))
-    obj = LocalNPoint(mat, 2, 1, 2, full_niw_range=True)
-    result = obj.to_half_niw_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 5, 10, 10)
-
-
 def test_raises_error_when_converting_to_full_range_with_two_fermionic_dimensions():
     mat = np.zeros((4, 4, 4, 10, 10))
     obj = LocalNPoint(mat, 2, 1, 2, full_niv_range=False)
@@ -407,14 +301,14 @@ def test_flips_matrix_along_valid_single_axis():
     mat = np.zeros((4, 4, 9, 10))
     obj = LocalNPoint(mat, 2, 1, 1)
     result = obj.flip_frequency_axis(axis=(-1,))
-    assert np.array_equal(result.mat, np.flip(mat, axis=-1))
+    assert np.allclose(result.mat, np.flip(mat, axis=-1))
 
 
 def test_flips_matrix_along_valid_multiple_axes():
     mat = np.zeros((4, 4, 9, 10))
     obj = LocalNPoint(mat, 2, 1, 1)
     result = obj.flip_frequency_axis(axis=(-2, -1))
-    assert np.array_equal(result.mat, np.flip(mat, axis=(-2, -1)))
+    assert np.allclose(result.mat, np.flip(mat, axis=(-2, -1)))
 
 
 def test_raises_error_when_flipping_with_no_frequency_dimensions():
@@ -438,41 +332,7 @@ def test_handles_single_axis_as_integer():
     mat = np.zeros((4, 4, 9, 10))
     obj = LocalNPoint(mat, 2, 1, 1)
     result = obj.flip_frequency_axis(axis=-1)
-    assert np.array_equal(result.mat, np.flip(mat, axis=-1))
-
-
-def test_saves_matrix_to_file_with_default_name_using_mock():
-    mat = np.zeros((4, 4, 9, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
-    with patch("numpy.save") as mock_save:
-        obj.save(output_dir="./test_output")
-        mock_save.assert_called_once()
-
-
-def test_saves_matrix_to_file_with_custom_name_using_mock():
-    mat = np.zeros((4, 4, 9, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
-    with patch("numpy.save") as mock_save:
-        obj.save(output_dir="./test_output", name="custom_name")
-        mock_save.assert_called_once()
-
-
-def test_restores_full_niw_range_after_saving_using_mock():
-    mat = np.zeros((4, 4, 9, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
-    with patch("numpy.save"):
-        obj.save(output_dir="./test_output")
-        assert obj.full_niw_range is True
-        assert obj.mat.shape == mat.shape
-
-
-def test_does_not_restore_full_niw_range_if_already_half_range_using_mock():
-    mat = np.zeros((4, 4, 9, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=False)
-    with patch("numpy.save"):
-        obj.save(output_dir="./test_output")
-        assert obj.full_niw_range is False
-        assert obj.mat.shape == mat.shape
+    assert np.allclose(result.mat, np.flip(mat, axis=-1))
 
 
 def test_aligns_frequency_dimensions_correctly_when_self_has_one_and_other_has_two_fermionic_dimensions():
@@ -523,3 +383,41 @@ def test_does_not_extend_frequency_dimensions_when_both_have_one_fermionic_dimen
     assert other_extended is False
     assert obj_self.mat.shape == (4, 4, 4, 4)
     assert result_other.mat.shape == (4, 4, 4, 4)
+
+
+def test_raises_error_when_calling_to_half_niw_range():
+    mat = np.zeros((4, 4, 10))
+    obj = LocalNPoint(mat, 2, 1, 1)
+    with pytest.raises(NotImplementedError):
+        obj.to_half_niw_range()
+
+
+def test_raises_error_when_calling_to_full_niw_range():
+    mat = np.zeros((4, 4, 10))
+    obj = LocalNPoint(mat, 2, 1, 1)
+    with pytest.raises(NotImplementedError):
+        obj.to_full_niw_range()
+
+
+def test_saves_matrix_calls_to_full_niw_range_when_full_range():
+    mat = np.zeros((4, 4, 10))
+    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=True)
+    with patch.object(obj, "to_full_niw_range") as mock_full, patch.object(
+        obj, "to_half_niw_range"
+    ) as mock_half, patch("numpy.save") as mock_save:
+        obj.save(output_dir="dir", name="full_range")
+        mock_full.assert_called_once()
+        mock_half.assert_called_once()
+        mock_save.assert_called_once()
+
+
+def test_saves_matrix_calls_to_half_niw_range_when_half_range():
+    mat = np.zeros((4, 4, 10))
+    obj = LocalNPoint(mat, 2, 1, 1, full_niw_range=False)
+    with patch.object(obj, "to_full_niw_range") as mock_full, patch.object(
+        obj, "to_half_niw_range"
+    ) as mock_half, patch("numpy.save") as mock_save:
+        obj.save(output_dir="dir", name="half_range")
+        mock_full.assert_not_called()
+        mock_half.assert_called_once()
+        mock_save.assert_called_once()
