@@ -410,7 +410,7 @@ def test_assures_invert_calls_to_full_indices_with_default_shape():
     with patch.object(LocalFourPoint, 'to_full_indices', autospec=True, wraps=LocalFourPoint.to_full_indices) as mock_full:
         obj.invert()
         args, kwargs = mock_full.call_args
-        # shape=None ist default
+        # shape=None is default
         assert kwargs.get('shape', None) is None
 
 
