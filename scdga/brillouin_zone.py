@@ -92,7 +92,7 @@ def inv_sym(mat: np.ndarray, axis) -> None:
     In-place inversion symmetry applied to mat along dimension axis
     assumes that the grid is from [0,2pi), hence 0 does not map.
     """
-    assert axis in [0, 1, 2], f"axix = {axis} but must be in [0,1,2]"
+    assert axis in [0, 1, 2], f"axis = {axis} but must be in [0,1,2]"
     assert len(np.shape(mat)) >= 3, f"dim(mat) = {len(np.shape(mat))} but must be at least 3 dimensional"
     len_ax = np.shape(mat)[axis] // 2
     mod_2 = np.shape(mat)[axis] % 2
