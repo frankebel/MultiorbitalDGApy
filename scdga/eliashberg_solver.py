@@ -401,7 +401,7 @@ def solve(
                 f_ud_loc_pp = (
                     (0.5 * f_dens_loc - 0.5 * f_magn_loc)
                     .cut_niv(config.box.niv_core)
-                    .change_frequency_notation_ph_to_pp_v2()
+                    .change_frequency_notation_ph_to_pp()
                 )
                 f_ud_loc_pp.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_pp")
                 del f_ud_loc_pp

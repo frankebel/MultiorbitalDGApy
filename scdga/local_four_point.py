@@ -1,4 +1,3 @@
-import numpy as np
 import scipy as sp
 
 from scdga.interaction import LocalInteraction, Interaction
@@ -284,7 +283,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 2: "abijwvp,jief->abefwvp" if left_hand_side else "abij,jiefwvp->abefwvp",
             }.get(self.num_vn_dimensions)
             return LocalFourPoint(
-                np.einsum(einsum_str, self.mat, other.mat, optimize=True) if left_hand_side else np.einsum(einsum_str, other.mat, self.mat, optimize=True),
+                (
+                    np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+                    if left_hand_side
+                    else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
+                ),
                 self.channel,
                 self.num_wn_dimensions,
                 self.num_vn_dimensions,
@@ -325,7 +328,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
                 (1, 2): "abcdwv,dcefwvp->abefwvp" if left_hand_side else "abcdwvp,dcefwp->abefwvp",
                 (2, 1): "abcdwvp,dcefwp->abefwvp" if left_hand_side else "abcdwv,dcefwvp->abefwvp",
             }.get((self.num_vn_dimensions, other.num_vn_dimensions))
-            new_mat = np.einsum(einsum_str, self.mat, other.mat, optimize=True) if left_hand_side else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
+            new_mat = (
+                np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+                if left_hand_side
+                else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
+            )
             max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
             return LocalFourPoint(new_mat, channel, self.num_wn_dimensions, max_vn_dim, False, self.full_niv_range)
 
@@ -572,6 +579,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
         The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
         """
+        """
         if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
             raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
 
@@ -596,11 +604,14 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.frequency_notation = FrequencyNotation.PP
         copy.update_original_shape()
         return copy
+        """
+        pass
 
     def change_frequency_notation_ph_to_pp_v3(self) -> "LocalFourPoint":
         r"""
         Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
         The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
+        """
         """
         if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
             raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
@@ -647,6 +658,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.update_original_shape()
         niw_pp, niv_pp = copy.niw // 3, min(copy.niw // 3, copy.niv // 3)
         return copy.cut_niw_and_niv(niw_pp, niv_pp)
+        """
+        pass
 
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """
@@ -658,12 +671,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if niv_pad <= copy.niv:
             return copy
 
-        gamma_urange_mat = np.tile(
-            u.mat[..., None, None, None], (1, 1, 1, 1, 2 * copy.niw + 1, 2 * niv_pad, 2 * niv_pad)
-        )
+        urange_mat = np.tile(u.mat[..., None, None, None], (1, 1, 1, 1, 2 * copy.niw + 1, 2 * niv_pad, 2 * niv_pad))
         niv_diff = niv_pad - copy.niv
-        gamma_urange_mat[..., niv_diff : niv_diff + 2 * copy.niv, niv_diff : niv_diff + 2 * copy.niv] = copy.mat
-        copy.mat = gamma_urange_mat
+        urange_mat[..., niv_diff : niv_diff + 2 * copy.niv, niv_diff : niv_diff + 2 * copy.niv] = copy.mat
+        copy.mat = urange_mat
         copy.update_original_shape()
         return copy
 
