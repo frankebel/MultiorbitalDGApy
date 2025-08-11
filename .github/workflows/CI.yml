@@ -33,7 +33,7 @@ jobs:
       - name: Install Microsoft MPI
         if: runner.os == 'Windows'
         run: |
-          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v10.1.3/msmpisetup.exe -OutFile msmpisetup.exe
+          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v10.1.1/msmpisetup.exe -OutFile msmpisetup.exe
           Start-Process msmpisetup.exe -ArgumentList '/quiet' -Wait
           echo "Microsoft MPI installed"
 
