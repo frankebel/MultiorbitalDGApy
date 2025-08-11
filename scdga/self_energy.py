@@ -63,7 +63,7 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         if n_freq_fit < 4:
             n_freq_fit = 4
 
-        iwfit = iv[self.niv - n_freq_fit :][None, None, :] * np.eye(self.n_bands)[:, :, None]
+        iwfit = iv[self.niv - n_freq_fit :][None, None, :]  # * np.eye(self.n_bands)[:, :, None]
         fitdata = mat_half_v[..., self.niv - n_freq_fit :]
 
         mom0 = np.mean(fitdata.real, axis=-1)
