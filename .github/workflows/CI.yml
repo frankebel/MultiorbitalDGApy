@@ -14,8 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.13"]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        python-version: [ "3.13" ]
 
     steps:
       # 1. Checkout repository
@@ -28,6 +28,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+
+      # 2.5 Install Microsoft MPI on Windows
+      - name: Install Microsoft MPI
+        if: runner.os == 'Windows'
+        run: |
+          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v10.1.3/msmpisetup.exe -OutFile msmpisetup.exe
+          Start-Process msmpisetup.exe -ArgumentList '/quiet' -Wait
+          echo "Microsoft MPI installed"
 
       # 3. Install build tools
       - name: Install build dependencies
@@ -56,7 +64,7 @@ jobs:
         run: |
           pytest tests --cov=scdga --cov-report=term-missing --cov-report=xml -vv
         # pytest tests --cov=scdga --cov-report=xml --cov-report=term
-          
+
       # 8. Upload coverage to Codecov (requires CODECOV_TOKEN for private repos)
       - name: Upload test results to Codecov
         uses: codecov/codecov-action@v5
