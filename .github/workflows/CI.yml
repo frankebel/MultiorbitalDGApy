@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        os: [ ubuntu-latest, macos-latest ]
         python-version: [ "3.13" ]
 
     steps:
@@ -28,14 +28,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-
-      # 2.5 Install Microsoft MPI on Windows
-      - name: Install Microsoft MPI
-        if: runner.os == 'Windows'
-        run: |
-          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v10.1.1/msmpisetup.exe -OutFile msmpisetup.exe
-          Start-Process msmpisetup.exe -ArgumentList '/quiet' -Wait
-          echo "Microsoft MPI installed"
 
       # 3. Install build tools
       - name: Install build dependencies
