@@ -184,9 +184,6 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
         radians and the number of orbitals needs to be 2.
         """
-        if self.n_bands != 2:
-            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
-
         copy = deepcopy(self)
 
         if theta == 0:
@@ -197,6 +194,9 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         if len(self.current_shape) == 3:  # [o1,o2,v]
             copy.mat = np.einsum("ip,qj,pqv->ijv", r.T, r, copy.mat, optimize=True)
             return copy
+
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         einsum_str = "ip,qj,xpqv->xijv" if self.has_compressed_q_dimension else "ip,qj,xyzpqv->xyzijv"
         copy.mat = np.einsum(einsum_str, r.T, r, copy.mat, optimize=True)
