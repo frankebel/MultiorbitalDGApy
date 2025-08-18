@@ -27,15 +27,15 @@ class BubbleGenerator:
         wn = MFHelper.wn(niw, return_only_positive=True)
         gchi0_q = np.zeros((len(q_list),) + (giwk.n_bands,) * 4 + (len(wn), 2 * niv), dtype=giwk.mat.dtype)
 
-        niv_range = np.arange(-niv, niv)
-        g_left_mat = giwk.mat[:, :, :, :, None, None, :, None, giwk.niv - niv : giwk.niv + niv]
         g_right = giwk.transpose_orbitals().cut_niv(niv + niw)
+        g_left_mat = g_right.mat[:, :, :, :, None, None, :, g_right.niv - niv : g_right.niv + niv]
         for idx_q, q in enumerate(q_list):
-            g_right_mat = np.roll(g_right.mat, [-i for i in q], axis=(0, 1, 2))[
-                :, :, :, None, :, :, None, g_right.niv + niv_range[None, :] - wn[:, None]
-            ]
+            g_right_mat = np.roll(g_right.mat, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :]
 
-            gchi0_q[idx_q, ...] = np.sum(g_left_mat * g_right_mat, axis=(0, 1, 2))
+            for idx_w, wn_i in enumerate(wn):
+                start = g_right.niv - niv - wn_i
+                end = g_right.niv + niv - wn_i
+                gchi0_q[idx_q, ..., idx_w, :] = np.sum(g_left_mat * g_right_mat[..., start:end], axis=(0, 1, 2))
 
         gchi0_q *= -config.sys.beta / config.lattice.q_grid.nk_tot
         return FourPoint(
