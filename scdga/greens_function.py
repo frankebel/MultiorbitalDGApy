@@ -155,13 +155,18 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         if split[0] == split[1]:
             return self
 
+        copy = deepcopy(self)
+
         permutation = (
-            f"i{split[0]}...->i{split[1]}..."
-            if self.has_compressed_q_dimension
-            else f"ijk{split[0]}...->ijk{split[1]}..."
+            (
+                f"i{split[0]}...->i{split[1]}..."
+                if self.has_compressed_q_dimension
+                else f"ijk{split[0]}...->ijk{split[1]}..."
+            )
+            if len(self.current_shape) != 3
+            else f"{split[0]}v->{split[1]}v"
         )
 
-        copy = deepcopy(self)
         copy.mat = np.einsum(permutation, copy.mat, optimize=True)
         return copy
 
