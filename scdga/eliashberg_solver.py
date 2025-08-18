@@ -208,18 +208,24 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     """
     logger = config.logger
 
-    logger.log_info(f"Starting to solve the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.")
+    logger.log_info(
+        f"Starting to solve the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.",
+        allowed_ranks=(0, 1),
+    )
 
     gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(
         config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk
     ).decompress_q_dimension()
-    logger.log_info(f"Mapped Gamma_pp ({gamma_q_r_pp.channel.value}) to full BZ.")
-    logger.log_memory_usage(f"Gamma_pp_{gamma_q_r_pp.channel.value}", gamma_q_r_pp, 1)
+    logger.log_memory_usage(
+        f"Gamma_pp_{gamma_q_r_pp.channel.value}",
+        gamma_q_r_pp,
+        1,
+        allowed_ranks=(0, 1),
+    )
 
     sign = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
 
     gamma_x = sign * gamma_q_r_pp.fft()
-    logger.log_info("Fourier-transformed Gamma_pp.")
     gamma_x_flipped = gamma_x.flip_momentum_axis().flip_frequency_axis(-1).permute_orbitals("abcd->adcb")
 
     gap_shape = gamma_q_r_pp.nq + 2 * (gamma_q_r_pp.n_bands,) + (2 * gamma_q_r_pp.niv,)
@@ -228,7 +234,8 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     gap0 = get_initial_gap_function(gap_shape, gamma_q_r_pp.channel)
     logger.log_info(
         f"Initialized the gap function as {config.eliashberg.symmetry if config.eliashberg.symmetry else "random"} "
-        f"for the {gamma_q_r_pp.channel.value}let channel."
+        f"for the {gamma_q_r_pp.channel.value}let channel.",
+        allowed_ranks=(0, 1),
     )
 
     einsum_str1 = "xyzacbdv,xyzdcv->xyzabv"
@@ -251,15 +258,19 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     mat = sp.sparse.linalg.LinearOperator(shape=(np.prod(gap_shape), np.prod(gap_shape)), matvec=mv)
     logger.log_info(
         f"Starting Lanczos method to retrieve largest {"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"}"
-        f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"}."
+        f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"} "
+        f"for the {gamma_q_r_pp.channel.value}let channel.",
+        allowed_ranks=(0, 1),
     )
 
     lambdas, gaps = sp.sparse.linalg.eigsh(
-        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, which="LA"
+        mat, k=config.eliashberg.n_eig, tol=config.eliashberg.epsilon, v0=gap0, which="LA", maxiter=10000
     )
     logger.log_info(
         f"Finished Lanczos method for the largest {"" if config.eliashberg.n_eig > 1 else f" {config.eliashberg.n_eig}"} "
-        f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"}."
+        f"eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} and eigenvector{"" if config.eliashberg.n_eig == 1 else "s"} "
+        f"for the {gamma_q_r_pp.channel.value}let channel.",
+        allowed_ranks=(0, 1),
     )
 
     order = lambdas.argsort()[::-1]  # sort eigenvalues in descending order
@@ -268,7 +279,8 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
 
     logger.log_info(
         f"Largest {config.eliashberg.n_eig} eigenvalue{"" if config.eliashberg.n_eig == 1 else "s"} for the "
-        f"{gamma_q_r_pp.channel.value}let channel are: {', '.join(f'{lam:.6f}' for lam in lambdas)}."
+        f"{gamma_q_r_pp.channel.value}let channel are: {', '.join(f'{lam:.6f}' for lam in lambdas)}.",
+        allowed_ranks=(0, 1),
     )
 
     gaps = [
@@ -276,7 +288,10 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
         for i in range(config.eliashberg.n_eig)
     ]
 
-    logger.log_info(f"Finished solving the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.")
+    logger.log_info(
+        f"Finished solving the Eliashberg equation for the {gamma_q_r_pp.channel.value}let channel.",
+        allowed_ranks=(0, 1),
+    )
 
     return lambdas, gaps
 
@@ -381,7 +396,8 @@ def solve(
     gamma_sing_pp.mat = mpi_dist_irrk.gather(gamma_sing_pp.mat)
     gamma_trip_pp.mat = mpi_dist_irrk.gather(gamma_trip_pp.mat)
 
-    if comm.rank == 0:
+    gchi0_q0_pp = None
+    if mpi_dist_irrk.my_rank == 0:
         gchi0_q0_pp = BubbleGenerator.create_generalized_chi0_pp_w0(giwk_dga, niv_pp)
         logger.log_info("Created the bare bubble susceptibility in pp notation.")
 
@@ -457,11 +473,21 @@ def solve(
                 f"Saved singlet and triplet pairing vertices in pp notation in the irreducible BZ to file."
             )
 
+    gchi0_q0_pp = mpi_dist_irrk.bcast(gchi0_q0_pp, root=0)
+    gamma_trip_pp = mpi_dist_irrk.bcast(gamma_trip_pp, root=0)
+
+    lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
+    if mpi_dist_irrk.my_rank == 0:
         lambdas_sing, gaps_sing = solve_eliashberg_lanczos(gamma_sing_pp, gchi0_q0_pp)
+    if mpi_dist_irrk.mpi_size == 1 or mpi_dist_irrk.my_rank == 1:
         lambdas_trip, gaps_trip = solve_eliashberg_lanczos(gamma_trip_pp, gchi0_q0_pp)
-    else:
-        lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = (None,) * 4
 
     mpi_dist_irrk.delete_file()
+
+    lambdas_sing = mpi_dist_irrk.bcast(lambdas_sing, root=0)
+    lambdas_trip = mpi_dist_irrk.bcast(lambdas_trip, root=1)
+
+    gaps_sing = mpi_dist_irrk.bcast(gaps_sing, root=0)
+    gaps_trip = mpi_dist_irrk.bcast(gaps_trip, root=1)
 
     return lambdas_sing, lambdas_trip, gaps_sing, gaps_trip

@@ -12,14 +12,13 @@ class DgaLogger:
         self._filename = filename
         self._filepath = os.path.join(output_path, filename)
 
-        if self.is_root:
-            self._logger = logging.getLogger("dga_logger")
-            self._logger.setLevel(logging.DEBUG)
-            self._logger.addHandler(logging.StreamHandler())
-            self._logger.info("       Current-T        |    Elapsed-T    |    Message")
-            # self._logger.addHandler(logging.FileHandler(self._filepath))
+        self._logger = logging.getLogger("dga_logger")
+        self._logger.setLevel(logging.DEBUG)
+        self._logger.addHandler(logging.StreamHandler())
+        # self._logger.addHandler(logging.FileHandler(self._filepath))
 
         self._start_time = datetime.now()
+        self.log_info("       Current-T        |    Elapsed-T    |    Message")
 
     @property
     def is_root(self) -> bool:
@@ -40,20 +39,21 @@ class DgaLogger:
     def current_time(self) -> str:
         return str(datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"))[:-3]
 
-    def log(self, message: str, level: int):
-        if not self.is_root or message is None or message == "" or level < 0:
+    def _log(self, message: str, level: int, allowed_ranks: tuple = (0,)):
+        if self._comm.rank not in allowed_ranks or message is None or message == "" or level < 0:
             return
         self._logger.log(level, f"{self.current_time} | {self.total_elapsed_time} | {message}")
 
-    def log_debug(self, message: str):
-        self.log("::DEBUG:: " + message, level=logging.DEBUG)
+    def log_debug(self, message: str, allowed_ranks: tuple = (0,)):
+        self._log("::DEBUG:: " + message, level=logging.DEBUG, allowed_ranks=allowed_ranks)
 
-    def log_info(self, message: str):
-        self.log(message, level=logging.INFO)
+    def log_info(self, message: str, allowed_ranks: tuple = (0,)):
+        self._log(message, level=logging.INFO, allowed_ranks=allowed_ranks)
 
-    def log_memory_usage(self, obj_name: str, obj, n_exists: int = 1):
+    def log_memory_usage(self, obj_name: str, obj, n_exists: int = 1, allowed_ranks: tuple = (0,)):
         if obj is None:
             return
         self.log_info(
-            f"{obj_name} {"uses" if n_exists <= self._comm.size else "use"} (GB): {obj.memory_usage_in_gb * n_exists:.6f}"
+            f"{obj_name} {"uses" if n_exists <= self._comm.size else "use"} (GB): {obj.memory_usage_in_gb * n_exists:.6f}",
+            allowed_ranks=allowed_ranks,
         )

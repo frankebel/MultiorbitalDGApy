@@ -156,8 +156,8 @@ class LocalNPoint(IHaveMat):
             raise ValueError("No fermionic frequency dimensions available for extension.")
         if self.num_vn_dimensions == 2:
             return self
-        self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.mat.shape[-1]), optimize=True)
-        self._num_vn_dimensions += 1
+        self.mat = np.einsum("...i,ij->...ij", self.mat, np.eye(self.current_shape[-1]), optimize=True)
+        self._num_vn_dimensions = 2
         self.update_original_shape()
         return self
 
@@ -170,7 +170,7 @@ class LocalNPoint(IHaveMat):
         if self.num_vn_dimensions == 1:
             return self
         self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
-        self._num_vn_dimensions -= 1
+        self._num_vn_dimensions = 1
         self.update_original_shape()
         return self
 
@@ -180,7 +180,30 @@ class LocalNPoint(IHaveMat):
         """
         if self.num_wn_dimensions == 0 or self.full_niw_range:
             return self
-        pass
+
+        niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
+        ind = np.arange(1, self.current_shape[niw_axis])
+        freq_axis = niw_axis
+        trailing = "w"
+        if self.num_vn_dimensions == 1:
+            freq_axis = niw_axis, -1
+            trailing = "wv"
+        if self.num_vn_dimensions == 2:
+            freq_axis = niw_axis, -2, -1
+            trailing = "wvp"
+        self.mat = np.concatenate(
+            (
+                np.einsum(
+                    f"...abcd{trailing}->...dcba{trailing}",
+                    np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)),
+                ),
+                self.mat,
+            ),
+            axis=niw_axis,
+        )
+        self.update_original_shape()
+        self._full_niw_range = True
+        return self
 
     def to_half_niw_range(self):
         """

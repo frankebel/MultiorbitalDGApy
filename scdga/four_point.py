@@ -492,30 +492,6 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             self.frequency_notation,
         ).to_full_indices(self.original_shape)
 
-    def to_full_niw_range(self):
-        """
-        Converts the object to the full bosonic frequency range in-place.
-        """
-        if self.num_wn_dimensions == 0 or self.full_niw_range:
-            return self
-
-        niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
-        ind = np.arange(1, self.current_shape[niw_axis])
-        freq_axis = niw_axis
-        if self.num_vn_dimensions == 1:
-            freq_axis = niw_axis, -1
-        if self.num_vn_dimensions == 2:
-            freq_axis = niw_axis, -2, -1
-        other = np.einsum(
-            "qabcd...->qdcba..." if self.has_compressed_q_dimension else "xyzabcd...->xyzdcba...",
-            np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)),
-        )
-        self.mat = np.concatenate((other, self.mat), axis=niw_axis)
-        del other
-        self.update_original_shape()
-        self._full_niw_range = True
-        return self
-
     def rotate_orbitals(self, theta: float = np.pi):
         r"""
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in

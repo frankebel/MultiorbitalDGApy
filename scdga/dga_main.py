@@ -288,20 +288,18 @@ def execute_dga_routine():
             )
 
             for i in range(len(gaps_sing)):
-                suffix = f"{i}" if i != len(gaps_sing) - 1 else "max"
-                gaps_sing[i].save(name=f"gap_sing_{suffix}", output_dir=config.output.eliashberg_path)
-                gaps_trip[i].save(name=f"gap_trip_{suffix}", output_dir=config.output.eliashberg_path)
+                gaps_sing[i].save(name=f"gap_sing_{i+1}", output_dir=config.output.eliashberg_path)
+                gaps_trip[i].save(name=f"gap_trip_{i+1}", output_dir=config.output.eliashberg_path)
             logger.log_info("Saved singlet and triplet gap functions to files.")
 
         if config.output.do_plotting and comm.rank == 0:
             kx, ky = config.lattice.k_grid.kx_shift_closed, config.lattice.k_grid.ky_shift_closed
             for i in range(len(gaps_sing)):
-                suffix = f"{i}" if i != len(gaps_sing) - 1 else "max"
                 plotting.plot_gap_function(
-                    gaps_sing[i], kx, ky, name=f"gap_sing_{suffix}", output_dir=config.output.eliashberg_path
+                    gaps_sing[i], kx, ky, name=f"gap_sing_{i+1}", output_dir=config.output.eliashberg_path
                 )
                 plotting.plot_gap_function(
-                    gaps_trip[i], kx, ky, name=f"gap_trip_{suffix}", output_dir=config.output.eliashberg_path
+                    gaps_trip[i], kx, ky, name=f"gap_trip_{i+1}", output_dir=config.output.eliashberg_path
                 )
             logger.log_info("Plotted singlet and triplet gap functions.")
 
