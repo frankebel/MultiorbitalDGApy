@@ -40,7 +40,17 @@ def get_hartree_fock(
 
     hartree = 2 * (u_loc + v_q0).times("qabcd,dc->ab", config.sys.occ)
     fock = -1.0 / nq_tot * (u_loc + v_nonloc).compress_q_dimension().times("qadcb,qkdc->kab", occ_qk)
-    return hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
+    hartree, fock = hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
+
+    theta = 0
+
+    if theta == 0:
+        return hartree, fock
+
+    r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+    hartree = np.einsum("ip,qj,xpqv->xijv", r.T, r, hartree, optimize=True)
+    fock = np.einsum("ip,qj,xpqv->xijv", r.T, r, fock, optimize=True)
+    return hartree, fock
 
 
 def create_auxiliary_chi_r_q(
@@ -402,11 +412,11 @@ def calculate_self_energy_q(
         logger.log_info(f"Starting iteration {current_iter}.")
         logger.log_info("----------------------------------------")
 
-        # giwk_full = GreensFunction.get_g_full(
-        #    sigma_old.rotate_orbitals(theta=-theta), config.sys.mu, config.lattice.hamiltonian.get_ek()
-        # ).rotate_orbitals(theta=theta)
+        giwk_full = GreensFunction.get_g_full(
+            sigma_old.rotate_orbitals(theta=-theta), config.sys.mu, config.lattice.hamiltonian.get_ek()
+        ).rotate_orbitals(theta=theta)
 
-        giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, config.lattice.hamiltonian.get_ek())
+        # giwk_full = GreensFunction.get_g_full(sigma_old, config.sys.mu, config.lattice.hamiltonian.get_ek())
         # giwk_full.mat = giwk_full.mat[..., 0, 0, :][..., None, None, :]
         giwk_full.save(output_dir=config.output.output_path, name="g_dga")
 
@@ -436,10 +446,7 @@ def calculate_self_energy_q(
         logger.log_memory_usage("Gchi0_q_inv", gchi0_q_core_inv, comm.size)
 
         if config.eliashberg.perform_eliashberg:
-            gchi0_q_core_inv.save(
-                name=f"gchi0_q_inv_rank_{comm.rank}",
-                output_dir=config.output.eliashberg_path,
-            )
+            gchi0_q_core_inv.save(name=f"gchi0_q_inv_rank_{comm.rank}", output_dir=config.output.eliashberg_path)
 
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core
@@ -447,14 +454,13 @@ def calculate_self_energy_q(
         kernel += calculate_sigma_kernel_r_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
-        del gamma_dens
         comm.Barrier()
         logger.log_info("Calculated kernel for density channel.")
 
         kernel += 3 * calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
-        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, gamma_magn
+        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         comm.Barrier()
         logger.log_info("Calculated kernel for magnetic channel.")
 
@@ -481,7 +487,7 @@ def calculate_self_energy_q(
         # This is done to minimize noise. We remove some fluctuations from dmft that are included in the local self-energy
         # calculated in this code and add the smooth dmft self-energy
         sigma_new += delta_sigma
-        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft)  # .rotate_orbitals(theta=-theta)
+        sigma_new = sigma_new.concatenate_self_energies(sigma_dmft).rotate_orbitals(theta=-theta)
 
         if comm.rank == 0:
             count_nonzero_orbital_entries(sigma_new, "sigma_new")

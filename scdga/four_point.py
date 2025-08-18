@@ -525,14 +525,17 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
             raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         copy = deepcopy(self)
-        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
+        if theta == 0:
+            return copy
+
+        r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
         einsum_str = (
-            "pi,qj,rk,sl,xpqrs...->xijkl..."
+            "ip,jq,rk,sl,xpqrs...->xijkl..."
             if self.has_compressed_q_dimension
-            else "pi,qj,rk,sl,xyzpqrs...->xyzijkl..."
+            else "ip,jq,rk,sl,xyzpqrs...->xyzijkl..."
         )
-        copy.mat = np.einsum(einsum_str, np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
-        copy.mat[np.abs(copy.mat) < 1e-13] = 0
+        copy.mat = np.einsum(einsum_str, r.T, r.T, r, r, copy.mat, optimize=True)
         return copy
 
     @staticmethod

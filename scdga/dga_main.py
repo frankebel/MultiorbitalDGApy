@@ -70,7 +70,7 @@ def execute_dga_routine():
     sigma_dmft = comm.bcast(sigma_dmft, root=0)
 
     theta = 0
-    # g_dmft = g_dmft.rotate_orbitals(theta=theta)
+    g_dmft = g_dmft.rotate_orbitals(theta=theta)
 
     logger.log_memory_usage("giwk & siwk", g_dmft, 2 * comm.size)
     logger.log_memory_usage("g2_dens & g2_magn", g2_dens, 2 * comm.size)
@@ -88,12 +88,12 @@ def execute_dga_routine():
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     # ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)[..., 0, 0][..., None, None]
-    g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek)  # .rotate_orbitals(theta=theta)
-    # sigma_dmft = sigma_dmft.rotate_orbitals(theta=theta)
+    g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek).rotate_orbitals(theta=theta)
+    sigma_dmft = sigma_dmft.rotate_orbitals(theta=theta)
     g_loc.save(output_dir=config.output.output_path, name="g_loc")
     # g_loc.mat = g_loc.mat[..., 0, 0, :][..., None, None, :]
-    u_loc = config.lattice.hamiltonian.get_local_u()  # .rotate_orbitals(theta=theta)
-    v_nonloc = config.lattice.hamiltonian.get_vq(config.lattice.q_grid)  # .rotate_orbitals(theta=theta)
+    u_loc = config.lattice.hamiltonian.get_local_u().rotate_orbitals(theta=theta)
+    v_nonloc = config.lattice.hamiltonian.get_vq(config.lattice.q_grid).rotate_orbitals(theta=theta)
 
     logger.log_info("Preprocessing done.")
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
@@ -103,8 +103,8 @@ def execute_dga_routine():
         count_nonzero_orbital_entries(g2_magn, "g2_magn")
 
     if comm.rank == 0:
-        # g2_dens = g2_dens.rotate_orbitals(theta=theta)
-        # g2_magn = g2_magn.rotate_orbitals(theta=theta)
+        g2_dens = g2_dens.rotate_orbitals(theta=theta)
+        g2_magn = g2_magn.rotate_orbitals(theta=theta)
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (
             local_sde.perform_local_schwinger_dyson(g_loc, g2_dens, g2_magn, u_loc)
         )
@@ -253,7 +253,7 @@ def execute_dga_routine():
             sigma_dga,
             kx,
             ky,
-            title=r"$\Sigma_{D\Gamma A}^{k_xk_y k_z=0;\nu=0}$",
+            title=r"$\Sigma_{\text{D}\Gamma\text{A}}^{k_xk_y k_z=0;\nu=0}$",
             name="Sigma_dga_kz0",
             output_dir=config.output.plotting_path,
         )
@@ -263,7 +263,7 @@ def execute_dga_routine():
             giwk_dga,
             kx,
             ky,
-            title=r"$G_{D\Gamma A}^{k_x k_y k_z=0;\nu=0}$",
+            title=r"$G_{\text{D}\Gamma\text{A}}^{k_x k_y k_z=0;\nu=0}$",
             name="Giwk_dga_kz0",
             output_dir=config.output.plotting_path,
         )
@@ -310,22 +310,22 @@ def execute_dga_routine():
 
 
 def configure_matplotlib():
-    fonts = [s for s in font_manager.findSystemFonts() if "euler" in s.lower()]
-    if len(fonts) == 0:
+    euler_font = [s for s in font_manager.findSystemFonts() if "euler" in s.lower()]
+    if len(euler_font) == 0:
         return
-    font_path = fonts[0]
-    font_manager.fontManager.addfont(font_path)
-    prop = font_manager.FontProperties(fname=font_path)
+    euler_font_path = euler_font[0]
+    font_manager.fontManager.addfont(euler_font_path)
+    prop_euler = font_manager.FontProperties(fname=euler_font_path)
     plt.rc("axes", unicode_minus=False)
     plt.rcParams["font.family"] = "sans-serif"
-    plt.rcParams["font.sans-serif"] = prop.get_name()
+    plt.rcParams["font.sans-serif"] = prop_euler.get_name()
     plt.rcParams["font.size"] = 12
     plt.rcParams["mathtext.fontset"] = "custom"
     plt.rcParams["axes.titlesize"] = 12
     plt.rcParams["text.usetex"] = False
-    plt.rcParams["mathtext.rm"] = prop.get_name()
-    plt.rcParams["mathtext.it"] = prop.get_name()
-    plt.rcParams["mathtext.bf"] = prop.get_name()
+    plt.rcParams["mathtext.rm"] = prop_euler.get_name()
+    plt.rcParams["mathtext.it"] = prop_euler.get_name()
+    plt.rcParams["mathtext.bf"] = prop_euler.get_name()
 
 
 if __name__ == "__main__":

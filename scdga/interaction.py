@@ -31,7 +31,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
             raise ValueError("Invalid permutation.")
 
         if split[0] == split[1]:
-            return self
+            return deepcopy(self)
 
         return LocalInteraction(np.einsum(permutation, self.mat, optimize=True), self.channel)
 
@@ -44,9 +44,13 @@ class LocalInteraction(IHaveMat, IHaveChannel):
             raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         copy = deepcopy(self)
-        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
-        copy.mat = np.einsum("pi,qj,rk,sl,pqrs->ijkl", np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
+        if theta == 0:
+            return copy
+
+        r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+
+        copy.mat = np.einsum("ip,jq,rk,sl,pqrs->ijkl", r.T, r.T, r, r, copy.mat, optimize=True)
         return copy
 
     def as_channel(self, channel: SpinChannel) -> "LocalInteraction":
@@ -167,7 +171,7 @@ class Interaction(LocalInteraction, IAmNonLocal):
             raise ValueError("Invalid permutation.")
 
         if split[0] == split[1]:
-            return self
+            return deepcopy(self)
 
         permutation = f"...{split[0]}->...{split[1]}"
         return Interaction(
@@ -183,10 +187,13 @@ class Interaction(LocalInteraction, IAmNonLocal):
             raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         copy = deepcopy(self)
-        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
-        copy.mat = np.einsum("pi,qj,rk,sl,...pqrs->...ijkl", np.conj(r.T), np.conj(r.T), r, r, copy.mat, optimize=True)
-        copy.mat[np.abs(copy.mat) < 1e-13] = 0
+        if theta == 0:
+            return copy
+
+        r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+
+        copy.mat = np.einsum("ip,jq,rk,sl,...pqrs->...ijkl", r.T, r.T, r, r, copy.mat, optimize=True)
         return copy
 
     def as_channel(self, channel: SpinChannel) -> "Interaction":

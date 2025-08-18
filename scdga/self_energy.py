@@ -188,10 +188,14 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
             raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         copy = deepcopy(self)
-        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-        einsum_str = "pi,qj,xpq...->xij..." if self.has_compressed_q_dimension else "pi,qj,xyzpq...->xyzij..."
-        copy.mat = np.einsum(einsum_str, np.conj(r.T), r, copy.mat, optimize=True)
-        copy.mat[np.abs(copy.mat) < 1e-13] = 0
+
+        if theta == 0:
+            return copy
+
+        r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+
+        einsum_str = "ip,qj,xpq...->xij..." if self.has_compressed_q_dimension else "ip,qj,xyzpq...->xyzij..."
+        copy.mat = np.einsum(einsum_str, r.T, r, copy.mat, optimize=True)
         return copy
 
     def _estimate_niv_core(self, err: float = 1e-5):

@@ -184,21 +184,22 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
         radians and the number of orbitals needs to be 2.
         """
-        r = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         copy = deepcopy(self)
 
-        if len(self.current_shape) == 3:  # [o1,o2,v]
-            copy.mat = np.einsum("ab,cd,acv->bdv", np.conj(r.T), r, copy.mat, optimize=True)
-            copy.mat[np.abs(copy.mat) < 1e-13] = 0
+        if theta == 0:
             return copy
 
-        if copy.n_bands != 2:
-            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
+        r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
 
-        einsum_str = "pi,qj,xpq...->xij..." if self.has_compressed_q_dimension else "pi,qj,xyzpq...->xyzij..."
-        copy.mat = np.einsum(einsum_str, np.conj(r.T), r, copy.mat, optimize=True)
-        copy.mat[np.abs(copy.mat) < 1e-13] = 0
+        if len(self.current_shape) == 3:  # [o1,o2,v]
+            copy.mat = np.einsum("ip,qj,pqv->ijv", r.T, r, copy.mat, optimize=True)
+            return copy
+
+        einsum_str = "ip,qj,xpqv->xijv" if self.has_compressed_q_dimension else "ip,qj,xyzpqv->xyzijv"
+        copy.mat = np.einsum(einsum_str, r.T, r, copy.mat, optimize=True)
         return copy
 
     def _get_fill_nonlocal(self) -> tuple[float, np.ndarray, np.ndarray]:
