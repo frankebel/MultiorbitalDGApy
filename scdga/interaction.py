@@ -40,13 +40,13 @@ class LocalInteraction(IHaveMat, IHaveChannel):
         Rotates the orbitals of the local interaction around the angle :math:`\theta`. :math:`\theta` must be given in
         radians and the number of orbitals needs to be 2.
         """
-        if self.n_bands != 2:
-            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
-
         copy = deepcopy(self)
 
         if theta == 0:
             return copy
+
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
 
@@ -183,13 +183,13 @@ class Interaction(LocalInteraction, IAmNonLocal):
         Rotates the orbitals of the interaction around the angle :math:`\theta`. :math:`\theta` must be given in
         radians and the number of orbitals needs to be 2.
         """
-        if self.n_bands != 2:
-            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
-
         copy = deepcopy(self)
 
         if theta == 0:
             return copy
+
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
 

@@ -521,13 +521,13 @@ class FourPoint(LocalFourPoint, IAmNonLocal):
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
         radians and the number of orbitals needs to be 2.
         """
-        if self.n_bands != 2:
-            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
-
         copy = deepcopy(self)
 
         if theta == 0:
             return copy
+
+        if self.n_bands != 2:
+            raise ValueError("Rotating the orbitals is only allowed for objects that have two bands.")
 
         r = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
         einsum_str = (
