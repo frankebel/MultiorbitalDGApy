@@ -79,14 +79,6 @@ class IHaveMat(ABC):
         """
         return self.mat.nbytes / (1024**3)
 
-    def to_real(self) -> "IHaveMat":
-        """
-        Converts the matrix to real numbers. Returns it as complex type.
-        """
-        dtype = self.mat.dtype
-        self.mat = self.mat.real.astype(dtype)
-        return self
-
     def __mul__(self, other) -> "IHaveMat":
         """
         Multiplication with a scalar or another matrix.

@@ -105,6 +105,33 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         )
         return copy
 
+    def to_full_niv_range(self):
+        """
+        Converts the object to the full fermionic frequency range in-place. Works only on objects
+        with a single fermionic frequency dimension.
+        """
+        if self.num_vn_dimensions == 0 or self.full_niv_range:
+            return self
+
+        self.mat = np.concatenate((np.conj(np.flip(np.einsum("...abv->...bav", self.mat), axis=-1)), self.mat), axis=-1)
+        self.update_original_shape()
+        self._full_niv_range = True
+        return self
+
+    def to_half_niv_range(self):
+        """
+        Converts the object to the half fermionic frequency range in-place. Works only on objects
+        with a single fermionic frequency dimension.
+        """
+        if self.num_vn_dimensions == 0 or not self.full_niv_range:
+            return self
+
+        ind = np.arange(self.current_shape[-1] // 2, self.current_shape[-1])
+        self.mat = np.take(self.mat, ind, axis=-1)
+        self.update_original_shape()
+        self._full_niv_range = False
+        return self
+
     def __add__(self, other):
         """
         Adds two SelfEnergy objects.

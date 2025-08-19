@@ -8,7 +8,6 @@ import numpy as np
 import scdga.config as config
 import scdga.lambda_correction as lc
 from scdga.bubble_gen import BubbleGenerator
-from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.four_point import FourPoint
 from scdga.greens_function import GreensFunction, update_mu
 from scdga.interaction import LocalInteraction, Interaction
@@ -170,18 +169,9 @@ def calculate_sigma_kernel_r_q(
     """
     logger = config.logger
 
-    group_size = max(mpi_dist_irrq.comm.size // 2, 1)
-    color = mpi_dist_irrq.comm.rank // group_size
-    sub_comm = mpi_dist_irrq.comm.Split(color, mpi_dist_irrq.comm.rank)
-
-    gchi_aux_q_r_sum = None
-    for i in range(sub_comm.size):
-        if sub_comm.rank == i:
-            gchi_aux_q_r_sum = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc).sum_over_vn(
-                config.sys.beta, axis=(-1,)
-            )
-        sub_comm.Barrier()
-    sub_comm.Free()
+    gchi_aux_q_r_sum = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc).sum_over_vn(
+        config.sys.beta, axis=(-1,)
+    )
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value}) calculated.")
     logger.log_memory_usage(
         f"Gchi_aux ({gchi_aux_q_r_sum.channel.value})",
@@ -189,15 +179,9 @@ def calculate_sigma_kernel_r_q(
         mpi_dist_irrq.comm.size * 2 * config.box.niv_core,
     )
 
-    if mpi_dist_irrq.comm.rank == 0:
-        count_nonzero_orbital_entries(gchi_aux_q_r_sum, f"gchi_aux_q_{gchi_aux_q_r_sum.channel.value}")
-
     vrg_q_r = create_vrg_r_q(gchi_aux_q_r_sum, gchi0_q_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
-
-    if mpi_dist_irrq.comm.rank == 0:
-        count_nonzero_orbital_entries(vrg_q_r, f"vrg_q_r_{vrg_q_r.channel.value}")
 
     if config.eliashberg.perform_eliashberg:
         vrg_q_r.save(
@@ -217,9 +201,6 @@ def calculate_sigma_kernel_r_q(
     logger.log_memory_usage(
         f"Summed auxiliary susceptibility ({chi_phys_q_r.channel.value})", chi_phys_q_r, mpi_dist_irrq.comm.size
     )
-
-    if mpi_dist_irrq.comm.rank == 0:
-        count_nonzero_orbital_entries(chi_phys_q_r, f"gchi_aux_q_{chi_phys_q_r.channel.value}_sum")
 
     if config.lambda_correction.perform_lambda_correction or config.output.save_quantities:
         chi_phys_q_r.mat = mpi_dist_irrq.gather(chi_phys_q_r.mat)
@@ -460,9 +441,6 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
 
-        if comm.rank == 0:
-            count_nonzero_orbital_entries(kernel, "kernel")
-
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
@@ -484,9 +462,6 @@ def calculate_self_energy_q(
         # calculated in this code and add the smooth dmft self-energy
         sigma_new += delta_sigma
         sigma_new = sigma_new.concatenate_self_energies(sigma_dmft).rotate_orbitals(theta=-theta)
-
-        if comm.rank == 0:
-            count_nonzero_orbital_entries(sigma_new, "sigma_new")
 
         old_mu = config.sys.mu
         if comm.rank == 0:

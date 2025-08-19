@@ -542,7 +542,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if copy.frequency_notation == FrequencyNotation.PP:
             return copy
 
-        copy = copy.to_full_niw_range().to_full_niv_range()
+        copy = copy.to_full_niw_range()
 
         if copy.num_vn_dimensions == 1:
             copy = copy.extend_vn_to_diagonal()

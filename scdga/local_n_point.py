@@ -219,39 +219,6 @@ class LocalNPoint(IHaveMat):
         self._full_niw_range = False
         return self
 
-    def to_full_niv_range(self):
-        """
-        Converts the object to the full fermionic frequency range in-place. Works only on objects
-        with a single fermionic frequency dimension.
-        """
-        if self.num_vn_dimensions == 0 or self.full_niv_range:
-            return self
-
-        if self.num_vn_dimensions != 1:
-            raise ValueError("Can only convert to full niv range if the number of fermionic frequency dimensions is 1.")
-
-        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-1)), self.mat), axis=-1)
-        self.update_original_shape()
-        self._full_niv_range = True
-        return self
-
-    def to_half_niv_range(self):
-        """
-        Converts the object to the half fermionic frequency range in-place. Works only on objects
-        with a single fermionic frequency dimension.
-        """
-        if self.num_vn_dimensions == 0 or not self.full_niv_range:
-            return self
-
-        if self.num_vn_dimensions != 1:
-            raise ValueError("Can only convert to half niv range if the number of fermionic frequency dimensions is 1.")
-
-        ind = np.arange(self.current_shape[-1] // 2, self.current_shape[-1])
-        self.mat = np.take(self.mat, ind, axis=-1)
-        self.update_original_shape()
-        self._full_niv_range = False
-        return self
-
     def flip_frequency_axis(self, axis: tuple | int):
         """
         Flips the matrix along the specified axis.

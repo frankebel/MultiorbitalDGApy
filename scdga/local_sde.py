@@ -1,8 +1,5 @@
-import itertools
-
 import scdga.config as config
 from scdga.bubble_gen import BubbleGenerator
-from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.greens_function import GreensFunction
 from scdga.interaction import LocalInteraction
 from scdga.local_four_point import LocalFourPoint
@@ -59,10 +56,6 @@ def create_gamma_r_with_shell_correction(
     """
     chi_tilde_shell = (gchi0.invert() + 1.0 / config.sys.beta**2 * u_loc.as_channel(gchi_r.channel)).invert()
     chi_tilde_core_inv = chi_tilde_shell.cut_niv(config.box.niv_core).invert()
-
-    count_nonzero_orbital_entries(gchi_r.invert(), "gchi_r inv")
-    count_nonzero_orbital_entries(chi_tilde_core_inv, "chi_tilde_core_inv")
-    count_nonzero_orbital_entries(gchi_r.invert() - chi_tilde_core_inv, "difference")
 
     gchi_r.invert().save(output_dir=config.output.output_path, name=f"gchi_{gchi_r.channel.value}_inverted")
     chi_tilde_core_inv.extend_vn_to_diagonal().save(output_dir=config.output.output_path, name=f"chi_tilde_core_inv")
@@ -141,14 +134,6 @@ def create_vertex_functions(
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
 
-    """
-    gamma_r = gamma_r.rotate_orbitals(theta=-np.pi / 3)
-    for i, j, k, l in itertools.product(range(gamma_r.n_bands), repeat=4):
-        if not i == j == k == l:
-            gamma_r.mat[i, j, k, l] = 0.0 + 0.0j
-    gamma_r = gamma_r.rotate_orbitals(theta=np.pi / 3)
-    """
-
     gchi0 = gchi0.take_vn_diagonal()
     logger.log_info(f"Local irreducible vertex Gamma^wvv' ({gamma_r.channel.value}) with asymptotic correction done.")
 
@@ -208,9 +193,6 @@ def perform_local_schwinger_dyson(
         gchi0.save(name="gchi0_loc", output_dir=config.output.output_path)
 
     gchi0_inv_core = gchi0.cut_niv(config.box.niv_core).invert().take_vn_diagonal()
-
-    count_nonzero_orbital_entries(gchi0, "gchi0")
-    count_nonzero_orbital_entries(gchi0_inv_core, "gchi0_inv")
 
     gamma_d, gchi_d_sum, vrg_d, f_d, gchi_d = create_vertex_functions(g2_dens, gchi0, gchi0_inv_core, g_loc, u_loc)
     gamma_m, gchi_m_sum, vrg_m, f_m, gchi_m = create_vertex_functions(g2_magn, gchi0, gchi0_inv_core, g_loc, u_loc)

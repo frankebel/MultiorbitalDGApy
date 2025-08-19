@@ -14,7 +14,6 @@ import scdga.local_sde as local_sde
 import scdga.nonlocal_sde as nonlocal_sde
 import scdga.plotting as plotting
 from scdga.config_parser import ConfigParser
-from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.greens_function import GreensFunction
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -99,10 +98,6 @@ def execute_dga_routine():
     logger.log_info("Starting local Schwinger-Dyson equation (SDE).")
 
     if comm.rank == 0:
-        count_nonzero_orbital_entries(g2_dens, "g2_dens")
-        count_nonzero_orbital_entries(g2_magn, "g2_magn")
-
-    if comm.rank == 0:
         g2_dens = g2_dens.rotate_orbitals(theta=theta)
         g2_magn = g2_magn.rotate_orbitals(theta=theta)
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (
@@ -110,27 +105,6 @@ def execute_dga_routine():
         )
     else:
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (None,) * 11
-
-    if comm.rank == 0:
-        count_nonzero_orbital_entries(g2_dens, "g2_dens")
-        count_nonzero_orbital_entries(g2_magn, "g2_magn")
-
-        count_nonzero_orbital_entries(gchi_d, "gchi_dens")
-        count_nonzero_orbital_entries(gchi_m, "gchi_magn")
-
-        count_nonzero_orbital_entries(gamma_d, "gamma_dens")
-        count_nonzero_orbital_entries(gamma_m, "gamma_magn")
-        count_nonzero_orbital_entries(chi_d, "chi_dens")
-        count_nonzero_orbital_entries(chi_m, "chi_magn")
-        count_nonzero_orbital_entries(vrg_d, "vrg_dens")
-        count_nonzero_orbital_entries(vrg_m, "vrg_magn")
-        count_nonzero_orbital_entries(f_d, "f_dens")
-        count_nonzero_orbital_entries(f_m, "f_magn")
-
-        count_nonzero_orbital_entries(sigma_loc, "sigma_loc")
-        count_nonzero_orbital_entries(sigma_dmft, "sigma_dmft")
-
-        count_nonzero_orbital_entries(u_loc, "u_loc")
 
     # there is no need to broadcast the other quantities
     gamma_d = comm.bcast(gamma_d, root=0)
@@ -253,7 +227,15 @@ def execute_dga_routine():
             sigma_dga,
             kx,
             ky,
-            title=r"$\Sigma_{\text{D}\Gamma\text{A}}^{k_xk_y k_z=0;\nu=0}$",
+            title=r"$\Sigma^{k_xk_y k_z=0;\nu=0}$",
+            name="Sigma_dga_kz0",
+            output_dir=config.output.plotting_path,
+        )
+        plotting.plot_two_point_kx_ky_real_and_imag(
+            sigma_dga,
+            kx,
+            ky,
+            title=r"\Sigma^{k_xk_y k_z=0;\nu=0}",
             name="Sigma_dga_kz0",
             output_dir=config.output.plotting_path,
         )
@@ -263,7 +245,15 @@ def execute_dga_routine():
             giwk_dga,
             kx,
             ky,
-            title=r"$G_{\text{D}\Gamma\text{A}}^{k_x k_y k_z=0;\nu=0}$",
+            title=r"$G^{k_x k_y k_z=0;\nu=0}$",
+            name="Giwk_dga_kz0",
+            output_dir=config.output.plotting_path,
+        )
+        plotting.plot_two_point_kx_ky_real_and_imag(
+            giwk_dga,
+            kx,
+            ky,
+            title=r"G^{k_x k_y k_z=0;\nu=0}",
             name="Giwk_dga_kz0",
             output_dir=config.output.plotting_path,
         )

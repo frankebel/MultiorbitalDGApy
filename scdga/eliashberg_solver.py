@@ -7,7 +7,6 @@ import scipy as sp
 import scdga.config as config
 from scdga import nonlocal_sde
 from scdga.bubble_gen import BubbleGenerator
-from scdga.debug_util import count_nonzero_orbital_entries
 from scdga.four_point import FourPoint
 from scdga.gap_function import GapFunction
 from scdga.greens_function import GreensFunction
@@ -368,10 +367,6 @@ def solve(
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     delete_files(config.output.output_path, f"gchi0_q_rank_{comm.rank}.npy")
 
-    if comm.rank == 0:
-        count_nonzero_orbital_entries(f_dens_pp, "f_dens_pp")
-        count_nonzero_orbital_entries(f_magn_pp, "f_magn_pp")
-
     if config.eliashberg.save_fq:
         for f_pp, name in [(f_dens_pp, "f_irrq_dens_pp"), (f_magn_pp, "f_irrq_magn_pp")]:
             f_pp.mat = mpi_dist_irrk.gather(f_pp.mat)
@@ -456,9 +451,6 @@ def solve(
                 phi_trip_loc_pp,
                 phi_ud_loc_pp,
             )
-
-        count_nonzero_orbital_entries(gamma_sing_pp, "gamma_sing_pp")
-        count_nonzero_orbital_entries(gamma_trip_pp, "gamma_trip_pp")
 
         if config.eliashberg.save_pairing_vertex:
             gamma_sing_pp.save(

@@ -248,55 +248,6 @@ def test_compresses_correctly_with_two_fermionic_dimensions():
     assert np.allclose(result.mat[..., 3], 4, rtol=1e-2)
 
 
-def test_raises_error_when_converting_to_full_range_with_two_fermionic_dimensions():
-    mat = np.zeros((4, 4, 4, 10, 10))
-    obj = LocalNPoint(mat, 2, 1, 2, full_niv_range=False)
-    with pytest.raises(ValueError):
-        obj.to_full_niv_range()
-
-
-def test_returns_self_when_already_in_full_fermionic_range():
-    mat = np.zeros((4, 4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niv_range=True)
-    result = obj.to_full_niv_range()
-    assert result is obj
-    assert result.mat.shape == mat.shape
-
-
-def test_converts_to_full_fermionic_range_correctly():
-    mat = np.random.random((4, 4, 4, 5)) + 1j * np.random.random((4, 4, 4, 5))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niv_range=False)
-    result = obj.to_full_niv_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 4, 10)
-    assert np.allclose(result.mat[..., :5], np.conj(np.flip(mat, axis=-1)), rtol=1e-2)
-    assert np.allclose(result.mat[..., 5:], mat, rtol=1e-2)
-
-
-def test_raises_error_when_converting_to_half_range_with_two_fermionic_dimensions():
-    mat = np.zeros((4, 4, 4, 10, 10))
-    obj = LocalNPoint(mat, 2, 1, 2, full_niv_range=True)
-    with pytest.raises(ValueError):
-        obj.to_half_niv_range()
-
-
-def test_returns_self_when_already_in_half_fermionic_range():
-    mat = np.zeros((4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niv_range=False)
-    result = obj.to_half_niv_range()
-    assert result is obj
-    assert result.mat.shape == mat.shape
-
-
-def test_converts_to_half_fermionic_range_correctly():
-    mat = np.random.random((4, 4, 4, 10)) + 1j * np.random.random((4, 4, 4, 10))
-    obj = LocalNPoint(mat, 2, 1, 1, full_niv_range=True)
-    result = obj.to_half_niv_range()
-    assert result is obj
-    assert result.mat.shape == (4, 4, 4, 5)
-    assert np.allclose(result.mat, np.take(mat, np.arange(5, 10), axis=-1), rtol=1e-2)
-
-
 def test_flips_matrix_along_valid_single_axis():
     mat = np.zeros((4, 4, 9, 10))
     obj = LocalNPoint(mat, 2, 1, 1)

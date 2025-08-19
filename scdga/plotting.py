@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import ticker
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import scdga.config as config
@@ -42,7 +43,7 @@ def find_zeros(mat: np.ndarray) -> np.ndarray:
     ind_x = np.arange(mat.shape[0])
     ind_y = np.arange(mat.shape[1])
 
-    cs1 = plt.contour(ind_x, ind_y, mat.T.real, cmap="RdBu", levels=[0])
+    cs1 = plt.contour(ind_x, ind_y, mat.T.real, cmap="magma", levels=[0])
     paths = cs1.get_paths()
     plt.close()
     paths = np.atleast_1d(paths)
@@ -93,7 +94,7 @@ def sigma_loc_checks(
     axes[1].set_ylim(None, 0)
     plt.tight_layout()
     if save:
-        plt.savefig(output_dir + f"/sde_" + name + "_check.png")
+        plt.savefig(os.path.join(output_dir, f"sde_{name}_check.svg"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -155,7 +156,7 @@ def chi_checks(
     axes[1].set_xlim(-1, 10)
     plt.tight_layout()
     if save:
-        plt.savefig(output_dir + f"/chi_dens_magn_" + name + ".png")
+        plt.savefig(os.path.join(output_dir, f"chi_dens_magn_{name}.svg"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -199,7 +200,7 @@ def plot_nu_nup(
     fig.colorbar(im2, ax=(axes[1]), aspect=15, fraction=0.08, location="right", pad=0.05)
     plt.tight_layout()
     if do_save:
-        plt.savefig(os.path.join(output_dir, f"{name}_w{omega}.png"))
+        plt.savefig(os.path.join(output_dir, f"{name}_w{omega}.svg"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -215,7 +216,7 @@ def plot_two_point_kx_ky(
     name: str = "",
     orbs: np.ndarray | list | tuple = (0, 0),
     output_dir="./",
-    cmap="RdBu",
+    cmap="magma",
     scatter=None,
     save: bool = True,
     show: bool = False,
@@ -261,8 +262,12 @@ def plot_two_point_kx_ky(
     vmin1, vmax1 = im1.get_clim()
     vmin2, vmax2 = im2.get_clim()
 
-    fig.colorbar(im1, cax=cax1, ticks=np.linspace(vmin1, vmax1, 5))
-    fig.colorbar(im2, cax=cax2, ticks=np.linspace(vmin2, vmax2, 5))
+    cb1 = fig.colorbar(im1, cax=cax1, ticks=np.linspace(vmin1, vmax1, 5))
+    cb1.locator = ticker.MaxNLocator(nbins=5)
+    cb1.update_ticks()
+    cb2 = fig.colorbar(im2, cax=cax2, ticks=np.linspace(vmin2, vmax2, 5))
+    cb2.locator = ticker.MaxNLocator(nbins=5)
+    cb2.update_ticks()
 
     if scatter is not None:
         for ax in axes:
@@ -270,23 +275,83 @@ def plot_two_point_kx_ky(
             ax.scatter(scatter[:, 0], scatter[:, 1], marker="o", c=colours)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(output_dir, f"{name}.png"))
+        plt.savefig(os.path.join(output_dir, f"{name}.svg"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
         plt.close()
 
 
-def plot_two_point_kx_ky_with_fs_points(
+def plot_two_point_kx_ky_real_and_imag(
     obj: LocalNPoint | IAmNonLocal,
-    kx: float,
-    ky: float,
+    kx: np.ndarray,
+    ky: np.ndarray,
     pi_shift: bool = True,
     title: str = "",
     name: str = "",
     orbs: np.ndarray | list | tuple = (0, 0),
     output_dir="./",
-    cmap="RdBu",
+    cmap="magma",
+    save: bool = True,
+    show: bool = False,
+):
+    cm = 1.0 / 2.54
+    if len(orbs) != 2:
+        raise ValueError("'orbs' needs to be of size 2.")
+
+    obj = obj.shift_k_by_pi() if pi_shift else obj
+    for idx, mat in enumerate([obj.mat.real, obj.mat.imag]):
+
+        niv = mat.shape[-1] // 2
+        mat = mat[:, :, 0, orbs[0], orbs[1], niv]
+        mat = np.concatenate([mat, mat[0:1, :, ...]], axis=0)
+        mat = np.concatenate([mat, mat[:, 0:1, ...]], axis=1)
+
+        fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(9 * cm, 9 * cm), dpi=500)
+        im = axes.pcolormesh(kx, ky, mat.T, cmap=cmap)
+        axes.set_title(rf"$\Re {title}$" if idx == 0 else rf"$\Im {title}$")
+
+        tick_vals = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]
+        tick_labels = [r"$-\pi$", r"$-\frac{\pi}{2}$", r"$0$", r"$\frac{\pi}{2}$", r"$\pi$"]
+
+        axes.set_xlabel(r"$k_x$")
+        axes.set_ylabel(r"$k_y$")
+        axes.set_aspect("equal")
+
+        axes.set_xticks(tick_vals)
+        axes.set_xticklabels(tick_labels)
+        axes.set_yticks(tick_vals)
+        axes.set_yticklabels(tick_labels)
+
+        divider1 = make_axes_locatable(axes)
+        cax1 = divider1.append_axes("right", size="5%", pad=0.1)  # 5% width, 10% padding
+
+        cb = fig.colorbar(im, cax=cax1)
+        cb.locator = ticker.MaxNLocator(nbins=5)
+        cb.update_ticks()
+        plt.tight_layout()
+        if save:
+            plt.savefig(
+                os.path.join(output_dir, f"{name}_{"real" if idx == 0 else "imag"}.svg"),
+                bbox_inches="tight",
+                pad_inches=0.05,
+            )
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+
+def plot_two_point_kx_ky_with_fs_points(
+    obj: LocalNPoint | IAmNonLocal,
+    kx: np.ndarray,
+    ky: np.ndarray,
+    pi_shift: bool = True,
+    title: str = "",
+    name: str = "",
+    orbs: np.ndarray | list | tuple = (0, 0),
+    output_dir="./",
+    cmap="magma",
     do_save: bool = True,
     show: bool = False,
 ):
@@ -305,7 +370,7 @@ def plot_gap_function(
     name: str = "",
     orbs: np.ndarray | list | tuple = (0, 0),
     output_dir="./",
-    cmap="RdBu",
+    cmap="magma",
     scatter=None,
     do_save: bool = True,
     show: bool = False,
@@ -359,7 +424,7 @@ def plot_gap_function(
             ax.scatter(scatter[:, 0], scatter[:, 1], marker="o", c=colours)
     plt.tight_layout()
     if do_save:
-        plt.savefig(os.path.join(output_dir, f"{name}.png"))
+        plt.savefig(os.path.join(output_dir, f"{name}.svg"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:

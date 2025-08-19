@@ -129,30 +129,6 @@ def test_raises_error_when_contraction_string_is_invalid():
         obj.times("invalid_contraction", mat2)
 
 
-def test_converts_matrix_to_real_and_preserves_dtype():
-    mat = np.array([[1 + 2j, 3 + 4j], [5 + 6j, 7 + 8j]], dtype=np.complex64)
-    obj = IHaveMat(mat)
-    result = obj.to_real()
-    assert np.allclose(result.mat, mat.real, rtol=1e-2)
-    assert result.mat.dtype == np.complex64
-
-
-def test_handles_empty_matrix_when_converting_to_real():
-    mat = np.array([], dtype=np.complex64).reshape(0, 0)
-    obj = IHaveMat(mat)
-    result = obj.to_real()
-    assert result.mat.size == 0
-    assert result.mat.dtype == np.complex64
-
-
-def test_handles_real_matrix_without_changes():
-    mat = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.complex64)
-    obj = IHaveMat(mat)
-    result = obj.to_real()
-    assert np.allclose(result.mat, mat, rtol=1e-2)
-    assert result.mat.dtype == np.complex64
-
-
 def test_retrieves_correct_value_for_valid_index():
     mat = np.array([[1, 2], [3, 4]])
     obj = IHaveMat(mat)
