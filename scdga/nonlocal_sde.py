@@ -341,8 +341,6 @@ def read_last_n_sigmas_from_files(n: int, output_path: str = "./", previous_sc_p
 
 def calculate_self_energy_q(
     comm: MPI.Comm,
-    gamma_dens: LocalFourPoint,
-    gamma_magn: LocalFourPoint,
     u_loc: LocalInteraction,
     v_nonloc: Interaction,
     sigma_dmft: SelfEnergy,
@@ -426,18 +424,25 @@ def calculate_self_energy_q(
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core
 
+        gamma_dens = LocalFourPoint.load(
+            os.path.join(config.output.output_path, "gamma_dens_loc.npy"), SpinChannel.DENS
+        )
         kernel += calculate_sigma_kernel_r_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
+        del gamma_dens
         logger.log_info("Calculated kernel for density channel.")
 
+        gamma_magn = LocalFourPoint.load(
+            os.path.join(config.output.output_path, "gamma_magn_loc.npy"), SpinChannel.MAGN
+        )
         kernel += 3 * calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
-        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
+        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, gamma_magn
         logger.log_info("Calculated kernel for magnetic channel.")
 
-        kernel = kernel.to_half_niw_range().take_vn_diagonal()
+        kernel = kernel.to_half_niw_range()
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)

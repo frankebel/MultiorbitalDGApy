@@ -152,14 +152,14 @@ def execute_dga_routine():
         plotting.plot_nu_nup(gamma_dens_plot, omega=10, name="Gamma_dens", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gamma_dens_plot, omega=-10, name="Gamma_dens", output_dir=config.output.plotting_path)
         logger.log_info("Plotted gamma (dens).")
-        del gamma_dens_plot
+        del gamma_dens_plot, gamma_d
 
-        gamma_magn_plot = gamma_d.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
+        gamma_magn_plot = gamma_m.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
         plotting.plot_nu_nup(gamma_magn_plot, omega=0, name="Gamma_magn", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gamma_magn_plot, omega=10, name="Gamma_magn", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gamma_magn_plot, omega=-10, name="Gamma_magn", output_dir=config.output.plotting_path)
         logger.log_info("Plotted gamma (magn).")
-        del gamma_magn_plot
+        del gamma_magn_plot, gamma_m
 
         plotting.chi_checks(
             [chi_d.mat],
@@ -199,8 +199,8 @@ def execute_dga_routine():
     logger.log_info("Local DGA routine finished.")
 
     logger.log_info("Starting non-local ladder-DGA routine.")
-    sigma_dga = nonlocal_sde.calculate_self_energy_q(comm, gamma_d, gamma_m, u_loc, v_nonloc, sigma_dmft, sigma_loc)
-    del gamma_d, gamma_m, sigma_dmft, sigma_loc
+    sigma_dga = nonlocal_sde.calculate_self_energy_q(comm, u_loc, v_nonloc, sigma_dmft, sigma_loc)
+    del sigma_dmft, sigma_loc
     logger.log_info("Non-local ladder-DGA routine finished.")
 
     giwk_dga = GreensFunction.get_g_full(sigma_dga, config.sys.mu, ek).cut_niv(
