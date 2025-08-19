@@ -408,7 +408,7 @@ def test_assures_invert_calls_to_half_niw_range_to_compound_indices_and_to_full_
         ) as mock_full,
     ):
         obj.invert()
-        mock_half_niw.assert_called_once()
+        assert mock_half_niw.call_count == 2
         mock_compound.assert_called_once()
         mock_full.assert_called_once()
 
