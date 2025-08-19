@@ -368,8 +368,6 @@ def solve(
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     delete_files(config.output.output_path, f"gchi0_q_rank_{comm.rank}.npy")
 
-    mpi_dist_irrk.comm.Barrier()
-
     if comm.rank == 0:
         count_nonzero_orbital_entries(f_dens_pp, "f_dens_pp")
         count_nonzero_orbital_entries(f_magn_pp, "f_magn_pp")
