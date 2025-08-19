@@ -99,12 +99,13 @@ def create_auxiliary_chi_r_q_sum(
     return bse_sum
 
 
-def create_vrg_r_q(gchi_aux_q_r_sum: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
+def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
     r"""
     Returns the three-leg vertex
     .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
+    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
     return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum)
 
 
@@ -169,17 +170,11 @@ def calculate_sigma_kernel_r_q(
     """
     logger = config.logger
 
-    gchi_aux_q_r_sum = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc).sum_over_vn(
-        config.sys.beta, axis=(-1,)
-    )
-    logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r_sum.channel.value}) calculated.")
-    logger.log_memory_usage(
-        f"Gchi_aux ({gchi_aux_q_r_sum.channel.value})",
-        gchi_aux_q_r_sum,
-        mpi_dist_irrq.comm.size * 2 * config.box.niv_core,
-    )
+    gchi_aux_q_r = create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
+    logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
+    logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, mpi_dist_irrq.comm.size)
 
-    vrg_q_r = create_vrg_r_q(gchi_aux_q_r_sum, gchi0_q_inv)
+    vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
 
@@ -189,8 +184,8 @@ def calculate_sigma_kernel_r_q(
             output_dir=config.output.eliashberg_path,
         )
 
-    chi_phys_q_r = gchi_aux_q_r_sum.sum_over_all_vn(config.sys.beta)
-    del gchi_aux_q_r_sum
+    chi_phys_q_r = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
+    del gchi_aux_q_r
 
     chi_phys_q_r = create_generalized_chi_q_with_shell_correction(
         chi_phys_q_r, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
