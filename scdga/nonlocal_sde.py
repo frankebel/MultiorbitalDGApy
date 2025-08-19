@@ -64,7 +64,7 @@ def create_auxiliary_chi_r_q(
     return (
         (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
         - 1.0 / config.sys.beta**2 * (v_nonloc.as_channel(gamma_r.channel) + u_loc.as_channel(gamma_r.channel))
-    ).invert()
+    ).invert(False)
 
 
 def create_auxiliary_chi_r_q_sum(
@@ -99,13 +99,12 @@ def create_auxiliary_chi_r_q_sum(
     return bse_sum
 
 
-def create_vrg_r_q(gchi_aux_q_r: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
+def create_vrg_r_q(gchi_aux_q_r_sum: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
     r"""
     Returns the three-leg vertex
     .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
     See Eq. (3.71) in Paul Worm's thesis.
     """
-    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
     return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum)
 
 
@@ -174,7 +173,9 @@ def calculate_sigma_kernel_r_q(
     logger.log_info(f"Non-Local auxiliary susceptibility ({gchi_aux_q_r.channel.value}) calculated.")
     logger.log_memory_usage(f"Gchi_aux ({gchi_aux_q_r.channel.value})", gchi_aux_q_r, mpi_dist_irrq.comm.size)
 
-    vrg_q_r = create_vrg_r_q(gchi_aux_q_r, gchi0_q_inv)
+    gchi_aux_q_r_sum = gchi_aux_q_r.sum_over_vn(config.sys.beta, axis=(-1,))
+    del gchi_aux_q_r
+    vrg_q_r = create_vrg_r_q(gchi_aux_q_r_sum, gchi0_q_inv)
     logger.log_info(f"Non-local three-leg vertex gamma^wv ({vrg_q_r.channel.value}) done.")
     logger.log_memory_usage(f"Three-leg vertex ({vrg_q_r.channel.value})", vrg_q_r, mpi_dist_irrq.comm.size)
 
@@ -184,8 +185,8 @@ def calculate_sigma_kernel_r_q(
             output_dir=config.output.eliashberg_path,
         )
 
-    chi_phys_q_r = gchi_aux_q_r.sum_over_all_vn(config.sys.beta)
-    del gchi_aux_q_r
+    chi_phys_q_r = gchi_aux_q_r_sum.sum_over_all_vn(config.sys.beta)
+    del gchi_aux_q_r_sum
 
     chi_phys_q_r = create_generalized_chi_q_with_shell_correction(
         chi_phys_q_r, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc
@@ -436,6 +437,7 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
 
+        kernel = kernel.to_half_niw_range().take_vn_diagonal()
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)

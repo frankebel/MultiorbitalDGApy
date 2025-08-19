@@ -256,7 +256,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
         return self
 
-    def invert(self):
+    def invert(self, copy: bool = True):
         """
         Inverts the object by transforming it to compound indices. Returns the object always in half of their niw range.
         """
@@ -264,9 +264,14 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         def invert_sub_matrix(matrix):
             return sp.linalg.inv(matrix, overwrite_a=True, check_finite=False)
 
-        copy = deepcopy(self.to_half_niw_range()).to_compound_indices()
-        copy.mat = np.vectorize(invert_sub_matrix, signature="(n,m)->(n,m)")(copy.mat)
-        return copy.to_full_indices()
+        if copy:
+            copy = deepcopy(self.to_half_niw_range()).to_compound_indices()
+            copy.mat = np.vectorize(invert_sub_matrix, signature="(n,m)->(n,m)")(copy.mat)
+            return copy.to_full_indices().to_half_niw_range()
+
+        self.to_half_niw_range().to_compound_indices()
+        self.mat = np.vectorize(invert_sub_matrix, signature="(n,m)->(n,m)")(self.mat)
+        return self.to_full_indices().to_half_niw_range()
 
     def matmul(self, other, left_hand_side: bool = True) -> "LocalFourPoint":
         """
