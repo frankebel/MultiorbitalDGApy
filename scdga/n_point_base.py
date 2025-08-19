@@ -129,13 +129,6 @@ class IHaveMat(ABC):
         del self._mat
         gc.collect()
 
-        def on_finalize():
-            pass
-
-        finalizer = weakref.finalize(self, on_finalize)
-        while not finalizer.alive:
-            time.sleep(0.1)
-
     def update_original_shape(self):
         """
         Updates the original shape of the matrix. This is needed when the matrix is reshaped.
