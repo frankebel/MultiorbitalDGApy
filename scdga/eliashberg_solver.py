@@ -142,7 +142,7 @@ def create_full_vertex_q_r_pp_w0(
 ):
     """
     Calculates the full vertex in PH notation and transforms it to PP notation for the both density or magnetic channel.
-    This is done in batches of size `group_size` to account for memory limiations. Since we need two variables as large
+    This is done in batches of size `group_size` to account for memory limitations. Since we need two variables as large
     as the auxiliary susceptibility, we split the MPI communicator in half and calculate the full vertex in two batches.
     """
     logger = config.logger

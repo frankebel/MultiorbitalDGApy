@@ -104,7 +104,7 @@ class LambdaCorrectionConfig:
     """
     Class to store the configuration for the lambda correction. You can set the option to perform the lambda
     correction and the type. Currently available are "sp" and "spch" for the magnetic channel and density + magnetic
-    channel, respecively.
+    channel, respectively.
     """
 
     def __init__(self):

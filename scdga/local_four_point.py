@@ -676,7 +676,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def rotate_orbitals(self, theta: float = np.pi):
         r"""
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
-        radians and the number of orbitals needs to be 2. Mostly inteded for testing purposes.
+        radians and the number of orbitals needs to be 2. Mostly intended for testing purposes.
         """
         copy = deepcopy(self)
 
