@@ -179,10 +179,11 @@ def get_lattice_symmetries_from_string(symmetry_string: str) -> list[KnownSymmet
 
 
 class KGrid:
-    """Class to build the k-grid for the Brillouin zone."""
+    """
+    Class to build the k-grid for the Brillouin zone.
+    """
 
     def __init__(self, nk: tuple = None, symmetries: list[KnownSymmetries] = None):
-        # Attributes:
         self.kx = None  # kx-grid
         self.ky = None  # ky-grid
         self.kz = None  # kz-grid

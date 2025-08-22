@@ -7,8 +7,8 @@ from scdga.hamiltonian import Hamiltonian
 
 class InteractionConfig:
     """
-    Class to store the interaction parameters. Currently, we only require udd, vdd, jdd for local and Kanamori-type
-    interactions. Other parameters are (currently) not used, however it is possible to extend the Hamiltonian class to
+    Class to store the interaction parameters. Currently, we only make use of udd, vdd, jdd for local and Kanamori-type
+    interactions. Other parameters are currently not used, however it would possible to extend the Hamiltonian class to
     use them when setting up the interaction matrix.
     """
 
@@ -29,7 +29,7 @@ class BoxConfig:
     """
     Class to store the box sizes. The main quantities are available in the core region. Due to explicit asymptotics,
     we can correct the core region by shell-region quantities. The full region is the sum of the core and shell regions
-    and is there for convenience.
+    and the variable exists for convenience.
     """
 
     def __init__(self):
@@ -43,7 +43,8 @@ class LatticeConfig:
     """
     Class to store the lattice parameters. The lattice is defined by the symmetries, the type of lattice, the input
     Hamiltonian and the input interaction. The k and q grids are defined by the number of k and q points and the
-    symmetries of the lattice. For more information, have a look at the file dga_config.yaml.
+    symmetries of the lattice. For more information, have a look at the file dga_config.yaml or check out my master's
+    thesis.
     """
 
     def __init__(self):
@@ -84,7 +85,8 @@ class SelfConsistencyConfig:
 class EliashbergConfig:
     """
     Class to store the configuration for the Eliashberg equation. It is defined by the option to perform the Eliashberg
-    equation, the subfolder name and the option to save the pairing vertex.
+    equation, the subfolder name, settings for the power iteration and the option to save the pairing vertex or
+    the full vertex in pp notation.
     """
 
     def __init__(self):
@@ -100,8 +102,9 @@ class EliashbergConfig:
 
 class LambdaCorrectionConfig:
     """
-    Class to store the configuration for the lambda correction. It is defined by the option to perform the lambda
-    correction and the type of lambda correction.
+    Class to store the configuration for the lambda correction. You can set the option to perform the lambda
+    correction and the type. Currently available are "sp" and "spch" for the magnetic channel and density + magnetic
+    channel, respecively.
     """
 
     def __init__(self):
@@ -111,7 +114,7 @@ class LambdaCorrectionConfig:
 
 class DmftConfig:
     """
-    Class to store the DMFT parameters. The DMFT input is defined by the type of input, the input path, the filenames
+    Class to store the DMFT input file parameters. The DMFT section contains the input path, the filenames
     for the 1-particle and 2-particle data and the option to symmetrize the 2-particle data with respect to v and v'.
     """
 
@@ -125,9 +128,9 @@ class DmftConfig:
 
 class SystemConfig:
     """
-    Class to store the system parameters. The system is defined by the number of bands, the inverse temperature beta, the
-    chemical potential mu and the number of Matsubara frequencies n. The occupation numbers for the different bands are
-    stored in the occ array.
+    Class to store the system parameters. It contains the number of bands, the inverse temperature beta, the
+    chemical potential mu and the total filling n. The occupation numbers for the different bands are
+    stored in the occ array for the local case and occ_k for the k-dependent occupation.
     """
 
     def __init__(self):
@@ -143,7 +146,7 @@ class SystemConfig:
 class PolyFittingConfig:
     """
     Class to store the polynomial fitting parameters. The polynomial fitting is controlled by the order of the polynomial
-    and the number of matsubara frequencies used for the polynomial fit.
+    and the number of matsubara frequencies used for the polynomial fit. This is currently not really used.
     """
 
     def __init__(self):
@@ -154,9 +157,9 @@ class PolyFittingConfig:
 
 class OutputConfig:
     """
-    Class to store the output parameters. What is output is specified by the properties.
-    The output path is the path where some quantities are saved. If save_fq is set to True, the full ladder vertex
-    will be saved.
+    Class to store the output parameters. The output path is the path where the results are saved, the plotting path
+    is the path where the plots are saved, and the plotting subfolder name is the name of the subfolder in the plotting
+    path where the plots are saved. The Eliashberg path is the absolute path where the Eliashberg results are saved.
     """
 
     def __init__(self):

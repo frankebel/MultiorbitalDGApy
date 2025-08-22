@@ -11,7 +11,9 @@ from scdga.dga_logger import DgaLogger
 
 class ConfigParser:
     """
-    Parses the config file and builds the DgaConfig. It is then broadcasted to all processes.
+    Parses the config file and builds the DgaConfig singleton class. The Configuration is then broadcasted to all
+    processes. The config file location can be specified with the path and/or name arguments when executing the main
+    python file.
     """
 
     def __init__(self):
@@ -19,8 +21,9 @@ class ConfigParser:
 
     def parse_config(self, comm: MPI.Comm = None, path: str = "./", name: str = "dga_config.yaml"):
         """
-        Parses the config file and builds the DgaConfig. It is then broadcasted to all processes.
-        The config file location can be specified with the path and name arguments when executing the main python file.
+        Parses the config file and builds the DgaConfig singleton class. Broadcasts the configuration to all
+        processes. The config file location can be specified with the path and/or name arguments when executing the
+        main python file. If the config file is not found, it will raise an error.
         """
         parser = argparse.ArgumentParser(
             prog="DGApy", description="Multi-orbital dynamical vertex approximation solver."
@@ -41,7 +44,8 @@ class ConfigParser:
 
     def save_config_file(self, path: str = "./", name: str = "dga_config.yaml") -> None:
         """
-        Provides a way to dump the current config file to a separate location.
+        Provides a way to dump the current config file to a separate location. Usually, the current configuration file
+        is saved to the output folder to keep track of the used parameters.
         """
         with open(os.path.join(path, name), "w+") as file:
             YAML().dump(self._config_file, file)

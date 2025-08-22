@@ -8,8 +8,8 @@ from scdga.n_point_base import *
 
 class LocalFourPoint(LocalNPoint, IHaveChannel):
     """
-    This class is used to represent a local four-point object in a given channel with a given number of bosonic and
-    fermionic frequency dimensions. These were added to make matrix operations with other objects easier.
+    This class is used to represent a local four-point object in a given channel with four orbital dimensions and a
+    variable number of bosonic and fermionic frequency dimensions.
     """
 
     def __init__(
@@ -35,42 +35,41 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def __add__(self, other):
         """
-        Addition for LocalFourPoint objects. Allows for A + B = C.
+        Adds two vertex objects involving a LocalFourPoint object. Allows for A + B = C.
         """
         return self.add(other)
 
     def __radd__(self, other):
         """
-        Addition for LocalFourPoint objects. Allows for A + B = C.
+        Adds two vertex objects involving a LocalFourPoint object. Allows for A + B = C.
         """
         return self.add(other)
 
     def __sub__(self, other):
         """
-        Subtraction for LocalFourPoint objects. Allows for A - B = C.
+        Subtracts two vertex objects involving a LocalFourPoint object. Allows for A - B = C.
         """
         return self.sub(other)
 
     def __rsub__(self, other):
         """
-        Subtraction for LocalFourPoint objects. Allows for A - B = C.
+        Subtracts two vertex objects involving a LocalFourPoint object. Allows for A - B = C.
         """
         return self.sub(other)
 
     def __mul__(self, other):
         r"""
-        Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter case,
-        we require both objects to only have one niv dimension, such that
-
-        .. math:: A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}.
-        Returns the object in the half niw range.
+        Allows for the multiplication of two LocalFourPoint objects with both having only one fermionic frequency
+        dimension or for the multiplication of a LocalFourPoint object with a number or numpy array. Attention: this
+        does not do the same as `__matmul__` or `matmul`, but rather :math:`A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}`.
         """
         return self.mul(other)
 
     def __rmul__(self, other) -> "LocalFourPoint":
-        """
-        Multiplication for LocalFourPoint objects. Allows for the multiplication with numbers, numpy arrays and
-        other LocalFourPoint objects, such that A^{v} * B^{v'} = C^{vv'}.
+        r"""
+        Allows for the multiplication of two LocalFourPoint objects with both having only one fermionic frequency
+        dimension or for the multiplication of a LocalFourPoint object with a number or numpy array. Attention: this
+        does not do the same as `__matmul__` or `matmul`, but rather :math:`A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}`.
         """
         return self.mul(other)
 
@@ -94,7 +93,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def __pow__(self, power, modulo=None):
         """
-        Exponentiation for LocalFourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
+        Exponentiates for LocalFourPoint objects. Allows for A ** n = B, where n is an integer. If n < 0, then we
         exponentiate the inverse of A |n| times, i.e., A ** (-n) = A^(-1) ** n.
         """
         return self.pow(power, LocalFourPoint.identity_like(self))
@@ -128,7 +127,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def symmetrize_v_vp(self):
         """
-        Symmetrize with respect to (v,v'). This is justified for SU(2) symmetric systems. (Thesis Rohringer p. 72)
+        Symmetrizes the vertex with respect to (v,v'). This is justified for SU(2) symmetric systems, see PhD Thesis
+        of Georg Rohringer p. 72
         """
         if self.num_vn_dimensions != 2:
             raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
@@ -138,7 +138,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def sum_over_orbitals(self, orbital_contraction: str = "abcd->ad"):
         """
-        Sums over the given orbitals.
+        Sums over the given orbitals with the contraction given. Raises an error if the contraction is not valid.
         """
         split = orbital_contraction.split("->")
         if len(split[0]) != 4 or len(split[1]) > len(split[0]):
@@ -151,8 +151,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         return self
 
     def sum_over_vn(self, beta: float, axis: tuple = (-1,)):
-        """
-        Sums over specific fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
+        r"""
+        Sums over a specific number of fermionic frequency dimensions and multiplies the with the correct prefactor
+        :math:`1/\beta^{n_dim}`.
         """
         if len(axis) > self.num_vn_dimensions:
             raise ValueError(f"Cannot sum over more fermionic axes than available in {self.current_shape}.")
@@ -168,8 +169,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
 
     def sum_over_all_vn(self, beta: float):
-        """
-        Sums over all fermionic frequency dimensions and multiplies with the correct prefactor 1/beta^(n_dim).
+        r"""
+        Sums over all fermionic frequency dimensions and multiplies the with the correct prefactor
+        :math:`1/\beta^{n_dim}`.
         """
         if self.num_vn_dimensions == 0:
             return self
@@ -183,8 +185,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def contract_legs(self, beta: float):
         """
-        Sums over all fermionic frequency dimensions if the object has 2 fermionic frequency dimensions and sums over
-        the inner two orbitals.
+        Contracts the outer legs of a four-point vertex. This is equivalent to a sum over all fermionic frequency
+        dimensions if the object has 2 fermionic frequency dimensions and a sum over the inner two orbital dimensions.
         """
         if self.num_vn_dimensions != 2:
             raise ValueError("This method is only implemented for objects with 2 fermionic frequency dimensions.")
@@ -192,17 +194,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def to_compound_indices(self) -> "LocalFourPoint":
         r"""
-        Converts the indices of the LocalNPoint object
-
-        .. math:: F^{wv(v')}_{lmm'l'}
-
-        to compound indices
-
-        .. math:: F^{w}_{c_1, c_2}.
-
-        for a couple of shape cases. We group {v, l, m} and {v',m',l'} into two indices.
-
-        .. math:: c_1 \;and\; c_2.
+        Converts the indices of the LocalFourPoint object :math:`F^{wvv'}_{lmm'l'}` to compound indices :math:`F^{w}_{c_1, c_2}`
+        by transposing the object to [w, o1, o2, v, o4, o3, v'] (if the object has any fermionic frequency dimension,
+        otherwise the compound indices are built from orbital dimensions only) and grouping {o1, o2, v} and {o4, o3, v'}
+        to the new compound index. Always returns the object with a compressed momentum dimension and in the same niw
+        range as the original object.
         """
         if len(self.current_shape) == 3:  # [w,x1,x2]
             return self
@@ -227,7 +223,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def to_full_indices(self, shape: tuple = None) -> "LocalFourPoint":
         """
-        Converts an object stored with compound indices to an object that has unraveled orbital and frequency axes.
+        Converts an object stored with compound indices to an object that has unraveled momentum,
+        orbital and frequency axes. Always returns the object with a compressed momentum dimension. This is the inverse
+        transformation as `to_compound_indices`. Will make use of the `original_shape` the object was created or last
+        modified with. If the `original_shape` is not set or is hard to obtain, the `shape` argument can be used to
+        specify the original shape of the object.
         """
         if len(self.current_shape) == self.num_orbital_dimensions + self.num_wn_dimensions + self.num_vn_dimensions:
             return self
@@ -259,6 +259,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def invert(self, copy: bool = True):
         """
         Inverts the object by transforming it to compound indices. Returns the object always in half of their niw range.
+        We chose to use the inversion from `scipy` here, since it allows to overwrite the matrix and saves a bit of memory.
         """
 
         def invert_sub_matrix(matrix):
@@ -275,8 +276,12 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def matmul(self, other, left_hand_side: bool = True) -> "LocalFourPoint":
         """
-        Helper method that allows for matrix multiplication for LocalFourPoint objects. Depending on the
-        number of frequency dimensions, the objects have to be multiplied differently.
+        Helper method that allows for a matrix multiplication between LocalFourPoint and LocalFourPoint and LocalInteraction
+        objects. Depending on the number of frequency and momentum dimensions,
+        the objects have to be multiplied differently. The use of einsum is very crucial for memory efficiency here,
+        as a regular matrix multiplication in compound index space would create large intermediate arrays if one of both
+        partaking objects has less than two fermionic frequency dimensions. Result objects will always be returned in
+        half of their niw range to save memory.
         """
         if not isinstance(other, (LocalFourPoint, LocalInteraction)):
             raise ValueError(f"Multiplication {type(self)} @ {type(other)} not supported.")
@@ -374,11 +379,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def mul(self, other):
         r"""
-        Allows for the multiplication with a number, a numpy array or a LocalFourPoint object. In the latter case,
-        we require both objects to only have one niv dimension, such that
-
-        .. math:: A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}.
-        Returns the object in the half niw range.
+        Allows for the multiplication of two LocalFourPoint objects with both having only one fermionic frequency
+        dimension or for the multiplication of a LocalFourPoint object with a number or numpy array. Attention: this
+        does not do the same as `__matmul__` or `matmul`, but rather :math:`A_{abcd}^{wv} * B_{dcef}^{wv'} = C_{abef}^{wvv'}`.
         """
         if not isinstance(other, (int, float, complex, np.ndarray, LocalFourPoint)):
             raise ValueError("Multiplication only supported with numbers, numpy arrays or LocalFourPoint objects.")
@@ -407,8 +410,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def add(self, other):
         """
-        Helper method that allows for addition of local FourPoint objects.
-        Depending on the number of frequency and momentum dimensions, the objects have to be added differently.
+        Helper method that allows for addition of LocalFourPoint objects and other LocalFourPoint or LocalInteraction
+        objects. Additions with numpy arrays, floats, ints or complex numbers are also supported.
+        Depending on the number of frequency and momentum dimensions, the vertices have to be added slightly different.
+        If the objects have different niw ranges, they will be converted to the half niw range before the addition.
+        Objects will always be returned in the half niw range to save memory.
         """
         if not isinstance(other, (LocalFourPoint, LocalInteraction, np.ndarray, float, int, complex)):
             raise ValueError(f"Operations '+/-' for {type(self)} and {type(other)} not supported.")
@@ -506,14 +512,18 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     def sub(self, other):
         """
-        Helper method that allows for subtraction of local FourPoint objects.
-        Depending on the number of frequency and momentum dimensions, the objects have to be subtracted differently.
+        Helper method that allows for Subtraction of LocalFourPoint objects and other LocalFourPoint or LocalInteraction
+        objects. Subtractions with numpy arrays, floats, ints or complex numbers are also supported.
+        Depending on the number of frequency and momentum dimensions, the vertices have to be subtracted slightly different.
+        If the objects have different niw ranges, they will be converted to the half niw range before the subtraction.
+        Objects will always be returned in the half niw range to save memory.
         """
         return self.add(-other)
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalFourPoint":
         """
-        Permutes the orbitals of the four-point object.
+        Permutes the orbitals of the local four-point object with the string given. It is not possible to sum over any
+        orbitals with this method.
         """
         split = permutation.split("->")
         if (
@@ -648,7 +658,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """
         Used to pad a LocalFourPoint object with a LocalInteraction object outside the core frequency region.
-        If niv_pad is less or equal self.niv, no padding will be done.
+        If niv_pad is less or equal self.niv, no padding will be done. Mainly used to add the interaction to the irreducible
+        vertex out of the core frequency region.
         """
         copy = deepcopy(self)
 
@@ -665,7 +676,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
     def rotate_orbitals(self, theta: float = np.pi):
         r"""
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
-        radians and the number of orbitals needs to be 2.
+        radians and the number of orbitals needs to be 2. Mostly inteded for testing purposes.
         """
         copy = deepcopy(self)
 
@@ -715,7 +726,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         value: float = 0.0,
     ) -> "LocalFourPoint":
         """
-        Initializes the object with a constant value.
+        Initializes a LocalFourPoint object with a constant value.
         """
         shape = (n_bands,) * 4 + (2 * niw + 1,) * num_wn_dimensions + (2 * niv,) * num_vn_dimensions
         return LocalFourPoint(

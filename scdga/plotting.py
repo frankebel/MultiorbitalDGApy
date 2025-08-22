@@ -39,7 +39,9 @@ def add_afzb(ax=None, kx=None, ky=None, lw=1.0, marker=""):
 
 
 def find_zeros(mat: np.ndarray) -> np.ndarray:
-    """Finds the zero crossings of a 2D matrix."""
+    """
+    Finds the zero crossings of a 2D matrix.
+    """
     ind_x = np.arange(mat.shape[0])
     ind_y = np.arange(mat.shape[1])
 
@@ -221,6 +223,9 @@ def plot_two_point_kx_ky(
     save: bool = True,
     show: bool = False,
 ):
+    """
+    Used to plot a two-point function in kx, ky space for given orbitals.
+    """
     if len(orbs) != 2:
         raise ValueError("'orbs' needs to be of size 2.")
 
@@ -295,6 +300,10 @@ def plot_two_point_kx_ky_real_and_imag(
     save: bool = True,
     show: bool = False,
 ):
+    """
+    Used to plot a two-point function in kx, ky space for given orbitals in two separate files for the real part and
+    imaginary part, respectively.
+    """
     cm = 1.0 / 2.54
     if len(orbs) != 2:
         raise ValueError("'orbs' needs to be of size 2.")
@@ -355,6 +364,9 @@ def plot_two_point_kx_ky_with_fs_points(
     do_save: bool = True,
     show: bool = False,
 ):
+    """
+    Used to plot a two-point function in kx, ky space for given orbitals including Fermi surface points.
+    """
     mat = obj.mat[..., 0, orbs[0], orbs[1], obj.niv][: obj.nq[0] // 2, : obj.nq[1] // 2]
     fs_ind = find_zeros(mat)
     n_fs = np.shape(fs_ind)[0]
@@ -375,6 +387,11 @@ def plot_gap_function(
     do_save: bool = True,
     show: bool = False,
 ):
+    """
+    Used to plot the gap function in kx, ky space for given orbitals. Here, not the real and imaginary parts are plotted,
+    but rather the two values at the two lowest positive and smallest negative Matsubara frequency, respectively. This
+    helps investigating the symmetry of the gap function.
+    """
     if len(orbs) != 2:
         raise ValueError("'orbs' needs to be of size 2.")
 

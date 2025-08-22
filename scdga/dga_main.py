@@ -298,6 +298,10 @@ def execute_dga_routine():
 
 
 def configure_matplotlib():
+    """
+    Configures matplotlib to use the Euler font for mathematical expressions if it is available on the system. This is
+    done because The Euler font is the default math font in my thesis.
+    """
     euler_font = [s for s in font_manager.findSystemFonts() if "euler" in s.lower()]
     if len(euler_font) == 0:
         return

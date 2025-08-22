@@ -213,12 +213,10 @@ def test_initializes_with_compressed_q_dimension():
 
 
 def test_shifts_momentum_by_zero_correctly():
-    mat = np.zeros(
-        (4, 4, 4),
-    )
+    mat = np.zeros((4, 4, 4))
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_q((0, 0, 0))
-    assert np.allclose(shifted, mat, rtol=1e-2)
+    assert np.allclose(shifted.mat, mat, rtol=1e-2)
 
 
 def test_shifts_momentum_by_positive_values_correctly():
@@ -226,7 +224,7 @@ def test_shifts_momentum_by_positive_values_correctly():
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_q((1, 1, 1))
     expected = np.roll(mat, shift=(-1, -1, -1), axis=(0, 1, 2))
-    assert np.allclose(shifted, expected, rtol=1e-2)
+    assert np.allclose(shifted.mat, expected, rtol=1e-2)
 
 
 def test_shifts_momentum_by_negative_values_correctly():
@@ -234,14 +232,14 @@ def test_shifts_momentum_by_negative_values_correctly():
     obj = IAmNonLocal(mat, (4, 4, 4))
     shifted = obj.shift_k_by_q((-1, -1, -1))
     expected = np.roll(mat, shift=(1, 1, 1), axis=(0, 1, 2))
-    assert np.allclose(shifted, expected, rtol=1e-2)
+    assert np.allclose(shifted.mat, expected, rtol=1e-2)
 
 
 def test_shifts_momentum_with_compressed_q_dimension_correctly():
     mat = np.zeros((64,))
     obj = IAmNonLocal(mat, (4, 4, 4), has_compressed_q_dimension=True)
     shifted = obj.shift_k_by_q((1, 1, 1))
-    assert shifted.shape == (4, 4, 4)
+    assert shifted.current_shape == (4, 4, 4)
 
 
 def test_raises_error_when_shifting_with_invalid_q_length():

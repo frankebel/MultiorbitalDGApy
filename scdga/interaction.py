@@ -7,8 +7,7 @@ from scdga.n_point_base import IHaveMat, IHaveChannel, IAmNonLocal, SpinChannel
 
 class LocalInteraction(IHaveMat, IHaveChannel):
     r"""
-    Class for local interactions
-    .. math:: U_{abcd}.
+    Class for the local (momentum-independent) interaction :math:`U_{abcd}`.
     """
 
     def __init__(self, mat: np.ndarray, channel: SpinChannel = SpinChannel.NONE):
@@ -38,7 +37,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
     def rotate_orbitals(self, theta: float = np.pi):
         r"""
         Rotates the orbitals of the local interaction around the angle :math:`\theta`. :math:`\theta` must be given in
-        radians and the number of orbitals needs to be 2.
+        radians and the number of orbitals needs to be 2. This is mainly intended for testing purposes.
         """
         copy = deepcopy(self)
 
@@ -79,7 +78,7 @@ class LocalInteraction(IHaveMat, IHaveChannel):
 
     def add(self, other) -> "LocalInteraction":
         """
-        Adds two local interactions.
+        Allows for the addition of a LocalInteraction object and another LocalInteraction object or numpy array.
         """
         if not isinstance(other, (LocalInteraction, np.ndarray)):
             raise ValueError(f"Operation {type(self)} +/- {type(other)} not supported.")
@@ -93,13 +92,13 @@ class LocalInteraction(IHaveMat, IHaveChannel):
 
     def sub(self, other) -> "LocalInteraction":
         """
-        Subtracts two local interactions.
+        Allows for the subtraction of a LocalInteraction object or numpy array from a LocalInteraction object.
         """
         return self.add(-other)
 
     def pow(self, power) -> "LocalInteraction":
         """
-        Exponentiation of LocalInteraction objects.
+        Exponentiates the LocalInteraction object. Only works for powers >= 0.
         """
         if power <= 0:
             raise ValueError("Exponentiation of Interaction objects only supports positive powers greater than zero.")
@@ -110,39 +109,38 @@ class LocalInteraction(IHaveMat, IHaveChannel):
 
     def __add__(self, other) -> "LocalInteraction":
         """
-        Adds two local interactions.
+        Adds two local interactions and allows for A + B = C.
         """
         return self.add(other)
 
     def __radd__(self, other) -> "LocalInteraction":
         """
-        Adds two local interactions.
+        Adds two local interactions and allows for A + B = C.
         """
         return self.add(other)
 
     def __sub__(self, other) -> "LocalInteraction":
         """
-        Subtracts two local interactions.
+        Subtracts two local interactions and allows for A - B = C.
         """
         return self.sub(other)
 
     def __rsub__(self, other) -> "LocalInteraction":
         """
-        Subtracts two local interactions.
+        Subtracts two local interactions and allows for A - B = C.
         """
         return self.sub(other)
 
     def __pow__(self, power, modulo=None) -> "LocalInteraction":
         """
-        Exponentiation of Interaction objects.
+        Exponentiation of Interaction objects and allows for A ** n = C, where n is an integer.
         """
         return self.pow(power)
 
 
-class Interaction(LocalInteraction, IAmNonLocal):
+class Interaction(IAmNonLocal, LocalInteraction):
     r"""
-    Class for non-local interactions
-    .. math:: V_{abcd}^{q}.
+    Class for the non-local (momentum-dependent) interaction :math:`V_{abcd}^q`.
     """
 
     def __init__(
@@ -154,13 +152,6 @@ class Interaction(LocalInteraction, IAmNonLocal):
     ):
         LocalInteraction.__init__(self, mat, channel)
         IAmNonLocal.__init__(self, mat, nq, has_compressed_q_dimension)
-
-    @property
-    def n_bands(self) -> int:
-        """
-        Returns the number of bands.
-        """
-        return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "Interaction":
         """
@@ -181,7 +172,7 @@ class Interaction(LocalInteraction, IAmNonLocal):
     def rotate_orbitals(self, theta: float = np.pi):
         r"""
         Rotates the orbitals of the interaction around the angle :math:`\theta`. :math:`\theta` must be given in
-        radians and the number of orbitals needs to be 2.
+        radians and the number of orbitals needs to be 2. Mostly intended for testing purposes.
         """
         copy = deepcopy(self)
 
@@ -222,7 +213,8 @@ class Interaction(LocalInteraction, IAmNonLocal):
 
     def add(self, other) -> "Interaction":
         """
-        Adds two (non-)local interactions.
+        Allows for the addition of a non-local Interaction object with another (non-)local Interaction object or a
+        numpy array.
         """
         if not isinstance(other, (LocalInteraction, Interaction, np.ndarray)):
             raise ValueError(f"Operation {type(self)} +/- {type(other)} not supported.")
@@ -244,13 +236,14 @@ class Interaction(LocalInteraction, IAmNonLocal):
 
     def sub(self, other) -> "Interaction":
         """
-        Subtracts two (non-)local interactions.
+        Allows for the subtraction of a (non-)local Interaction object or a numpy array from a non-local
+        Interaction object.
         """
         return self.add(-other)
 
     def pow(self, power) -> "Interaction":
         """
-        Exponentiation of Interaction objects.
+        Exponentiates the Interaction object. Only works for powers >= 0.
         """
         if power <= 0:
             raise ValueError("Exponentiation of Interaction objects only supports positive powers greater than zero.")
@@ -262,30 +255,30 @@ class Interaction(LocalInteraction, IAmNonLocal):
 
     def __add__(self, other) -> "Interaction":
         """
-        Adds two (non-)local interactions.
+        Adds two (non-)local interactions and allows for A + B = C.
         """
         return self.add(other)
 
     def __radd__(self, other) -> "Interaction":
         """
-        Adds two (non-)local interactions.
+        Adds two (non-)local interactions and allows for A + B = C.
         """
         return self.add(other)
 
     def __sub__(self, other) -> "Interaction":
         """
-        Subtracts two (non-)local interactions.
+        Subtracts two (non-)local interactions and allows for A - B = C.
         """
         return self.sub(other)
 
     def __rsub__(self, other) -> "Interaction":
         """
-        Subtracts two (non-)local interactions.
+        Subtracts two (non-)local interactions and allows for A - B = C.
         """
         return self.sub(other)
 
     def __pow__(self, power, modulo=None) -> "Interaction":
         """
-        Exponentiation of Interaction objects.
+        Exponentiation of Interaction objects and allows for A ** n = C, where n is an integer.
         """
         return self.pow(power)

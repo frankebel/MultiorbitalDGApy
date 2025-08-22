@@ -11,8 +11,10 @@ from scdga.self_energy import SelfEnergy
 
 
 def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray) -> float:
-    """
-    Returns the total filling. Helper method for the root finding of mu.
+    r"""
+    Returns the total filling calculated from the self-energy, :math:`\mu`, kinetic Hamiltonian and more.
+    Helper method for the root finding of :math:`\mu` via a Newton method.
+    Side note: One could refactor some functions in this file because they are very redundant.
     """
     n_bands = sigma_mat.shape[-2]
     eye_bands = np.eye(n_bands, n_bands)
@@ -41,8 +43,8 @@ def get_total_fill(mu: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float
 def root_fun(
     mu: float, target_filling: float, ek: np.ndarray, sigma_mat: np.ndarray, beta: float, smom0: np.ndarray
 ) -> float:
-    """
-    Function to minimize to find a new mu via Newton's method.
+    r"""
+    Minimization function used to find a new chemical potential :math:`\mu` via Newton's method.
     """
     return get_total_fill(mu, ek, sigma_mat, beta, smom0) - target_filling
 
@@ -66,9 +68,10 @@ def update_mu(
     return mu
 
 
-class GreensFunction(LocalNPoint, IAmNonLocal):
+class GreensFunction(IAmNonLocal, LocalNPoint):
     """
-    Represents a Green's function.
+    Represents a Green's function object. The Green's function class sadly is a bit of a mess because parts of it were
+    heavily inspired by DGApy.
     """
 
     def __init__(
@@ -93,36 +96,25 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
     @property
     def e_kin(self):
         """
-        Returns the kinetic energy of the system, see Eq (22) in G. Rohringer & A. Toschi PHYSICAL REVIEW B 94, 125144 (2016).
+        Returns the kinetic energy of the system, see Eq (22) in G. Rohringer & A. Toschi
+        PHYSICAL REVIEW B 94, 125144 (2016).
         """
         ekin = 2 / config.sys.beta * np.sum(np.mean(self._ek[..., None] * self.mat, axis=(0, 1, 2)))
         assert np.abs(ekin.imag) < 1e-8, "Kinetic energy must be real."
         return ekin.real
 
     @property
-    def n_bands(self) -> int:
-        """
-        Returns the number of bands.
-        """
-        return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
-
-    @property
     def ek(self) -> np.ndarray:
         """
-        Returns the band dispersion.
+        Returns the band dispersion as a numpy array.
         """
         return self._ek
 
-    def get_g_full_from_gloc(self) -> "GreensFunction":
-        """
-        Returns the full k-dependent Green's function.
-        """
-        return GreensFunction(self._get_gfull_mat(), self._sigma, self._ek, True, False)
-
     @staticmethod
     def get_g_full(siw: SelfEnergy, mu: float, ek: np.ndarray):
-        """
-        Returns the full k-dependent Green's function.
+        r"""
+        Returns the full k-dependent Green's function from the self-energy, chemical potential :math`\mu` and band
+        dispersion.
         """
         eye_bands = np.eye(siw.n_bands, siw.n_bands)
         iv = 1j * MFHelper.vn(siw.niv, config.sys.beta)
@@ -172,8 +164,7 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
 
     def transpose_orbitals(self):
         r"""
-        Transposes the orbitals of the Green's function object.
-        .. math:: G_{ab}^k -> G_{ba}^k
+        Transposes the orbitals of the Green's function object like :math:`G_{ab}^k -> G_{ba}^k.
         """
         return self.permute_orbitals("ab->ba")
 
@@ -187,7 +178,7 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
     def rotate_orbitals(self, theta: float = np.pi):
         r"""
         Rotates the orbitals of the four-point object around the angle :math:`\theta`. :math:`\theta` must be given in
-        radians and the number of orbitals needs to be 2.
+        radians and the number of orbitals needs to be 2. Mainly intended for testing purposes.
         """
         copy = deepcopy(self)
 
@@ -209,10 +200,11 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
 
     def _get_fill_nonlocal(self) -> tuple[float, np.ndarray, np.ndarray]:
         """
-        Returns the total filling, the k-mean of the occupation and the occupation.
+        Returns the total filling, the k-mean of the occupation (shape [o1, o2]) and the occupation
+        (shape [k, o1, o2]).
         """
         mat = self._get_gfull_mat()
-        g_model = self._get_g_model_q_mat()
+        g_model = self._get_g_model_k_mat()
         smom0 = self._sigma.smom[0][None, None, None, ...]
         mu_bands: np.ndarray = config.sys.mu * np.eye(self.n_bands)[None, None, None, ...]
 
@@ -230,7 +222,10 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         n_el = 2.0 * np.trace(occ_mean).real
         return n_el, occ_mean, occ_k
 
-    def _get_gfull_mat(self):
+    def _get_gfull_mat(self) -> np.ndarray:
+        """
+        Returns the full Green's function.
+        """
         iv_bands, mu_bands = self._get_g_params_local()
         iv_bands = iv_bands[None, None, None, ...]
         mu_bands = mu_bands[None, None, None, ...]
@@ -241,23 +236,37 @@ class GreensFunction(LocalNPoint, IAmNonLocal):
         mat = iv_bands + mu_bands - self._ek[..., None] - sigma_mat
         return np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
 
-    def _get_gloc_mat(self):
+    def _get_gloc_mat(self) -> np.ndarray:
+        """
+        Returns the local Green's function.
+        """
         return np.mean(self._get_gfull_mat(), axis=(0, 1, 2))
 
-    def _get_g_model_mat(self):
+    def _get_g_model_mat(self) -> np.ndarray:
+        """
+        Returns a helper quantity that helps to speed up the sum convergence when calculating the filling using the
+        zero'th moment of the self-energy and the k-space averaged band dispersion.
+        """
         iv_bands, mu_bands = self._get_g_params_local()
         hloc: np.ndarray = np.mean(self._ek, axis=(0, 1, 2))
         smom0, _ = self._sigma.smom
         mat = iv_bands + mu_bands - hloc[..., None] - smom0[..., None]
         return np.linalg.inv(mat.transpose(2, 0, 1)).transpose(1, 2, 0)
 
-    def _get_g_model_q_mat(self):
+    def _get_g_model_k_mat(self) -> np.ndarray:
+        """
+        Returns a k-dependent helper quantity that helps to speed up the sum convergence when calculating the filling
+        using the zero'th moment of the self-energy and the band dispersion.
+        """
         iv_bands, mu_bands = self._get_g_params_local()
         smom0 = self._sigma.smom[0][None, None, None, ...]
         mat = iv_bands[None, None, None] + mu_bands[None, None, None] - self._ek[..., None] - smom0[..., None]
         return np.linalg.inv(mat.transpose(0, 1, 2, 5, 3, 4)).transpose(0, 1, 2, 4, 5, 3)
 
     def _get_g_params_local(self):
+        """
+        Small helper method which projects the frequencies and mu into the diagonal orbital band space.
+        """
         eye_bands = np.eye(self.n_bands, self.n_bands)
         iv = 1j * MFHelper.vn(self.niv, config.sys.beta)
         iv_bands = iv[None, None, :] * eye_bands[..., None]

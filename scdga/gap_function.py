@@ -4,9 +4,10 @@ from scdga.local_n_point import LocalNPoint
 from scdga.n_point_base import IAmNonLocal, IHaveChannel, SpinChannel, FrequencyNotation
 
 
-class GapFunction(LocalNPoint, IAmNonLocal, IHaveChannel):
+class GapFunction(IAmNonLocal, LocalNPoint, IHaveChannel):
     """
-    Represents the superconducting gap function.
+    Represents the superconducting gap function. Has one momentum dimension, two orbital dimensions and one fermionic
+    frequency dimension. This object was created to simplify the power iteration in the Eliashberg equation.
     """
 
     def __init__(
@@ -21,16 +22,11 @@ class GapFunction(LocalNPoint, IAmNonLocal, IHaveChannel):
         IAmNonLocal.__init__(self, mat, nk, has_compressed_q_dimension=has_compressed_q_dimension)
         IHaveChannel.__init__(self, channel, FrequencyNotation.PP)
 
-    @property
-    def n_bands(self) -> int:
-        """
-        Returns the number of bands.
-        """
-        return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
-
     def to_compound_indices(self):
         """
-        Converts the indices of the gap function to compound indices.
+        Converts the indices of the gap function to compound indices. The gap function is a vector in compound index
+        notation and the compound index representation makes the power iteration procedure in the Eliashberg equation
+        easier.
         """
         if len(self.current_shape) == 2:  # [q,x]
             return self
@@ -41,7 +37,8 @@ class GapFunction(LocalNPoint, IAmNonLocal, IHaveChannel):
 
     def to_full_indices(self, shape: tuple = None):
         """
-        Converts an object stored with compound indices to an object that has unraveled orbital and frequency axes.
+        Converts the compound indices of the gap function back to the unraveled indices by using the `original_shape`
+        attribute.
         """
         if len(self.current_shape) == (
             4 if self.has_compressed_q_dimension else 6
@@ -58,7 +55,7 @@ class GapFunction(LocalNPoint, IAmNonLocal, IHaveChannel):
 
     def add(self, other):
         """
-        Adds two GapFunctions.
+        Allows for the addition of two gap functions.
         """
         if not isinstance(other, GapFunction):
             raise TypeError("Can only add or subtract GapFunction objects.")
@@ -76,18 +73,18 @@ class GapFunction(LocalNPoint, IAmNonLocal, IHaveChannel):
 
     def sub(self, other):
         """
-        Subtracts two GapFunctions.
+        Allows for the subtraction of two gap functions.
         """
         return self.add(-other)
 
     def __add__(self, other):
         """
-        Adds two GapFunctions.
+        Adds two GapFunctions like A + B = C.
         """
         return self.add(other)
 
     def __sub__(self, other):
         """
-        Subtracts two GapFunctions.
+        Subtracts two GapFunctions like A - B = C.
         """
         return self.sub(other)

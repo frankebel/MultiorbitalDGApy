@@ -11,94 +11,159 @@ class W2dynFile:
         self.open()
 
     def __del__(self):
+        """
+        Destructor to ensure the file is closed properly.
+        """
         self._file.close()
 
     def close(self):
+        """
+        Closes the HDF5 file.
+        """
         self._file.close()
 
     def open(self):
+        """
+        Opens the HDF5 file in read mode.
+        """
         self._file = h5py.File(self._fname, "r")
 
     def atom_group(self, dmft_iter="dmft-last", atom=1):
+        """
+        Returns the group string for a given DMFT iteration and atom.
+        """
         return dmft_iter + f"/ineq-{atom:03}"
 
     def get_nd(self, atom: int = 1) -> int:
-        """Returns the number of d orbitals."""
+        """
+        Returns the number of d orbitals of the DMFT calculation.
+        """
         return self._from_atom_config("nd", atom=atom)
 
     def get_np(self, atom: int = 1) -> int:
-        """Returns the number of p orbitals."""
+        """
+        Returns the number of p orbitals of the DMFT calculation.
+        """
         return self._from_atom_config("np", atom=atom)
 
     def get_beta(self) -> float:
-        """Returns beta."""
+        r"""
+        Returns the inverse temperature :math:`\beta`.
+        """
         return self._file[".config"].attrs["general.beta"]
 
     def get_mu(self, dmft_iter: str = "dmft-last"):
-        """Returns the chemical potential."""
+        r"""
+        Returns the chemical potential :math:`\mu`.
+        """
         return self._file[dmft_iter + "/mu/value"][()]
 
     def get_totdens(self) -> float:
-        """Returns the total particle density."""
+        """
+        Returns the total particle density.
+        """
         return self._file[".config"].attrs["general.totdens"]
 
     def get_jdd(self, atom: int = 1) -> float:
+        """
+        Extracts the Hund's coupling for d orbitals.
+        """
         return self._from_atom_config("jdd", atom=atom)
 
     def get_jdp(self, atom: int = 1) -> float:
+        """
+        Extracts the Hund's coupling between d and p orbitals.
+        """
         return self._from_atom_config("jdp", atom=atom)
 
     def get_jpp(self, atom: int = 1) -> float:
+        """
+        Extracts the Hund's coupling for p orbitals.
+        """
         return self._from_atom_config("jpp", atom=atom)
 
     def get_jppod(self, atom: int = 1) -> float:
-        """Offdiagonal terms for jpp"""
+        """
+        Extracts the offdiagonal terms for jpp.
+        """
         return self._from_atom_config("jppod", atom=atom)
 
     def get_udd(self, atom: int = 1) -> float:
+        """
+        Extracts the Hubbard U for d orbitals.
+        """
         return self._from_atom_config("udd", atom=atom)
 
     def get_udp(self, atom: int = 1) -> float:
+        """
+        Extracts the Hubbard U between d and p orbitals.
+        """
         return self._from_atom_config("udp", atom=atom)
 
     def get_upp(self, atom: int = 1) -> float:
+        """
+        Extracts the Hubbard U for p orbitals.
+        """
         return self._from_atom_config("upp", atom=atom)
 
     def get_uppod(self, atom: int = 1):
-        """Offdiagonal terms for upp"""
+        """
+        Extracts the offdiagonal terms for upp.
+        """
         return self._from_atom_config("uppod", atom=atom)
 
     def get_vdd(self, atom: int = 1) -> float:
+        """
+        Extracts the intersite interaction between d orbitals.
+        """
         return self._from_atom_config("vdd", atom=atom)
 
     def get_vpp(self, atom: int = 1) -> float:
+        """
+        Extracts the intersite interaction between p orbitals.
+        """
         return self._from_atom_config("vpp", atom=atom)
 
     def get_siw(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
-        """Extracts the DMFT self-energy in Matsubara frequency space as [band, spin, iw]."""
+        """
+        Extracts the DMFT self-energy in Matsubara frequency space as [band, spin, iv].
+        """
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/siw/value"][()]
 
     def get_giw(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
-        """Extracts the DMFT Green's function in Matsubara frequency space as [band, spin, iw]."""
+        """
+        Extracts the DMFT Green's function in Matsubara frequency space as [band, spin, iv].
+        """
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/giw/value"][()]
 
     def get_occ(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
-        """Extracts the occupation matrix as [band1, spin1, band2, spin2]."""
+        """
+        Extracts the occupation matrix as [band1, spin1, band2, spin2].
+        """
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/occ/value"][()]
 
     def get_rho1(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
-        """Extracts the 1-particle density matrix as [band1, spin1, band2, spin2]."""
+        """
+        Extracts the 1-particle density matrix as [band1, spin1, band2, spin2].
+        """
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/rho1/value"][()]
 
     def get_rho2(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
-        """Extracts the 2-particle density matrix as [band1, spin1, band2, spin2, band3, spin3, band4, spin4]."""
+        """
+        Extracts the 2-particle density matrix as [band1, spin1, band2, spin2, band3, spin3, band4, spin4].
+        """
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/rho2/value"][()]
 
     def _from_atom_config(self, key: str, atom: int = 1):
+        """
+        Extracts a value from the .config group for a given atom.
+        """
         return self._file[".config"].attrs[f"atoms.{atom:1}.{key}"]
 
     def get_dc(self, dmft_iter: str = "dmft-last", atom: int = 1) -> list:
-        """Extracts the DMFT double-counting correction as [band, spin]."""
+        """
+        Extracts the DMFT double-counting correction as [band, spin].
+        """
         return self._file[self.atom_group(dmft_iter=dmft_iter, atom=atom) + "/dc/value"][()]
 
 
@@ -109,15 +174,27 @@ class W2dynG4iwFile:
         self.open()
 
     def __del__(self):
+        """
+        Destructor to ensure the file is closed properly.
+        """
         self._file.close()
 
     def close(self):
+        """
+        Closes the HDF5 file.
+        """
         self._file.close()
 
     def open(self):
+        """
+        Opens the HDF5 file in read mode.
+        """
         self._file = h5py.File(self._fname, "r")
 
     def read_g2_full_multiband(self, n_bands: int, ineq: int = 1, name: str = "dens") -> np.ndarray:
+        """
+        Reads the full two-particle Green's function from a w2dynamics vertex file and returns it as a numpy array.
+        """
         # the next lines determine the size of g2, i.e. niw and niv
         channel_group_string = f"/ineq-{ineq:03}/{name}"
         niw_full = len(self._file[channel_group_string].keys())

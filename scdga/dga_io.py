@@ -1,7 +1,5 @@
 import os
 
-import numpy as np
-
 import scdga.brillouin_zone as bz
 import scdga.config as config
 import scdga.w2dyn_aux as w2dyn_aux
@@ -48,7 +46,6 @@ def load_from_w2dyn_file_and_update_config():
 
     config.sys.mu = file.get_mu()
     config.sys.n_bands = file.get_nd() + file.get_np()
-    # config.sys.n = file.get_totdens() / 2
     config.sys.n = file.get_totdens()
     config.sys.occ_dmft = 2 * np.mean(file.get_rho1(), axis=(1, 3))
 
@@ -60,48 +57,20 @@ def load_from_w2dyn_file_and_update_config():
 
     giw_spin_mean = np.mean(file.get_giw(), axis=1)  # [band,spin,niv]
     g_dmft = GreensFunction(extend_orbital(giw_spin_mean))
-    """
-    giw = np.load("/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs0/g_dmft.npy")
-    g_dmft.mat[0, 0] = giw
-    g_dmft.mat[1, 1] = giw
-    """
-    # g_dmft.mat = g_dmft.mat[..., 0, 0, :][..., None, None, :]
-    # g_dmft.mat[..., 1, 1, :] = g_dmft.mat[..., 0, 0, :]
-    # g_dmft.update_original_shape()
 
     siw_spin_mean = np.mean(file.get_siw(), axis=1)  # [band,spin,niv]
     siw_spin_mean = extend_orbital(siw_spin_mean)[None, None, None, ...]
     siw_dc_spin_mean = np.mean(file.get_dc(), axis=-1)  # [band,spin]
     siw_dc_spin_mean = extend_orbital(siw_dc_spin_mean)[None, None, None, ..., None]
-    # siw_spin_mean = siw_spin_mean[..., 0, 0, :][..., None, None, :]
-    # siw_spin_mean[..., 1, 1, :] = siw_spin_mean[..., 0, 0, :]
-    # siw_dc_spin_mean = siw_dc_spin_mean[..., 0, 0, :][..., None, None, :]
-    # siw_dc_spin_mean[..., 1, 1, :] = siw_dc_spin_mean[..., 0, 0, :]
-    """
-    siw = np.load("/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs0/sigma_dmft.npy")
-    siw_spin_mean[0, 0, 0, 0, 0] = siw
-    siw_spin_mean[0, 0, 0, 1, 1] = siw
-    """
     sigma_dmft = SelfEnergy(siw_spin_mean, estimate_niv_core=True) + siw_dc_spin_mean
-    # sigma_dmft.mat = sigma_dmft.mat[..., 0, 0, :][..., None, None, :]
-    # sigma_dmft.update_original_shape()
     del giw_spin_mean, siw_spin_mean, siw_dc_spin_mean
 
     file.close()
 
     file = w2dyn_aux.W2dynG4iwFile(fname=str(os.path.join(config.dmft.input_path, config.dmft.fname_2p)))
     g2_dens = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="dens"), channel=SpinChannel.DENS)
-
-    # g2_dens.mat = g2_dens.mat[0, 0, 0, 0][None, None, None, None, ...]
-    # g2_dens.mat[1, 1, 1, 1] = g2_dens.mat[0, 0, 0, 0]
-    # g2_dens.update_original_shape()
     g2_magn = LocalFourPoint(file.read_g2_full_multiband(config.sys.n_bands, name="magn"), channel=SpinChannel.MAGN)
-    # g2_magn.mat = g2_magn.mat[0, 0, 0, 0][None, None, None, None, ...]
-    # g2_magn.mat[1, 1, 1, 1] = g2_magn.mat[0, 0, 0, 0]
-    # g2_magn.update_original_shape()
     file.close()
-
-    # config.sys.n_bands = 1
 
     config.lattice.hamiltonian = set_hamiltonian(
         config.lattice.type, config.lattice.er_input, config.lattice.interaction_type, config.lattice.interaction_input
@@ -128,22 +97,6 @@ def load_from_w2dyn_file_and_update_config():
 
     g2_dens = update_g2_from_dmft(g2_dens)
     g2_magn = update_g2_from_dmft(g2_magn)
-
-    """
-    g2_magn.mat[0, 0, 0, 0] = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs0/g2_magn_loc.npy"
-    )[0, 0, 0, 0]
-    g2_magn.mat[1, 1, 1, 1] = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs0/g2_magn_loc.npy"
-    )[0, 0, 0, 0]
-
-    g2_dens.mat[0, 0, 0, 0] = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs0/g2_dens_loc.npy"
-    )[0, 0, 0, 0]
-    g2_dens.mat[1, 1, 1, 1] = np.load(
-        "/home/julpe/Documents/DATA/Singleorb-DATA/N085/LDGA_Nk256_Nq256_wc60_vc40_vs0/g2_dens_loc.npy"
-    )[0, 0, 0, 0]
-    """
 
     return g_dmft, sigma_dmft, g2_dens, g2_magn
 

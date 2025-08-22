@@ -11,7 +11,7 @@ class BubbleGenerator:
     @staticmethod
     def create_generalized_chi0(g_loc: GreensFunction, niw: int, niv: int) -> LocalFourPoint:
         r"""
-        Returns the generalized bare susceptibility :math:`\chi_{0;lmm'l'}^{wv} = -\beta G_{ll'}^{v} G_{m'm}^{v-w}`.
+        Returns the generalized bare susceptibility :math:`\chi_{0;abcd}^{wv} = -\beta G_{ad}^{v} G_{cb}^{v-w}`.
         """
         wn = MFHelper.wn(niw)
         niv_range = np.arange(-niv, niv)
@@ -22,7 +22,7 @@ class BubbleGenerator:
     @staticmethod
     def create_generalized_chi0_q(giwk: GreensFunction, niw: int, niv: int, q_list: np.ndarray) -> FourPoint:
         r"""
-        Returns :math:`\chi^{q\nu}_{0;lmm'l'} = -\beta \sum_{k} G^{k}_{ll'} * G^{k-q}_{m'm}`.
+        Returns :math:`\chi^{q\nu}_{0;abcd} = -\beta \sum_{k} G^{k}_{ad} * G^{k-q}_{cb}`.
         """
         wn = MFHelper.wn(niw, return_only_positive=True)
         gchi0_q = np.zeros((len(q_list),) + (giwk.n_bands,) * 4 + (len(wn), 2 * niv), dtype=giwk.mat.dtype)
@@ -47,7 +47,7 @@ class BubbleGenerator:
         r"""
         Returns the particle-particle bare bubble susceptibility from the Green's function. Returns the object with :math:`\omega = 0`.
         We have :math:`\chi_{0;abcd}^{\vec{k}(\omega=0)\nu} = G_{ad}^k * G_{cb}^{-k}` with :math:`G_{cb}^{-k} = G_{bc}^{*k}`. Attention:
-        no factor of :math:`-\beta` is included here!
+        no factor of :math:`-\beta` is included here.
         """
         g = giwk.cut_niv(niv_pp).compress_q_dimension()
         gchi0_q = g.mat[:, :, None, None, :, :] * np.conj(g.mat)[:, None, :, :, None, :]

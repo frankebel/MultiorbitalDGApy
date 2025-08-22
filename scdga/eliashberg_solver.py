@@ -19,7 +19,8 @@ from scdga.n_point_base import SpinChannel, FrequencyNotation
 
 def delete_files(filepath: str, *args) -> None:
     """
-    Delete files in the given directory. If the file is not found, it will be ignored.
+    Deletes files in the given directory. If the file is not found, it will be ignored. The files that are deleted
+    are usually temporary files that are not needed anymore after the calculation is done.
     """
     for name in args:
         if not isinstance(name, str):
@@ -36,7 +37,7 @@ def create_full_vertex_q_r(
     u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, comm: MPI.Comm
 ) -> FourPoint:
     """
-    Calculate the full vertex function in the given channel. See Eq. (3.139) in my thesis.
+    Calculates the full vertex in the given channel (either density or magnetic). For details, see Eq. (3.139) in my thesis.
     """
     logger = config.logger
     logger.log_info(f"Starting to calculate the full {channel.value} vertex.")
@@ -84,8 +85,9 @@ def create_full_vertex_q_r(
 
 def create_full_vertex_q_r2(channel: SpinChannel, niv_pp: int, mpi_distributor: MpiDistributor) -> FourPoint:
     r"""
-    Calculates the full vertex function in either the density or magnetic channel using
-    .. math:: F^q_r = F^\omega_r [ 1- \chi_0^{nl,q} F^\omega_r]^{-1}
+    Alternative way that calculates the full vertex function in either the density or magnetic channel using
+    :math:`F^q_r = F^\omega_r [ 1- \chi_0^{nl,q} F^\omega_r]^{-1}`, see Eq. (3.106a) and Eq. (3.106b) in my thesis for
+    the case of :math:`V^q=0`.
     """
     f_r_loc = LocalFourPoint.load(
         os.path.join(config.output.output_path, f"f_{channel.value}_loc.npy"), channel=channel
@@ -115,9 +117,10 @@ def transform_vertex_ph_to_pp_w0(
     f_q_r: LocalFourPoint, niv_pp: int, channel: SpinChannel = SpinChannel.NONE
 ) -> LocalFourPoint | FourPoint:
     """
-    Transforms the vertex function from particle-hole notation to particle-particle notation based on Motoharu's
+    Transforms the vertex function from particle-hole notation to particle-particle notation based on Motoharu Kitatani's
     frequency convention (which is the same as Georg Rohringer's). This is done by flipping the last Matsubara
-    frequency to get v, -v' and then applying the necessary condition of w = v-v'.
+    frequency to get v, -v' and then applying the necessary condition of w = v-v'. The full vertex is needed with these
+    frequency shifts for the construction of the pairing vertex.
     """
     is_local = not isinstance(f_q_r, FourPoint)
 
@@ -138,8 +141,9 @@ def create_full_vertex_q_r_pp_w0(
     u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, niv_pp: int, mpi_dist_irrk: MpiDistributor
 ):
     """
-    Calculates the full vertex function in PH notation and transforms it to PP notation.
-    For the calculation of F, see Eq. (3.140a) and Eq. (3.140b) in my thesis.
+    Calculates the full vertex in PH notation and transforms it to PP notation for the both density or magnetic channel.
+    This is done in batches of size `group_size` to account for memory limiations. Since we need two variables as large
+    as the auxiliary susceptibility, we split the MPI communicator in half and calculate the full vertex in two batches.
     """
     logger = config.logger
 
@@ -163,9 +167,9 @@ def create_full_vertex_q_r_pp_w0(
 
 def get_initial_gap_function(shape: tuple, channel: SpinChannel) -> np.ndarray:
     """
-    Generates the initial gap function based on the specified shape, spin channel,
-    and symmetry settings from the configuration. Depending on the symmetry and
-    spin channel, it initializes the gap function with appropriate properties.
+    Generates the initial gap function based on the specified shape, spin channel and symmetry settings from the
+    configuration. Depending on the symmetry and spin channel, it initializes the gap function with appropriate
+    properties. Most often it should suffice to use a random initialization.
     """
     if channel not in {SpinChannel.SING, SpinChannel.TRIP}:
         raise ValueError("Channel must be either SING or TRIP.")
@@ -201,9 +205,9 @@ def get_initial_gap_function(shape: tuple, channel: SpinChannel) -> np.ndarray:
 
 def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     """
-    Solves the Eliashberg equation for the superconducting eigenvalue and gap function using an
-    Implicitly Restarted Lanczos Method. Returns the first n_eig eigenvalues and eigenvectors and the maximum
-    eigenvalue and corresponding eigenvector in two separate lists, one for the lambdas, one for the gaps.
+    Solves the Eliashberg equation for the superconducting eigenvalue and gap function using an Implicitly Restarted
+    Lanczos Method with ARPACK. Returns the largest n_eig eigenvalues and corresponding eigenvectors as two separate
+    lists.
     """
     logger = config.logger
 
@@ -304,7 +308,9 @@ def create_local_reducible_pp_diagrams(
     channel: SpinChannel,
 ) -> LocalFourPoint:
     """
-    Create the reducible particle-particle diagrams for either singlet or triplet channels.
+    Creates the reducible particle-particle diagrams for either singlet or triplet channel in PP notation. NOTE:
+    This is not finished yet and still in development. Please consider setting "include_local_part" in the Eliashberg
+    configuration to False.
     """
     logger = config.logger
 
@@ -343,7 +349,7 @@ def solve(
     giwk_dga: GreensFunction, giwk_dmft: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, comm: MPI.Comm
 ):
     """
-    Solve the Eliashberg equation for the superconducting eigenvalue and gap function.
+    Solves the Eliashberg equation for largest the superconducting eigenvalues and corresponding gap functions.
     """
     logger = config.logger
 

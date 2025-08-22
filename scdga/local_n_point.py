@@ -6,7 +6,8 @@ from scdga.n_point_base import *
 class LocalNPoint(IHaveMat):
     """
     Base class for all (Local)NPoint objects, such as the (Full/Irreducible) Vertex functions, Susceptibilities,
-    Fermi-Bose Vertices, Green's Function, Self-Energy and the like.
+    Fermi-Bose Vertices, Green's Function, Self-Energy and the like. Removes redundancy of a lot of methods to make
+    the implementation more efficient.
     """
 
     def __init__(
@@ -35,28 +36,30 @@ class LocalNPoint(IHaveMat):
     @property
     def n_bands(self) -> int:
         """
-        Returns the number of bands.
+        Returns the number of bands. Since these objects are momentum-independent, the orbital dimension is always
+        in the first dimension.
         """
         return self.original_shape[0]
 
     @property
     def num_orbital_dimensions(self) -> int:
         """
-        Returns the number of orbital dimensions.
+        Returns the number of orbital dimensions; two (for a two-point object) or four
+        (for a three-leg or four-leg vertex) are allowed.
         """
         return self._num_orbital_dimensions
 
     @property
     def num_wn_dimensions(self) -> int:
         """
-        Returns the number of bosonic frequency dimensions.
+        Returns the number of bosonic frequency dimensions; none or one are allowed.
         """
         return self._num_wn_dimensions
 
     @property
     def num_vn_dimensions(self) -> int:
         """
-        Returns the number of fermionic frequency dimensions.
+        Returns the number of fermionic frequency dimensions; none, one or two are allowed.
         """
         return self._num_vn_dimensions
 
@@ -81,17 +84,19 @@ class LocalNPoint(IHaveMat):
 
     @property
     def full_niw_range(self) -> bool:
-        """
+        r"""
         Specifies whether the object is stored in the full bosonic frequency range or
-        only a subset of it (only w >= 0).
+        only a subset of it (only :math:`\omega \geq 0`). All vertices fulfill a certain symmetry against the sign change
+        of :math:`\omega\to-\omega`, which can be taken advantage of. By exploiting this symmetry it allows us to almost
+        half their memory usage.
         """
         return self._full_niw_range
 
     @property
     def full_niv_range(self) -> bool:
-        """
+        r"""
         Specifies whether the object is stored in the full fermionic frequency range or
-        only a subset of it (only v > 0).
+        only a subset of it (only :math:`\nu\geq0`). Same reasoning as already discussed in `full_niw_range`.
         """
         return self._full_niv_range
 
@@ -176,7 +181,8 @@ class LocalNPoint(IHaveMat):
 
     def to_full_niw_range(self):
         """
-        Converts the object to the full bosonic frequency range in-place.
+        Converts the object to the full bosonic frequency range. For details, we refer to Eq. (2.39) and the associated
+        text in Georg Rohringer's PhD thesis.
         """
         if self.num_wn_dimensions == 0 or self.full_niw_range:
             return self
@@ -206,8 +212,9 @@ class LocalNPoint(IHaveMat):
         return self
 
     def to_half_niw_range(self):
-        """
-        Converts the object to the half bosonic frequency range in-place.
+        r"""
+        Converts the object to the half bosonic frequency range by taking
+        :math:`F^{\omega\nu\nu'}_{abcd}\to F^{\omega\geq0;\nu\nu'}_{abcd}`.
         """
         if self.num_wn_dimensions == 0 or not self.full_niw_range:
             return self
@@ -221,7 +228,7 @@ class LocalNPoint(IHaveMat):
 
     def flip_frequency_axis(self, axis: tuple | int):
         """
-        Flips the matrix along the specified axis.
+        Flips the matrix along the specified frequency axis.
         """
         if self.num_wn_dimensions + self.num_vn_dimensions == 0:
             raise ValueError("Cannot flip the matrix if there are no frequency dimensions.")
@@ -238,7 +245,7 @@ class LocalNPoint(IHaveMat):
 
     def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """
-        Saves the content of the matrix to a file. Always saves it with half the niw range.
+        Saves the content of the matrix to a numpy file. Always saves it in half the niw range to save storage space.
         """
         is_self_full_niw_range = self.full_niw_range
         np.save(os.path.join(output_dir, f"{name}.npy"), self.to_half_niw_range().mat, allow_pickle=False)
@@ -247,7 +254,7 @@ class LocalNPoint(IHaveMat):
 
     def _align_frequency_dimensions_for_operation(self, other: "LocalNPoint"):
         """
-        Adapts the frequency dimensions of two LocalNPoint objects to fit each other for addition or multiplication.
+        Adapts the frequency dimensions of two (Local)NPoint objects to fit each other for addition or multiplication.
         """
         self_extended = False
         other_extended = False

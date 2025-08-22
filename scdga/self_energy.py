@@ -9,9 +9,10 @@ from scdga.matsubara_frequencies import MFHelper
 from scdga.n_point_base import IAmNonLocal
 
 
-class SelfEnergy(LocalNPoint, IAmNonLocal):
+class SelfEnergy(IAmNonLocal, LocalNPoint):
     """
-    Represents the self-energy. Will automatically map to full niv range if full_niv_range is set to False.
+    Represents the self-energy. Will automatically map to full niv range if full_niv_range is set to False. This class
+    is a bit of a mess and should be rewritten.
     """
 
     def __init__(
@@ -39,13 +40,6 @@ class SelfEnergy(LocalNPoint, IAmNonLocal):
         Returns the first two local momenta of the self-energy.
         """
         return self._smom0, self._smom1
-
-    @property
-    def n_bands(self) -> int:
-        """
-        Returns the number of bands.
-        """
-        return self.original_shape[1] if self.has_compressed_q_dimension else self.original_shape[3]
 
     def fit_smom(self):
         """

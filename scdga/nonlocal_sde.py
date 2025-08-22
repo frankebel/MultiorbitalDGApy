@@ -23,14 +23,11 @@ def get_hartree_fock(
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""
     Returns the Hartree-Fock term separately for the local and non-local interaction. Since we are always SU(2)-symmetric,
-    the sum over the spins of the first term in Eq. (4.55) in Anna Galler's thesis results in a simple factor of 2.
+    the sum over the spins of the first term in Eq. (4.55) in Anna Galler's thesis results in a simple factor of 2. This
+    can be seen in my master's thesis, Eq. (3.56). The Hartree-Fock term is given by
     .. math:: \Sigma_{HF}^k = 2(U_{abcd} + V^{q=0}_{abcd}) n_{dc} - 1/N_q \sum_q (U_{adcb} + V^{q}_{adcb}) n^{k-q}_{dc}
-    where the Hartree-term is given by
-
-    .. math:: \Sigma_{H} = 2(U_{abcd} + V^{q=0}_{abcd}) n_{dc}
-    and the Fock-term reads
-
-    .. math:: \Sigma_{F}^k = - 1/N_q \sum_q (U_{adcb} + V^{q}_{adcb}) n^{k-q}_{dc}.
+    where the Hartree-term reads :math:`\Sigma_{H} = 2(U_{abcd} + V^{q=0}_{abcd}) n_{dc}` and the Fock-term reads
+    :math:`\Sigma_{F}^k = - 1/N_q \sum_q (U_{adcb} + V^{q}_{adcb}) n^{k-q}_{dc}`.
     """
     v_q0 = v_nonloc.find_q((0, 0, 0))
     occ_qk = np.array([np.roll(config.sys.occ_k, [-i for i in q], axis=(0, 1, 2)) for q in q_list])  # [q,k,o1,o2]
@@ -41,7 +38,7 @@ def get_hartree_fock(
     fock = -1.0 / nq_tot * (u_loc + v_nonloc).compress_q_dimension().times("qadcb,qkdc->kab", occ_qk)
     hartree, fock = hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
 
-    theta = 0
+    theta = np.pi / 3
 
     if theta == 0:
         return hartree, fock
@@ -56,10 +53,8 @@ def create_auxiliary_chi_r_q(
     gamma_r: LocalFourPoint, gchi0_q_inv: FourPoint, u_loc: LocalInteraction, v_nonloc: Interaction
 ) -> FourPoint:
     r"""
-    Returns the auxiliary susceptibility
-    .. math:: \chi^{*;qvv'}_{r;lmm'l'} = ((\chi_{0;lmm'l'}^{qv})^{-1} + (\Gamma_{r;lmm'l'}^{wvv'}-U_{r;lmm'l'}-V_{r;lmm'l'}^q)/\beta^2)^{-1}
-
-    See Eq. (3.68) in Paul Worm's thesis.
+    Returns the auxiliary susceptibility, see Eq. (3.60) in my master's thesis.
+    .. math:: \chi^{*;qvv'}_{r;abcd} = ((\chi_{0;abcd}^{qv})^{-1} + (\Gamma_{r;abcd}^{wvv'}-U_{r;abcd}-V_{r;abcd}^q)/\beta^2)^{-1}
     """
     return (
         (gchi0_q_inv + 1.0 / config.sys.beta**2 * gamma_r)
@@ -75,6 +70,9 @@ def create_auxiliary_chi_r_q_sum(
     v_nonloc: Interaction,
     summands: int = -1,
 ) -> FourPoint:
+    """
+    Obsolete method which calculates the auxiliary susceptibility by a summation instead of a matrix inversion.
+    """
     if summands <= 0:
         return create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
 
@@ -101,9 +99,8 @@ def create_auxiliary_chi_r_q_sum(
 
 def create_vrg_r_q(gchi_aux_q_r_sum: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
     r"""
-    Returns the three-leg vertex
-    .. math:: \gamma_{r;lmm'l'}^{qv} = \beta * (\chi^{qvv}_{0;lmab})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;bam'l'}).
-    See Eq. (3.71) in Paul Worm's thesis.
+    Returns the three-leg vertex, see Eq. (3.63) in my master's thesis.
+    .. math:: \gamma_{r;abcd}^{qv} = \beta * (\chi^{qvv}_{0;ablm})^{-1} * (\sum_{v'} \chi^{*;qvv'}_{r;mlcd}).
     """
     return config.sys.beta * (gchi0_q_inv @ gchi_aux_q_r_sum)
 
@@ -117,7 +114,8 @@ def create_generalized_chi_q_with_shell_correction(
 ) -> FourPoint:
     """
     Calculates the generalized susceptibility with the shell correction as described by
-    Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d. Eq. A.15
+    Motoharu Kitatani et al. 2022 J. Phys. Mater. 5 034005; DOI 10.1088/2515-7639/ac7e6d. Eq. A.15. See also Sec. 3.7.2
+    in my master's thesis for details.
     """
     return (
         (gchi_aux_q_sum + gchi0_q_full_sum - gchi0_q_core_sum).invert()
@@ -127,7 +125,7 @@ def create_generalized_chi_q_with_shell_correction(
 
 def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q: FourPoint, u_loc: LocalInteraction) -> FourPoint:
     """
-    Returns the double-counting kernel for the self-energy calculation.
+    Returns the double-counting kernel for the self-energy calculation. For details, see Eq. (3.124) in my master's thesis.
     """
     kernel = 1.0 / config.sys.beta**2 * u_loc.permute_orbitals("abcd->adcb") @ gchi0_q
     kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_1dens_3magn)
@@ -140,10 +138,9 @@ def calculate_kernel_r_q(
     vrg_q_r: FourPoint, gchi_aux_q_r_sum: FourPoint, v_nonloc: Interaction, u_loc: LocalInteraction
 ):
     r"""
-    Returns the kernel for the self-energy calculation.
-    .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} * U^{q}_{r;fehg} * \chi_{r;ghcd}^{q}
-
-    minus 2/3 times the identity if the channel is the magnetic channel (due to the extra u in Eq. (1.125)).
+    Returns the kernel for the self-energy calculation minus 2/3 times the identity if the channel is the magnetic
+    channel (due to the extra factor of :math:`U_{ah21}` in Eq. (3.125) in my master's thesis).
+    .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} U^{q}_{r;fehg} \chi_{r;ghcd}^{q}
     """
     u_r = v_nonloc.as_channel(vrg_q_r.channel) + u_loc.as_channel(vrg_q_r.channel)
     kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
@@ -164,8 +161,10 @@ def calculate_sigma_kernel_r_q(
     v_nonloc: Interaction,
     mpi_dist_irrq: MpiDistributor,
 ) -> FourPoint:
-    """
-    Returns the kernel in a specific channel for the self-energy calculation.
+    r"""
+    Returns the kernel for the self-energy calculation in a specific spin channel. Calculates the auxiliary
+    susceptibility, the three-leg vertex and the physical susceptibility with shell correction. Also performs a
+    :math:`\lambda`-correction on the physical susceptibility if specified in the config for single-band input.
     """
     logger = config.logger
 
@@ -217,10 +216,10 @@ def calculate_sigma_kernel_r_q(
 
 
 def perform_lambda_correction(chi_phys_q_r: FourPoint) -> FourPoint:
-    """
-    Performs the lambda correction on the physical susceptibility. If 'spch' is specified, the lambda correction will
-    be performed on both the density and magnetic channel whereas only the magnetic channel will be corrected if
-    'sp' is specified.
+    r"""
+    Performs the :math:`\lambda`-correction on the physical susceptibility. If 'spch' is specified, the lambda
+    correction will be performed on both the density and magnetic channel whereas only the magnetic channel will be
+    corrected if 'sp' is specified as :math:`\lambda`-correction type in the corresponding config.
     """
     logger = config.logger
 
@@ -275,8 +274,9 @@ def perform_lambda_correction(chi_phys_q_r: FourPoint) -> FourPoint:
 
 def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, my_full_q_list: np.ndarray) -> SelfEnergy:
     r"""
-    Returns
-    .. math:: \Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ].
+    Returns :math:`\Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ]`.
+    For very large momentum grids, this function is the slowest part compared to the rest of the code due to the
+    repeated loops. Potential speed-ups could be achieved by batching the q-points or using numba.
     """
     mat = np.zeros(
         (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
@@ -321,7 +321,9 @@ def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[Sel
 
 def read_last_n_sigmas_from_files(n: int, output_path: str = "./", previous_sc_path: str = "./") -> list[np.ndarray]:
     """
-    Reads the last n total self-energies from the output directory and - if specified - the previous self-consistency path.
+    Reads the last n total self-energies from the output directory and - if specified - the previous self-consistency
+    path. This is used for the predictive Pulay-mixing scheme. If one has a history of self-energies from a previous
+    calculation, these will be used as well.
     """
     files_output_dir = glob.glob(os.path.join(output_path, "sigma_dga_iteration_*.npy"))
     if previous_sc_path != "" and previous_sc_path is not None and os.path.exists(previous_sc_path):
@@ -346,6 +348,12 @@ def calculate_self_energy_q(
     sigma_dmft: SelfEnergy,
     sigma_local: SelfEnergy,
 ) -> SelfEnergy:
+    """
+    Main routine for the non-local DGA self-energy calculation. Calculates the Hartree- and Fock-terms, the bubble,
+    the double-counting correction and the kernel in the density and magnetic channel. Finally, calculates the
+    non-local self-energy from the kernel and the Green's function. Also takes care of the self-consistency loop and
+    the chemical potential adjustment as well as the self-energy mixing, etc.
+    """
     logger = config.logger
 
     logger.log_info("Starting with non-local DGA routine.")
@@ -379,7 +387,7 @@ def calculate_self_energy_q(
     delta_sigma = sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
     mu_history = [config.sys.mu]
 
-    theta = 0
+    theta = np.pi / 3
 
     for current_iter in range(starting_iter + 1, starting_iter + config.self_consistency.max_iter + 1):
         logger.log_info("----------------------------------------")
