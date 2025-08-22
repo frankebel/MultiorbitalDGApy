@@ -38,7 +38,7 @@ def get_hartree_fock(
     fock = -1.0 / nq_tot * (u_loc + v_nonloc).compress_q_dimension().times("qadcb,qkdc->kab", occ_qk)
     hartree, fock = hartree[None, ..., None], fock[..., None]  # [k,o1,o2,v]
 
-    theta = np.pi / 3
+    theta = 0
 
     if theta == 0:
         return hartree, fock
@@ -387,7 +387,7 @@ def calculate_self_energy_q(
     delta_sigma = sigma_dmft.cut_niv(config.box.niv_core) - sigma_local.cut_niv(config.box.niv_core)
     mu_history = [config.sys.mu]
 
-    theta = np.pi / 3
+    theta = 0
 
     for current_iter in range(starting_iter + 1, starting_iter + config.self_consistency.max_iter + 1):
         logger.log_info("----------------------------------------")
