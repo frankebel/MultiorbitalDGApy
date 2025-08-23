@@ -146,8 +146,7 @@ def calculate_kernel_r_q(
     kernel = vrg_q_r - vrg_q_r @ u_r @ gchi_aux_q_r_sum
 
     if vrg_q_r.channel == SpinChannel.MAGN:
-        kernel -= 2.0 / 3.0 * FourPoint.identity_like(kernel.to_full_niw_range())
-        kernel = kernel.to_half_niw_range()
+        kernel -= 2.0 / 3.0 * FourPoint.identity_like(kernel)
 
     return u_r @ kernel
 

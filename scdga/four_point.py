@@ -586,8 +586,8 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
             mat, nq=nq, num_vn_dimensions=num_vn_dimensions, has_compressed_q_dimension=True
         ).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
-            return result.take_vn_diagonal()
-        return result
+            result = result.take_vn_diagonal()
+        return result.to_half_niw_range()
 
     @staticmethod
     def identity_like(other: "FourPoint") -> "FourPoint":
@@ -595,4 +595,11 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         Creates an identity (matrix in compound index notation is unity in the last two dimensions) for the FourPoint
         object from the shape of another FourPoint object.
         """
-        return FourPoint.identity(other.n_bands, other.niw, other.niv, other.nq_tot, other.nq, other.num_vn_dimensions)
+        return FourPoint.identity(
+            other.n_bands,
+            other.niw if other.full_niw_range else 2 * other.niw,
+            other.niv,
+            other.nq_tot,
+            other.nq,
+            other.num_vn_dimensions,
+        )
