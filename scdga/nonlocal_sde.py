@@ -449,7 +449,6 @@ def calculate_self_energy_q(
         del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, gamma_magn
         logger.log_info("Calculated kernel for magnetic channel.")
 
-        kernel = kernel.to_half_niw_range()
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)
         if comm.rank == 0:
             kernel = kernel.map_to_full_bz(config.lattice.q_grid.irrk_inv)
