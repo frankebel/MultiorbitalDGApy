@@ -229,9 +229,7 @@ def perform_lambda_correction(chi_phys_q_r: FourPoint) -> FourPoint:
         chi_magn_loc_sum = (chi_dens_loc.mat + chi_magn_loc.mat).sum() - 1 / config.lattice.q_grid.nk_tot * (
             config.lattice.q_grid.irrk_count[:, None, None, None, None, None] * chi_phys_q_dens.mat
         ).sum()
-        chi_phys_q_r, lambda_r = lc.perform_single_lambda_correction(
-            chi_phys_q_r, 1 / config.sys.beta * chi_magn_loc_sum
-        )
+        chi_phys_q_r, lambda_r = lc.perform_single_lambda_correction(chi_phys_q_r, chi_magn_loc_sum / config.sys.beta)
         logger.log_info(f"Lambda correction 'sp' applied. Lambda for magn channel is: {lambda_r:.6f}.")
     return chi_phys_q_r
 

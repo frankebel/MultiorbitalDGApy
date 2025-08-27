@@ -13,7 +13,7 @@ def test_calculates_local_quantities_correctly():
     config.output.save_quantities = False
     config.output.do_plotting = False
 
-    config.dmft.input_path = "../dummy_data"
+    config.dmft.input_path = "../test_data"
 
     # scdga.dga_io.load_from_w2dyn_file_and_update_config()
 
