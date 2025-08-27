@@ -49,9 +49,9 @@ class LatticeConfig:
 
     def __init__(self):
         self.symmetries: list[bz.KnownSymmetries] = bz.two_dimensional_square_symmetries()
-        self.type: str = "t_tp_tpp"
-        self.er_input: str | list = ""
-        self.interaction_type: str = ""
+        self.type: str = "from_wannier90"
+        self.er_input: str | list = "./wannier_hr.dat"
+        self.interaction_type: str = "local_from_dmft"
         self.interaction_input: str | list = ""
         self.nk: tuple[int, int, int] = (16, 16, 1)
         self.nq: tuple[int, int, int] = self.nk
@@ -79,7 +79,7 @@ class SelfConsistencyConfig:
         self.mixing_strategy: str = "linear"
         self.mixing_history_length: int = 3
         self.use_poly_fit = False
-        self.previous_sc_path: str = "/."
+        self.previous_sc_path: str = "./"
 
 
 class EliashbergConfig:
@@ -95,7 +95,7 @@ class EliashbergConfig:
         self.save_fq: bool = False
         self.n_eig: int = 2
         self.epsilon: float = 1e-4
-        self.symmetry: str = "d-wave"
+        self.symmetry: str = "random"
         self.subfolder_name: str = "Eliashberg"
         self.include_local_part: bool = True
 
@@ -108,7 +108,7 @@ class LambdaCorrectionConfig:
     """
 
     def __init__(self):
-        self.perform_lambda_correction: bool = True
+        self.perform_lambda_correction: bool = False
         self.type: str = "spch"
 
 
@@ -120,7 +120,7 @@ class DmftConfig:
 
     def __init__(self):
         self.type: str = "w2dyn"
-        self.input_path: str = "/."
+        self.input_path: str = "./"
         self.fname_1p: str = "1p-data.hdf5"
         self.fname_2p: str = "g4iw_sym.hdf5"
         self.do_sym_v_vp: bool = True

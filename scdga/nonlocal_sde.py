@@ -62,41 +62,6 @@ def create_auxiliary_chi_r_q(
     ).invert(False)
 
 
-def create_auxiliary_chi_r_q_sum(
-    gamma_r: LocalFourPoint,
-    gchi0_q: FourPoint,
-    gchi0_q_inv: FourPoint,
-    u_loc: LocalInteraction,
-    v_nonloc: Interaction,
-    summands: int = -1,
-) -> FourPoint:
-    """
-    Obsolete method which calculates the auxiliary susceptibility by a summation instead of a matrix inversion.
-    """
-    if summands <= 0:
-        return create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
-
-    factor = gamma_r - v_nonloc.as_channel(gamma_r.channel) - u_loc.as_channel(gamma_r.channel)
-    factor *= 1.0 / config.sys.beta**2
-    factor = FourPoint(
-        factor,
-        gamma_r.channel,
-        config.lattice.nq,
-        1,
-        2,
-        gamma_r.full_niw_range,
-        True,
-        v_nonloc.has_compressed_q_dimension,
-    )
-    factor = factor @ gchi0_q
-    bse_sum = gchi0_q
-    next_value = gchi0_q
-    for _ in range(summands - 1):
-        next_value = -factor @ next_value
-        bse_sum += next_value
-    return bse_sum
-
-
 def create_vrg_r_q(gchi_aux_q_r_sum: FourPoint, gchi0_q_inv: FourPoint) -> FourPoint:
     r"""
     Returns the three-leg vertex, see Eq. (3.63) in my master's thesis.

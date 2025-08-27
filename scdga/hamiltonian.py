@@ -42,10 +42,10 @@ class InteractionElement:
     """
 
     def __init__(self, r_lat: list[int], orbs: list[int], value: float):
-        if not isinstance(r_lat, list) and len(r_lat) == 3 and all(isinstance(x, int) for x in r_lat):
+        if not (isinstance(r_lat, list) and len(r_lat) == 3 and all(isinstance(x, int) for x in r_lat)):
             raise ValueError("'r_lat' must be a list with exactly 3 integer elements.")
-        if (
-            not isinstance(orbs, list)
+        if not (
+            isinstance(orbs, list)
             and len(orbs) == 4
             and all(isinstance(x, int) for x in orbs)
             and all(orb > 0 for orb in orbs)

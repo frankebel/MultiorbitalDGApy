@@ -166,12 +166,6 @@ def test_append_returns_self_energy_unchanged_when_niv_is_less_than_or_equal_to_
     assert np.allclose(result.mat, self_energy.mat)
 
 
-def test_append_handles_edge_case_with_zero_niv():
-    self_energy = SelfEnergy(mat_decompressed, nk=nk, has_compressed_q_dimension=False)
-    result = self_energy.append_asympt(niv=0)
-    assert np.allclose(result.mat, self_energy.mat)
-
-
 def test_appends_asymptotic_tail_correctly_with_large_niv():
     self_energy = SelfEnergy(mat_decompressed, nk=nk, has_compressed_q_dimension=False)
     asympt = self_energy._get_asympt(niv=100)
@@ -279,10 +273,10 @@ def test_fits_polynomial_correctly_with_compression(has_compressed_q_dimension):
 
 
 def test_fits_polynomial_coefficients_correctly_with_default_parameters():
-    mat = np.random.rand(*nk, 2, 2, 100)
+    mat = np.random.rand(*nk, 2, 2, 100).astype(np.complex128)
     vn = MFHelper.vn(50, sys.beta)
     f_vn = np.random.rand() + np.random.rand() * vn + np.random.rand() * vn**2
-    mat[...] = f_vn + 1j * f_vn  # Dummy data for testing
+    mat = np.full(mat.shape, f_vn + 1j * f_vn)  # Dummy data for testing
     self_energy = SelfEnergy(mat, nk=nk, has_compressed_q_dimension=False)
     result = self_energy.fit_polynomial(n_fit=25, degree=2)
     assert np.allclose(result.mat[0, 0, 0], f_vn + 1j * f_vn, rtol=1e-2, atol=1e6)

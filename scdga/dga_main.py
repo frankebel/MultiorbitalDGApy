@@ -60,6 +60,10 @@ def execute_dga_routine():
             "Lambda correction is not available for multi-band systems. Please disable it in the config file."
         )
 
+    if config.lambda_correction.perform_lambda_correction:
+        config.self_consistency.max_iter = 1
+        config.self_consistency.mixing = 1.0
+
     config_parser.save_config_file(path=config.output.output_path, name="dga_config.yaml")
 
     logger.log_info("Config init and folder setup done.")
