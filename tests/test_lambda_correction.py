@@ -17,7 +17,11 @@ import scdga.brillouin_zone as bz
 
 def load_four_point(lc_type: str, filename: str, channel: SpinChannel) -> FourPoint:
     return FourPoint.load(
-        f"{os.getcwd()}/test_data/lambda_correction/" + lc_type + "/" + filename + ".npy",
+        f"{os.path.dirname(os.path.abspath(__file__))}/test_data/lambda_correction/"
+        + lc_type
+        + "/"
+        + filename
+        + ".npy",
         channel,
         num_vn_dimensions=0,
         has_compressed_q_dimension=True,
@@ -27,7 +31,13 @@ def load_four_point(lc_type: str, filename: str, channel: SpinChannel) -> FourPo
 
 def load_local_four_point(lc_type: str, filename: str, channel: SpinChannel) -> LocalFourPoint:
     return LocalFourPoint.load(
-        f"{os.getcwd()}/test_data/lambda_correction/" + lc_type + "/" + filename + ".npy", channel, num_vn_dimensions=0
+        f"{os.path.dirname(os.path.abspath(__file__))}/test_data/lambda_correction/"
+        + lc_type
+        + "/"
+        + filename
+        + ".npy",
+        channel,
+        num_vn_dimensions=0,
     )
 
 
@@ -91,7 +101,7 @@ def test_lambda_correction_in_sde_sp(lc_type):
     config.lattice.q_grid = bz.KGrid(nk=(4, 4, 1), symmetries=bz.two_dimensional_square_symmetries())
     config.sys.beta = 12.5
     config.lambda_correction.type = lc_type
-    config.output.output_path = f"./test_data/lambda_correction/{lc_type}"
+    config.output.output_path = f"{os.path.dirname(os.path.abspath(__file__))}/test_data/lambda_correction/{lc_type}"
 
     with patch("mpi4py.MPI.COMM_WORLD", wraps=mpi4py.MPI.COMM_WORLD) as comm_mock:
         config.logger = DgaLogger(comm_mock, "./")

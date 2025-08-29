@@ -174,7 +174,7 @@ def test_get_vq_returns_interaction():
 
 
 def test_read_write_hr_hk_files():
-    folder = f"{os.getcwd()}/test_data/hamiltonian"
+    folder = f"{os.path.dirname(os.path.abspath(__file__))}/test_data/hamiltonian"
     k_grid = KGrid(nk=(24, 24, 1), symmetries=brillouin_zone.two_dimensional_square_symmetries())
 
     wannier_hr_oneband = Hamiltonian().read_hr_w2k(f"{folder}/wannier_hr_oneband.dat")
