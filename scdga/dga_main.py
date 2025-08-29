@@ -109,8 +109,6 @@ def execute_dga_routine():
         (gamma_d, gamma_m, chi_d, chi_m, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc) = (None,) * 11
 
     # there is no need to broadcast the other quantities
-    gamma_d = comm.bcast(gamma_d, root=0)
-    gamma_m = comm.bcast(gamma_m, root=0)
     sigma_loc = comm.bcast(sigma_loc, root=0)
 
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
