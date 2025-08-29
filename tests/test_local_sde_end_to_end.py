@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import mpi4py
@@ -21,7 +22,7 @@ from scdga.n_point_base import SpinChannel
 
 @pytest.fixture
 def setup():
-    folder = "./test_data/end_2_end"
+    folder = f"{os.getcwd()}/test_data/end_2_end"
 
     with patch("mpi4py.MPI.COMM_WORLD", wraps=mpi4py.MPI.COMM_WORLD) as comm_mock:
         config.logger = DgaLogger(comm_mock, "./")

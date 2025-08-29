@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import mpi4py
@@ -16,7 +17,7 @@ import scdga.brillouin_zone as bz
 
 def load_four_point(lc_type: str, filename: str, channel: SpinChannel) -> FourPoint:
     return FourPoint.load(
-        "./test_data/lambda_correction/" + lc_type + "/" + filename + ".npy",
+        f"{os.getcwd()}/test_data/lambda_correction/" + lc_type + "/" + filename + ".npy",
         channel,
         num_vn_dimensions=0,
         has_compressed_q_dimension=True,
@@ -26,7 +27,7 @@ def load_four_point(lc_type: str, filename: str, channel: SpinChannel) -> FourPo
 
 def load_local_four_point(lc_type: str, filename: str, channel: SpinChannel) -> LocalFourPoint:
     return LocalFourPoint.load(
-        "./test_data/lambda_correction/" + lc_type + "/" + filename + ".npy", channel, num_vn_dimensions=0
+        f"{os.getcwd()}/test_data/lambda_correction/" + lc_type + "/" + filename + ".npy", channel, num_vn_dimensions=0
     )
 
 
