@@ -107,7 +107,7 @@ class SelfEnergy(IAmNonLocal, LocalNPoint):
         if self.num_vn_dimensions == 0 or self.full_niv_range:
             return self
 
-        self.mat = np.concatenate((np.conj(np.flip(np.einsum("...abv->...bav", self.mat), axis=-1)), self.mat), axis=-1)
+        self.mat = np.concatenate((np.conj(np.flip(self.mat, axis=-1)), self.mat), axis=-1)
         self.update_original_shape()
         self._full_niv_range = True
         return self

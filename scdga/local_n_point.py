@@ -112,7 +112,7 @@ class LocalNPoint(IHaveMat):
 
         copy = deepcopy(self)
 
-        niw_slice = slice(copy.niw - niw_cut, copy.niw + niw_cut + 1) if copy.full_niw_range else slice(0, niw_cut)
+        niw_slice = slice(copy.niw - niw_cut, copy.niw + niw_cut + 1) if copy.full_niw_range else slice(0, niw_cut + 1)
 
         if copy.num_vn_dimensions == 2:
             copy.mat = copy.mat[..., niw_slice, :, :]
@@ -190,22 +190,12 @@ class LocalNPoint(IHaveMat):
         niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
         ind = np.arange(1, self.current_shape[niw_axis])
         freq_axis = niw_axis
-        trailing = "w"
         if self.num_vn_dimensions == 1:
             freq_axis = niw_axis, -1
-            trailing = "wv"
         if self.num_vn_dimensions == 2:
             freq_axis = niw_axis, -2, -1
-            trailing = "wvp"
         self.mat = np.concatenate(
-            (
-                np.einsum(
-                    f"...abcd{trailing}->...dcba{trailing}",
-                    np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)),
-                ),
-                self.mat,
-            ),
-            axis=niw_axis,
+            (np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)), self.mat), axis=niw_axis
         )
         self.update_original_shape()
         self._full_niw_range = True

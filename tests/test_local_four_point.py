@@ -816,9 +816,7 @@ def test_converts_to_full_niw_range_correctly_with_no_vn_dimensions():
     mat = np.random.rand(2, 2, 2, 2, 11) + 1j * np.random.rand(2, 2, 2, 2, 11)
     obj = LocalFourPoint(mat, num_vn_dimensions=0, full_niw_range=False)
     result = obj.to_full_niw_range()
-    expected = np.einsum(
-        "abcd...->dcba...", np.conj(np.flip(np.take(mat, np.arange(1, mat.shape[-1]), axis=-1), axis=-1))
-    )
+    expected = np.conj(np.flip(np.take(mat, np.arange(1, mat.shape[-1]), axis=-1), axis=-1))
     expected = np.concatenate((expected, mat), axis=-1)
     assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.full_niw_range is True
@@ -828,9 +826,7 @@ def test_converts_to_full_niw_range_correctly_with_one_vn_dimension():
     mat = np.random.rand(2, 2, 2, 2, 11, 4) + 1j * np.random.rand(2, 2, 2, 2, 11, 4)
     obj = LocalFourPoint(mat, num_vn_dimensions=1, full_niw_range=False)
     result = obj.to_full_niw_range()
-    expected = np.einsum(
-        "abcd...->dcba...", np.conj(np.flip(np.take(mat, np.arange(1, mat.shape[-2]), axis=-2), axis=(-2, -1)))
-    )
+    expected = np.conj(np.flip(np.take(mat, np.arange(1, mat.shape[-2]), axis=-2), axis=(-2, -1)))
     expected = np.concatenate((expected, mat), axis=-2)
     assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.full_niw_range is True
@@ -840,9 +836,7 @@ def test_converts_to_full_niw_range_correctly_with_two_vn_dimensions():
     mat = np.random.rand(2, 2, 2, 2, 11, 4, 4) + 1j * np.random.rand(2, 2, 2, 2, 11, 4, 4)
     obj = LocalFourPoint(mat, num_vn_dimensions=2, full_niw_range=False)
     result = obj.to_full_niw_range()
-    expected = np.einsum(
-        "abcd...->dcba...", np.conj(np.flip(np.take(mat, np.arange(1, mat.shape[-3]), axis=-3), axis=(-3, -2, -1)))
-    )
+    expected = np.conj(np.flip(np.take(mat, np.arange(1, mat.shape[-3]), axis=-3), axis=(-3, -2, -1)))
     expected = np.concatenate((expected, mat), axis=-3)
     assert np.allclose(result.mat, expected, rtol=1e-2)
     assert result.full_niw_range is True

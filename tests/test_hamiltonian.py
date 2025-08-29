@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from scdga import brillouin_zone
+from scdga.brillouin_zone import KGrid
 from scdga.hamiltonian import Hamiltonian, HoppingElement, InteractionElement
 
 
@@ -168,3 +169,32 @@ def test_get_vq_returns_interaction():
     vq = h.get_vq(kg)
     assert hasattr(vq, "mat")
     assert vq.mat.shape[-4:] == (1, 1, 1, 1)
+
+
+def test_read_write_hr_hk_files():
+    folder = "./test_data/hamiltonian"
+    k_grid = KGrid(nk=(24, 24, 1), symmetries=brillouin_zone.two_dimensional_square_symmetries())
+
+    wannier_hr_oneband = Hamiltonian().read_hr_w2k(f"{folder}/wannier_hr_oneband.dat")
+    ek = wannier_hr_oneband.get_ek(k_grid)
+
+    assert wannier_hr_oneband._er.shape[-1] == 1
+    assert wannier_hr_oneband._er.shape[-2] == 1
+
+    assert ek.shape == (24, 24, 1, 1, 1)
+
+    wannier_hk_oneband, _ = Hamiltonian().read_hk_w2k(f"{folder}/wannier_oneband_24x24.hk")
+    ek_ref = wannier_hk_oneband.get_ek(k_grid).reshape(ek.shape)
+    assert np.allclose(ek, ek_ref)
+
+    wannier_hr_twoband = Hamiltonian().read_hr_w2k(f"{folder}/wannier_hr_twoband.dat")
+    ek = wannier_hr_twoband.get_ek(k_grid)
+
+    assert wannier_hr_twoband._er.shape[-1] == 2
+    assert wannier_hr_twoband._er.shape[-2] == 2
+
+    assert ek.shape == (24, 24, 1, 2, 2)
+
+    wannier_hk_twoband, _ = Hamiltonian().read_hk_w2k(f"{folder}/wannier_twoband_24x24.hk")
+    ek_ref = wannier_hk_twoband.get_ek(k_grid).reshape(ek.shape)
+    assert np.allclose(ek, ek_ref)

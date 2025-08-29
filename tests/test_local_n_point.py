@@ -179,10 +179,10 @@ def test_cuts_both_frequencies_correctly_with_full_ranges():
 
 
 def test_cuts_both_frequencies_correctly_with_half_ranges():
-    mat = np.zeros((4, 4, 10, 10))
+    mat = np.zeros((1, 1, 1, 1, 5, 10, 10))
     obj = LocalNPoint(mat, 2, 1, 2, full_niw_range=False, full_niv_range=False)
     result = obj.cut_niw_and_niv(2, 3)
-    assert result.mat.shape[-3] == 2
+    assert result.mat.shape[-3] == 3
     assert result.mat.shape[-1] == 3
     assert result.mat.shape[-2] == 3
 

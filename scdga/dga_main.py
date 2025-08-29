@@ -90,11 +90,9 @@ def execute_dga_routine():
         logger.log_info("Plotted g2 (dens) and g2 (magn).")
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
-    # ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)[..., 0, 0][..., None, None]
     g_loc = GreensFunction.create_g_loc(sigma_dmft.create_with_asympt_up_to_core(), ek).rotate_orbitals(theta=theta)
     sigma_dmft = sigma_dmft.rotate_orbitals(theta=theta)
     g_loc.save(output_dir=config.output.output_path, name="g_loc")
-    # g_loc.mat = g_loc.mat[..., 0, 0, :][..., None, None, :]
     u_loc = config.lattice.hamiltonian.get_local_u().rotate_orbitals(theta=theta)
     v_nonloc = config.lattice.hamiltonian.get_vq(config.lattice.q_grid).rotate_orbitals(theta=theta)
 

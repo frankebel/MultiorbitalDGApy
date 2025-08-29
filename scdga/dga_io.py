@@ -25,7 +25,7 @@ def uniquify_path(path: str = None):
     return path
 
 
-def load_from_w2dyn_file_and_update_config():
+def load_from_w2dyn_file_and_update_config() -> tuple[GreensFunction, SelfEnergy, LocalFourPoint, LocalFourPoint]:
     """
     Loads data from the w2dyn file and updates the config file.
     """
@@ -90,7 +90,9 @@ def load_from_w2dyn_file_and_update_config():
     config.output.plotting_path = os.path.join(config.output.output_path, config.output.plotting_subfolder_name)
     config.output.eliashberg_path = os.path.join(config.output.output_path, config.eliashberg.subfolder_name)
 
-    if not os.path.exists(config.output.output_path):
+    if not os.path.exists(config.output.output_path) and (
+        config.output.save_quantities or config.output.do_plotting or config.eliashberg.perform_eliashberg
+    ):
         os.makedirs(config.output.output_path)
         os.makedirs(config.output.plotting_path)
         os.makedirs(config.output.eliashberg_path)
