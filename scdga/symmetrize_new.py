@@ -1,4 +1,5 @@
 import gc
+import itertools
 import itertools as it
 import logging
 
@@ -23,6 +24,17 @@ def index2component_general(num_bands: int, n: int, ind: int) -> tuple[np.ndarra
     return bandspin, band, spin
 
 
+def component2index_general(num_bands: int, bands: list, spins: list) -> int:
+    assert num_bands > 0, "Number of bands has to be set to non-zero positive integers."
+
+    n_spins = 2
+    dims_bs = 4 * (num_bands * n_spins,)
+    dims_1 = (num_bands, n_spins)
+
+    bandspin = np.ravel_multi_index((bands, spins), dims_1)
+    return np.ravel_multi_index(bandspin, dims_bs) + 1
+
+
 # compute orbital indices from a compound index.
 def index2component_band(num_bands: int, n: int, ind: int) -> list:
     b = []
@@ -41,8 +53,18 @@ def component2index_band(num_bands: int, n: int, b: list) -> int:
     return ind
 
 
+def get_worm_components(num_bands: int) -> list[int]:
+    orbs = [list(orb) for orb in itertools.product(range(num_bands), repeat=4)]
+    spins = [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 1, 1], [1, 1, 0, 0], [1, 0, 0, 1], [0, 1, 1, 0]
+    component_indices = []
+    for o in orbs:
+        for s in spins:
+            component_indices.append(int(component2index_general(num_bands, o, s)))
+    return sorted(component_indices)
+
+
 def extract_g2_general(group_string: str, indices: list, file: h5py.File) -> tuple:
-    print(f"Nonzero number of elements of g2 in dataset: {len(indices)} / {(2 * n_bands) ** 4}")
+    print(f"Nonzero number of elements of g2 in dataset: {len(indices)} / {n_bands ** 4 * 2**4}")
 
     elements = np.array([file[f"{group_string}/{idx}/value"] for idx in indices])
     elements = elements.transpose(0, -1, 1, 2)

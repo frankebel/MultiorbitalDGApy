@@ -481,9 +481,9 @@ def solve(
     mpi_dist_irrk.delete_file()
 
     lambdas_sing = mpi_dist_irrk.bcast(lambdas_sing, root=0)
-    lambdas_trip = mpi_dist_irrk.bcast(lambdas_trip, root=1)
+    lambdas_trip = mpi_dist_irrk.bcast(lambdas_trip, root=1 if mpi_dist_irrk.mpi_size > 1 else 0)
 
     gaps_sing = mpi_dist_irrk.bcast(gaps_sing, root=0)
-    gaps_trip = mpi_dist_irrk.bcast(gaps_trip, root=1)
+    gaps_trip = mpi_dist_irrk.bcast(gaps_trip, root=1 if mpi_dist_irrk.mpi_size > 1 else 0)
 
     return lambdas_sing, lambdas_trip, gaps_sing, gaps_trip
