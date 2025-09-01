@@ -7,8 +7,10 @@ import h5py
 import numpy as np
 
 
-# computes component arrays from a compound index.
 def index2component_general(num_bands: int, n: int, ind: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Returns the band and spin components corresponding to a compound index.
+    """
     bandspin = np.zeros(n, dtype=np.int_)
     spin = np.zeros(n, dtype=np.int_)
     band = np.zeros(n, dtype=np.int_)
@@ -25,6 +27,9 @@ def index2component_general(num_bands: int, n: int, ind: int) -> tuple[np.ndarra
 
 
 def component2index_general(num_bands: int, bands: list, spins: list) -> int:
+    """
+    Computes a compound index from band and spin indices.
+    """
     assert num_bands > 0, "Number of bands has to be set to non-zero positive integers."
 
     n_spins = 2
@@ -35,8 +40,10 @@ def component2index_general(num_bands: int, bands: list, spins: list) -> int:
     return np.ravel_multi_index(bandspin, dims_bs) + 1
 
 
-# compute orbital indices from a compound index.
 def index2component_band(num_bands: int, n: int, ind: int) -> list:
+    """
+    Computes only orbital indices from a compound index.
+    """
     b = []
     ind_tmp = ind - 1
     for i in range(n):
@@ -45,8 +52,10 @@ def index2component_band(num_bands: int, n: int, ind: int) -> list:
     return b
 
 
-# compute a compound index from orbital indices only.
 def component2index_band(num_bands: int, n: int, b: list) -> int:
+    """
+    Computes a compound index from orbital indices only.
+    """
     ind = 1
     for i in range(n):
         ind = ind + num_bands ** (n - i - 1) * b[i]
@@ -54,6 +63,12 @@ def component2index_band(num_bands: int, n: int, b: list) -> int:
 
 
 def get_worm_components(num_bands: int) -> list[int]:
+    """
+    Returns the list of worm components for a given number of bands, where only relevant spin combinations for the
+    density and magnetic channels in the case of SU(2) symmetry are picked. If one wants to speed up the w2dynamics
+    simulation, one can furthermore restrict the worm components to only allow spins = [0, 0, 0, 0], [0, 0, 1, 1] at
+    the cost of more stochastic noise.
+    """
     orbs = [list(orb) for orb in itertools.product(range(num_bands), repeat=4)]
     spins = [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 1, 1], [1, 1, 0, 0], [1, 0, 0, 1], [0, 1, 1, 0]
     component_indices = []
@@ -64,6 +79,9 @@ def get_worm_components(num_bands: int) -> list[int]:
 
 
 def extract_g2_general(group_string: str, indices: list, file: h5py.File) -> tuple:
+    """
+    Extracts the g2 from the vertex file for given indices and group string.
+    """
     print(f"Nonzero number of elements of g2 in dataset: {len(indices)} / {n_bands ** 4 * 2**4}")
 
     elements = np.array([file[f"{group_string}/{idx}/value"] for idx in indices])
@@ -116,6 +134,9 @@ def extract_g2_general(group_string: str, indices: list, file: h5py.File) -> tup
 
 
 def save_to_file(g2_list: list[np.ndarray], names: list[str], niw: int, n_bands: int):
+    """
+    Saves the given g2 to the output file.
+    """
     assert len(g2_list) == len(names)
     for wn in range(2 * niw + 1):
         for i, j, k, l in it.product(range(n_bands), repeat=4):
@@ -125,6 +146,9 @@ def save_to_file(g2_list: list[np.ndarray], names: list[str], niw: int, n_bands:
 
 
 def get_niw_niv(vertex_file, g4iw_groupstring, indices):
+    """
+    Determines niw and niv from the shape of the first element in the vertex file.
+    """
     first_element_shape = vertex_file[f"{g4iw_groupstring}/{indices[0]}/value"].shape
     assert first_element_shape[0] % 2 == 0
     assert first_element_shape[-1] % 2 != 0
