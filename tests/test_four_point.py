@@ -92,20 +92,20 @@ def test_add_scalar_and_numpy(small_fourpoint):
     val = 2.5
     res = fp + val
     assert isinstance(res, FourPoint)
-    np.testing.assert_allclose(res.mat, fp.mat + val)
+    assert np.allclose(res.mat, fp.mat + val)
 
     arr = np.ones_like(fp.mat)
     res2 = fp + arr
-    np.testing.assert_allclose(res2.mat, fp.mat + arr)
+    assert np.allclose(res2.mat, fp.mat + arr)
 
 
 def test_sub_operator(small_fourpoint):
     fp = small_fourpoint
     res = fp - 1.0
-    np.testing.assert_allclose(res.mat, fp.mat - 1.0)
+    assert np.allclose(res.mat, fp.mat - 1.0)
 
     res2 = 1.0 - fp
-    np.testing.assert_allclose(res2.mat, 1.0 - fp.mat)
+    assert np.allclose(res2.mat, 1.0 - fp.mat)
 
 
 # ---------------------------
@@ -124,7 +124,7 @@ def test_sum_over_vn_reduces_dims(small_fourpoint):
     sl = fp.mat[0, 0, 0, 0, 0, 0, :, :, :]
     expect = (1 / beta) * np.sum(sl, axis=-1)
     got = out.mat[0, 0, 0, 0, 0, 0, :, :]
-    np.testing.assert_allclose(got, expect, rtol=1e-6, atol=1e-6)
+    assert np.allclose(got, expect, rtol=1e-6, atol=1e-6)
 
 
 def test_sum_over_vn_raises_on_too_many_axes(small_fourpoint):
@@ -140,14 +140,14 @@ def test_permute_orbitals_noop_and_swap(small_fourpoint):
     fp = small_fourpoint
     out = fp.permute_orbitals("abcd->abcd")
     assert out is fp  # does not return a copy
-    np.testing.assert_allclose(out.mat, fp.mat)
+    assert np.allclose(out.mat, fp.mat)
 
     # Simple swap: a<->b and c<->d simultaneously: "abcd->badc"
     out2 = fp.permute_orbitals("abcd->badc")
     # Check a few positions explicitly:
     idx_src = (0, 0, 0, 1, 0, 1, 0, slice(None), slice(None), slice(None))
     idx_dst = (0, 0, 0, 0, 1, 0, 1, slice(None), slice(None), slice(None))
-    np.testing.assert_allclose(out2.mat[idx_dst], fp.mat[idx_src])
+    assert np.allclose(out2.mat[idx_dst], fp.mat[idx_src])
 
 
 def test_permute_orbitals_invalid_strings_raise(small_fourpoint):
@@ -289,11 +289,11 @@ def test_matmul_fourpoint_vs_fourpoint_mixed_vn_dims(rng):
 def test_mul_with_scalar_and_array(small_fourpoint):
     fp = small_fourpoint
     res = fp * 3.0
-    np.testing.assert_allclose(res.mat, fp.mat * 3.0)
+    assert np.allclose(res.mat, fp.mat * 3.0)
 
     arr = np.full_like(fp.mat, 2.0)
     res2 = 2.0 * fp
-    np.testing.assert_allclose(res2.mat, fp.mat * 2.0)
+    assert np.allclose(res2.mat, fp.mat * 2.0)
 
 
 # ---------------
@@ -332,7 +332,7 @@ def test_identity_shapes_and_like(rng):
 def test_rotate_orbitals_theta_zero_is_noop(small_fourpoint_compressed):
     fp = small_fourpoint_compressed
     out = fp.rotate_orbitals(theta=0.0)
-    np.testing.assert_allclose(out.mat, fp.mat)
+    assert np.allclose(out.mat, fp.mat)
 
 
 def test_rotate_orbitals_raises_if_not_two_bands(rng):
@@ -428,7 +428,7 @@ def test_add_two_fourpoints_same_shape_and_ranges(rng):
     fp2 = FourPoint(mat2, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True, full_niw_range=False)
 
     res = fp1 + fp2
-    np.testing.assert_allclose(res.mat, mat1 + mat2, atol=1e-6)
+    assert np.allclose(res.mat, mat1 + mat2, atol=1e-6)
     assert isinstance(res, FourPoint)
     assert res.current_shape == fp1.current_shape
 
