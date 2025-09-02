@@ -1,102 +1,26 @@
-import logging
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 
-import scdga.brillouin_zone as bz
 from scdga import config, dga_io, local_sde
 from scdga import nonlocal_sde
 from scdga.dga_logger import DgaLogger
 from scdga.greens_function import GreensFunction
+from tests import conftest
 
 
 @pytest.fixture
 def setup():
     folder = f"{os.path.dirname(os.path.abspath(__file__))}/test_data/end_2_end"
 
-    comm_mock = MagicMock()
-    comm_mock.Get_size.return_value = 1
-    comm_mock.Get_rank.return_value = 0
-    comm_mock.size = 1
-    comm_mock.rank = 0
-    comm_mock.barrier.return_value = None
-
-    comm_mock.bcast.side_effect = lambda obj, root=0: obj
-
-    def allreduce_mock(sendbuf, recvbuf, op=None):
-        np.copyto(recvbuf, sendbuf)
-        return recvbuf
-
-    comm_mock.Allreduce.side_effect = allreduce_mock
-
-    def gatherv_mock(sendbuf, recvlist, root=0):
-        tot_result = recvlist[0]
-        np.copyto(tot_result, sendbuf)
-        return tot_result
-
-    comm_mock.Gatherv.side_effect = gatherv_mock
-
-    def scatterv_mock(sendlist, recvbuf, root=0):
-        full_data = sendlist[0]
-        np.copyto(recvbuf, full_data)
-        return recvbuf
-
-    comm_mock.Scatterv.side_effect = scatterv_mock
+    comm_mock = conftest.create_comm_mock()
 
     with patch("mpi4py.MPI.COMM_WORLD", comm_mock):
         config.logger = DgaLogger(comm_mock, "./")
-
-        config.box.niw_core = -1
-        config.box.niv_core = -1
-        config.box.niv_shell = 10
-
-        config.output.save_quantities = False
-        config.output.do_plotting = False
-
-        config.lattice.nk = (4, 4, 1)
-        config.lattice.nq = config.lattice.nk
-        config.lattice.k_grid = bz.KGrid(config.lattice.nk, symmetries=bz.two_dimensional_square_symmetries())
-        config.lattice.q_grid = config.lattice.k_grid
-
-        config.lattice.type = "from_wannierHK"
-        config.lattice.interaction_type = "kanamori_from_dmft"
-        config.lattice.er_input = f"{folder}/wannier.hk"
-
-        config.dmft.input_path = folder
-        config.dmft.do_sym_v_vp = True
-
-        config.eliashberg.perform_eliashberg = False
-
-        config.self_consistency.mixing = 1
-        config.self_consistency.max_iter = 1
-
+        conftest.create_default_config(config, folder)
         yield folder, comm_mock
-
-
-@pytest.fixture(autouse=True)
-def mock_numpy_save(monkeypatch):
-    """
-    Automatically mock numpy.save for all tests in this file.
-    """
-
-    def fake_save(file, arr, **kwargs):
-        pass
-
-    monkeypatch.setattr(np, "save", fake_save)
-    yield
-
-
-@pytest.fixture(autouse=True)
-def mock_logger(monkeypatch):
-    """
-    Automatically mock logger.log for all tests in this file.
-    """
-    logger_mock = MagicMock()
-    monkeypatch.setattr(logging, "getLogger", lambda name=None: logger_mock)
-    monkeypatch.setattr(logging, "Logger", MagicMock(return_value=logger_mock))
-    yield logger_mock
 
 
 @pytest.mark.parametrize("niw_core, niv_core, niv_shell", [(20, 20, 10), (-1, 20, 10), (20, -1, 10), (-1, -1, 10)])
