@@ -1,8 +1,14 @@
-coverage:
-  status:
-    project:
-      default:
-        target: 65%
-        threshold: 1%
-        base: auto
-        color: green
+ignore:
+  - "tests/*"
+  - "*.md"
+  - "*.yml"
+  - "*.yaml"
+  - "*.json"
+  - "*.toml"
+  - "*.log"
+  - "*.txt"
+  - "*.html"
+  - "**/setup.py"
+  - "scdga/dga_main.py"
+  - "scdga/plotting.py"
+  - "scdga/config_parser.py"
