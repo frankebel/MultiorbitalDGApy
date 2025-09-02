@@ -1,4 +1,8 @@
 coverage:
-  range: 50..65
-  round: down
-  precision: 2
+  status:
+    project:
+      default:
+        target: 65%
+        threshold: 1%
+        base: auto
+        color: green
