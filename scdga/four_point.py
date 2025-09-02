@@ -60,7 +60,7 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         """
         Subtracts two vertex objects involving a FourPoint object. Allows for A - B = C.
         """
-        return self.sub(other)
+        return -self.sub(other)
 
     def __mul__(self, other) -> "FourPoint":
         r"""

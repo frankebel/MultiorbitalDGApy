@@ -1,0 +1,582 @@
+import numpy as np
+import pytest
+
+from scdga.four_point import FourPoint
+from scdga.interaction import LocalInteraction, Interaction
+from scdga.n_point_base import SpinChannel, FrequencyNotation, IAmNonLocal
+
+
+# ----------------
+# Helper fixtures
+# ----------------
+@pytest.fixture
+def rng():
+    return np.random.default_rng(1234)
+
+
+@pytest.fixture
+def small_fourpoint(rng):
+    """
+    Create a tiny FourPoint:
+      - nq=(2,1,1), compressed=FALSE (test both branches later)
+      - 2 orbitals -> 4 orbital dims (2,2,2,2)
+      - niw=1 (w size 3 in full, will get cut to 2 in half range)
+      - niv=1 (fermionic size 2 in half range, 2*niv in full)
+      - num_vn_dimensions=2
+    Shape (decompressed, full w): [qx,qy,qz,o,o,o,o,w,v,v']
+      -> [2,1,1,2,2,2,2,3,2,2]
+    """
+    nq = (4, 4, 1)
+    o = 2
+    niw = 3
+    niv = 3
+    shape = (*nq, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+
+    fp = FourPoint(
+        mat=mat,
+        channel=SpinChannel.DENS,
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=2,
+        full_niw_range=True,
+        full_niv_range=True,
+        has_compressed_q_dimension=False,
+        frequency_notation=FrequencyNotation.PH,
+    )
+    return fp
+
+
+@pytest.fixture
+def small_fourpoint_compressed(rng):
+    """
+    Same logical object as above but compressed in momentum dimension.
+    """
+    nq = (4, 4, 1)
+    qtot = int(np.prod(nq))
+    o = 2
+    niw = 3
+    niv = 3
+    shape = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    fp = FourPoint(
+        mat=mat,
+        channel=SpinChannel.MAGN,
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=2,
+        full_niw_range=True,
+        full_niv_range=True,
+        has_compressed_q_dimension=True,
+        frequency_notation=FrequencyNotation.PH,
+    )
+    return fp
+
+
+# ---------------
+# Basic behavior
+# ---------------
+def test_basic_init_and_properties(small_fourpoint):
+    fp = small_fourpoint
+    assert isinstance(fp, IAmNonLocal)
+    assert fp.nq == (4, 4, 1)
+    assert fp.nq_tot == 16
+    assert fp.num_wn_dimensions == 1
+    assert fp.num_vn_dimensions == 2
+    # n_bands equals 2 for our construction
+    assert fp.n_bands == 2
+
+
+def test_add_scalar_and_numpy(small_fourpoint):
+    fp = small_fourpoint
+    val = 2.5
+    res = fp + val
+    assert isinstance(res, FourPoint)
+    np.testing.assert_allclose(res.mat, fp.mat + val)
+
+    arr = np.ones_like(fp.mat)
+    res2 = fp + arr
+    np.testing.assert_allclose(res2.mat, fp.mat + arr)
+
+
+def test_sub_operator(small_fourpoint):
+    fp = small_fourpoint
+    res = fp - 1.0
+    np.testing.assert_allclose(res.mat, fp.mat - 1.0)
+
+    res2 = 1.0 - fp
+    np.testing.assert_allclose(res2.mat, 1.0 - fp.mat)
+
+
+# ---------------------------
+# Frequency summation / cut
+# ---------------------------
+def test_sum_over_vn_reduces_dims(small_fourpoint):
+    fp = small_fourpoint.to_half_niw_range()  # work in half range to mirror default return convention
+    beta = 10.0
+    # Sum over the last fermionic axis (-1), keeping w & v' -> result num_vn_dims should drop from 2 to 1
+    out = fp.sum_over_vn(beta=beta, axis=(-1,))
+    assert isinstance(out, FourPoint)
+    assert out.num_vn_dimensions == 1
+
+    # Manual check on a single slice to avoid huge arrays:
+    # take first qx=0, w=all, orbitals first, sum over last fermionic dim
+    sl = fp.mat[0, 0, 0, 0, 0, 0, :, :, :]
+    expect = (1 / beta) * np.sum(sl, axis=-1)
+    got = out.mat[0, 0, 0, 0, 0, 0, :, :]
+    np.testing.assert_allclose(got, expect, rtol=1e-6, atol=1e-6)
+
+
+def test_sum_over_vn_raises_on_too_many_axes(small_fourpoint):
+    with pytest.raises(ValueError):
+        _ = small_fourpoint.sum_over_vn(beta=1.0, axis=(-1, -2, -3))  # more than available
+
+
+# ---------------------------
+# Orbital permutations/sums
+# ---------------------------
+def test_permute_orbitals_noop_and_swap(small_fourpoint):
+    # No-op
+    fp = small_fourpoint
+    out = fp.permute_orbitals("abcd->abcd")
+    assert out is fp  # does not return a copy
+    np.testing.assert_allclose(out.mat, fp.mat)
+
+    # Simple swap: a<->b and c<->d simultaneously: "abcd->badc"
+    out2 = fp.permute_orbitals("abcd->badc")
+    # Check a few positions explicitly:
+    idx_src = (0, 0, 0, 1, 0, 1, 0, slice(None), slice(None), slice(None))
+    idx_dst = (0, 0, 0, 0, 1, 0, 1, slice(None), slice(None), slice(None))
+    np.testing.assert_allclose(out2.mat[idx_dst], fp.mat[idx_src])
+
+
+def test_permute_orbitals_invalid_strings_raise(small_fourpoint):
+    with pytest.raises(ValueError):
+        _ = small_fourpoint.permute_orbitals("abc->abc")
+    with pytest.raises(ValueError):
+        _ = small_fourpoint.permute_orbitals("abcd->abc")  # cannot reduce with permute
+
+
+def test_sum_over_orbitals_valid_and_invalid(small_fourpoint):
+    fp = small_fourpoint.to_half_niw_range()
+    # Valid: "abcd->ad" (sum over b,c)
+    out = fp.sum_over_orbitals("abcd->ad")
+    assert out._num_orbital_dimensions == 2
+    # Invalid:
+    with pytest.raises(ValueError):
+        _ = small_fourpoint.sum_over_orbitals("abc->a")
+    with pytest.raises(ValueError):
+        _ = small_fourpoint.sum_over_orbitals("abcd->abcde")
+
+
+# -----------------------------------------
+# Compound index transform round-tripping
+# -----------------------------------------
+def test_to_compound_indices_and_back_with_two_vn_dims(small_fourpoint_compressed):
+    fp = small_fourpoint_compressed
+    fp_half = fp.to_half_niw_range()
+    fp_ci = fp_half.to_compound_indices()
+    # CI shape should be [q, w, C, C]
+    assert fp_ci.has_compressed_q_dimension
+    assert len(fp_ci.current_shape) == 4
+    # Transform back using the stored original shape
+    back = fp_ci.to_full_indices(fp.original_shape)
+    # Ensure we are back to an array that can be mapped to original dims (not necessarily identical
+    # due to possible internal reshapes, but shapes should be consistent)
+    assert back.has_compressed_q_dimension is True
+    assert back.current_shape == fp.original_shape
+
+
+def test_to_compound_indices_no_wn_dim_raises_if_vn_not_2(rng):
+    # Build case with num_wn_dimensions=0 and num_vn_dimensions != 2 -> should raise
+    nq = (1, 1, 1)
+    o = 2
+    niv = 2
+    # Here we make a shape consistent with: [q, o1, o2, o3, o4, v] (since wn=0, vn=1)
+    mat = rng.standard_normal((1, o, o, o, o, 2 * niv)) + 1j * rng.standard_normal((1, o, o, o, o, 2 * niv))
+    fp = FourPoint(
+        mat=mat,
+        channel=SpinChannel.DENS,
+        nq=nq,
+        num_wn_dimensions=0,
+        num_vn_dimensions=1,
+        full_niw_range=True,
+        full_niv_range=True,
+        has_compressed_q_dimension=True,
+        frequency_notation=FrequencyNotation.PH,
+    )
+    with pytest.raises(ValueError):
+        _ = fp.to_compound_indices()
+
+
+def test_to_full_indices_invalid_shape_raises(small_fourpoint_compressed):
+    fp = small_fourpoint_compressed.to_compound_indices()
+    # Tamper with has_compressed_q_dimension to build a shape mismatch
+    fp._has_compressed_q_dimension = False
+    with pytest.raises(ValueError):
+        _ = fp.to_full_indices()
+
+
+# ------------------------------
+# Matmul with interactions / FP
+# ------------------------------
+def test_matmul_with_localinteraction_left_and_right(rng):
+    # FourPoint with (q compressed), 2 bands, niw=1, vn=1
+    nq = (2, 2, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    # shape [q,o,o,o,o,w,v]
+    shape_fp = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv)
+    fp_mat = rng.standard_normal(shape_fp) + 1j * rng.standard_normal(shape_fp)
+    fp = FourPoint(
+        fp_mat,
+        channel=SpinChannel.DENS,
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=1,
+        has_compressed_q_dimension=True,
+    )
+
+    # Local interaction: [o,o,o,o]
+    u = rng.standard_normal((o, o, o, o)) + 1j * rng.standard_normal((o, o, o, o))
+    Uloc = LocalInteraction(u)
+
+    # Left multiplication (FourPoint @ LocalInteraction)
+    out1 = fp @ Uloc
+    assert isinstance(out1, FourPoint)
+    assert out1.current_shape[:1] == (qtot,)
+    # Right multiplication (LocalInteraction @ FourPoint)
+    out2 = Uloc @ fp
+    assert isinstance(out2, FourPoint)
+    assert out2.current_shape[:1] == (qtot,)
+
+
+def test_matmul_fourpoint_vs_fourpoint_mixed_vn_dims(rng):
+    # Left: vn=1, Right: vn=2, expect final has max(vn)=2
+    nq = (2, 2, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    shape_left = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv)  # vn=1 -> size=2
+    shape_right = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)  # vn=2
+    lhs = FourPoint(
+        rng.standard_normal(shape_left) + 1j * rng.standard_normal(shape_left),
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=1,
+        has_compressed_q_dimension=True,
+    )
+    rhs = FourPoint(
+        rng.standard_normal(shape_right) + 1j * rng.standard_normal(shape_right),
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=2,
+        has_compressed_q_dimension=True,
+    )
+    out = lhs @ rhs
+    assert out.num_vn_dimensions == 2
+    assert out.current_shape[0] == qtot
+    # Basic numerical sanity: shapes line up to produce [q,o,o,o,o,w,v,v']
+    assert len(out.current_shape) == 1 + 4 + 1 + 2
+
+
+# -------------
+# Multiplication
+# -------------
+def test_mul_with_scalar_and_array(small_fourpoint):
+    fp = small_fourpoint
+    res = fp * 3.0
+    np.testing.assert_allclose(res.mat, fp.mat * 3.0)
+
+    arr = np.full_like(fp.mat, 2.0)
+    res2 = 2.0 * fp
+    np.testing.assert_allclose(res2.mat, fp.mat * 2.0)
+
+
+# ---------------
+# Identity helpers
+# ---------------
+def test_identity_shapes_and_like(rng):
+    n_bands = 2
+    niw = 2
+    niv = 2
+    nq = (4, 4, 1)
+    qtot = 4
+    # Build identity with vn=2
+    I = FourPoint.identity(n_bands=n_bands, niw=niw, niv=niv, nq_tot=qtot, nq=nq, num_vn_dimensions=2)
+    assert isinstance(I, FourPoint)
+    # After to_half_niw_range inside identity, w-size should be niw+1 = 2
+    assert I.current_shape[1 + 4] == niw + 1  # [q,o,o,o,o,w,...]
+
+    # identity_like
+    # Make a target object and check like() matches band/freq/momentum characteristics
+    shape = (qtot, n_bands, n_bands, n_bands, n_bands, 2 * niw + 1, 2 * niv, 2 * niv)
+    target = FourPoint(
+        rng.standard_normal(shape) + 1j * rng.standard_normal(shape),
+        nq=nq,
+        num_vn_dimensions=2,
+        has_compressed_q_dimension=True,
+    )
+    I2 = FourPoint.identity_like(target)
+    assert I2.n_bands == target.n_bands
+    assert I2.nq_tot == target.nq_tot
+    assert I2.num_vn_dimensions == target.num_vn_dimensions
+
+
+# -------------
+# Rotation
+# -------------
+def test_rotate_orbitals_theta_zero_is_noop(small_fourpoint_compressed):
+    fp = small_fourpoint_compressed
+    out = fp.rotate_orbitals(theta=0.0)
+    np.testing.assert_allclose(out.mat, fp.mat)
+
+
+def test_rotate_orbitals_raises_if_not_two_bands(rng):
+    # Make 3-band object to trigger error
+    nq = (1, 1, 1)
+    o = 3
+    niw = 2
+    niv = 2
+    mat = rng.standard_normal((1, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)) + 1j * rng.standard_normal(
+        (1, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    )
+    fp = FourPoint(
+        mat=mat,
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=2,
+        has_compressed_q_dimension=True,
+    )
+    with pytest.raises(ValueError):
+        _ = fp.rotate_orbitals(theta=np.pi / 4)
+
+
+# -------------------------------------------------
+# add/sub with LocalInteraction & Interaction stubs
+# -------------------------------------------------
+def test_add_with_localinteraction_and_interaction(rng):
+    nq = (4, 4, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    # FourPoint baseline (compressed)
+    shape_fp = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    fp = FourPoint(
+        rng.standard_normal(shape_fp) + 1j * rng.standard_normal(shape_fp),
+        nq=nq,
+        num_wn_dimensions=1,
+        num_vn_dimensions=2,
+        has_compressed_q_dimension=True,
+    )
+
+    # LocalInteraction adds over orbital axes (broadcast over w,v,v')
+    u_loc = rng.standard_normal((o, o, o, o)) + 1j * rng.standard_normal((o, o, o, o))
+    Uloc = LocalInteraction(u_loc)
+    res1 = fp + Uloc
+    assert res1.current_shape == fp.current_shape
+
+    # Interaction with momentum dimension (already compressed)
+    u_q = rng.standard_normal((qtot, o, o, o, o)) + 1j * rng.standard_normal((qtot, o, o, o, o))
+    Uq = Interaction(u_q, nq=nq, has_compressed_q_dimension=True)
+    res2 = fp + Uq
+    assert res2.current_shape == fp.current_shape
+
+
+# -------------------
+# Small edge-case nits
+# -------------------
+def test_to_full_indices_requires_one_wn_dim(small_fourpoint_compressed):
+    fp = small_fourpoint_compressed.to_half_niw_range().to_compound_indices()
+    # Temporarily make object pretend it had no w-dimension originally
+    fp._num_wn_dimensions = 0
+    with pytest.raises(ValueError):
+        _ = fp.to_full_indices()
+    # restore
+    fp._num_wn_dimensions = 1
+
+
+def test_flip_axes_helpers_from_base_do_not_break(small_fourpoint_compressed):
+    # IAmNonLocal methods inherited should behave
+    fp = small_fourpoint_compressed
+    # shift_k_by_pi returns a COPY (per code), ensure shape stable
+    out = fp.shift_k_by_pi()
+    assert out.current_shape == fp.current_shape
+    # flip momentum axis returns a copy as well
+    out2 = fp.flip_momentum_axis()
+    assert out2.current_shape == fp.current_shape
+
+
+# ---------------------------------------------------
+# Extended tests: addition of two FourPoint objects
+# ---------------------------------------------------
+def test_add_two_fourpoints_same_shape_and_ranges(rng):
+    nq = (2, 2, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    # Shape: [q, o,o,o,o, w, v, v']
+    shape = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat1 = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    mat2 = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    fp1 = FourPoint(mat1, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True, full_niw_range=False)
+    fp2 = FourPoint(mat2, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True, full_niw_range=False)
+
+    res = fp1 + fp2
+    np.testing.assert_allclose(res.mat, mat1 + mat2, atol=1e-6)
+    assert isinstance(res, FourPoint)
+    assert res.current_shape == fp1.current_shape
+
+
+def test_add_two_fourpoints_different_full_half_ranges(rng):
+    nq = (2, 2, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    shape_full = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat1 = rng.standard_normal(shape_full) + 1j * rng.standard_normal(shape_full)
+    mat2 = rng.standard_normal(shape_full) + 1j * rng.standard_normal(shape_full)
+    # fp1 in full range, fp2 in half range
+    fp1 = FourPoint(mat1, nq=nq, num_vn_dimensions=2, full_niw_range=True, has_compressed_q_dimension=True)
+    fp2 = FourPoint(
+        mat2[:, :, :, :, :, niw:, :, :],
+        nq=nq,
+        num_vn_dimensions=2,
+        full_niw_range=False,
+        has_compressed_q_dimension=True,
+    )
+
+    res = fp1 + fp2
+    # Result should always be returned in half niw range
+    assert res.full_niw_range is False
+    assert res.current_shape[5] == niw + 1
+
+
+def test_add_two_fourpoints_mismatched_vn_dims_promotes_correctly(rng):
+    nq = (1, 1, 1)
+    o = 2
+    niw = 2
+    niv = 2
+    # fp1: vn=1, fp2: vn=2
+    shape1 = (1, o, o, o, o, 2 * niw + 1, 2 * niv)
+    shape2 = (1, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat1 = rng.standard_normal(shape1) + 1j * rng.standard_normal(shape1)
+    mat2 = rng.standard_normal(shape2) + 1j * rng.standard_normal(shape2)
+    fp1 = FourPoint(mat1, nq=nq, num_vn_dimensions=1, has_compressed_q_dimension=True)
+    fp2 = FourPoint(mat2, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True)
+
+    res = fp1 + fp2
+    # Result should take highest vn dims
+    assert res.num_vn_dimensions == 2
+    assert res.current_shape[0] == 1
+
+
+def test_add_two_fourpoints_different_q_compression(rng):
+    nq = (2, 2, 1)
+    o = 2
+    niw = 2
+    niv = 2
+    shape_compr = (np.prod(nq), o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    shape_decomp = (*nq, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+
+    mat1 = rng.standard_normal(shape_compr) + 1j * rng.standard_normal(shape_compr)
+    mat2 = rng.standard_normal(shape_decomp) + 1j * rng.standard_normal(shape_decomp)
+
+    fp1 = FourPoint(mat1, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True, full_niw_range=False)
+    fp2 = FourPoint(mat2, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=False, full_niw_range=False)
+
+    # FourPoint.add automatically compresses q-dims for alignment
+    res = fp1 + fp2
+    assert res.has_compressed_q_dimension
+    assert res.current_shape[0] == np.prod(nq)
+    assert np.allclose(res.mat, fp1.mat + fp2.compress_q_dimension().mat, atol=1e-6)
+
+
+# ----------------------------------------------------------
+# Extended tests: to_compound_indices variations and checks
+# ----------------------------------------------------------
+def test_to_compound_indices_vn2_vs_vn1_vs_vn0(rng):
+    nq = (1, 1, 1)
+    qtot = 1
+    o = 2
+    niw = 2
+    niv = 2
+
+    # vn=2 case: shape [q,o,o,o,o,w,v,v']
+    shape2 = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat2 = rng.standard_normal(shape2) + 1j * rng.standard_normal(shape2)
+    fp2 = FourPoint(mat2, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True)
+    fp2_ci = fp2.to_compound_indices()
+    assert len(fp2_ci.current_shape) == 4
+    assert fp2_ci.current_shape[2] == fp2_ci.current_shape[3]
+
+    # vn=1 case: [q,o,o,o,o,w,v] -> promote to vn=2 internally
+    shape1 = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv)
+    mat1 = rng.standard_normal(shape1) + 1j * rng.standard_normal(shape1)
+    fp1 = FourPoint(mat1, nq=nq, num_vn_dimensions=1, has_compressed_q_dimension=True)
+    fp1_ci = fp1.to_compound_indices()
+    assert len(fp1_ci.current_shape) == 4
+    assert fp1_ci.num_vn_dimensions == 2
+
+    # vn=0 case: [q,o,o,o,o,w]
+    shape0 = (qtot, o, o, o, o, 2 * niw + 1)
+    mat0 = rng.standard_normal(shape0) + 1j * rng.standard_normal(shape0)
+    fp0 = FourPoint(mat0, nq=nq, num_vn_dimensions=0, has_compressed_q_dimension=True)
+    fp0_ci = fp0.to_compound_indices()
+    assert len(fp0_ci.current_shape) == 4
+    assert fp0_ci.num_vn_dimensions == 0
+
+
+def test_to_compound_indices_decompressed_vs_compressed(rng):
+    nq = (2, 2, 1)
+    o = 2
+    niw = 2
+    niv = 2
+    shape_decomp = (*nq, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat = rng.standard_normal(shape_decomp) + 1j * rng.standard_normal(shape_decomp)
+
+    # Start decompressed
+    fp = FourPoint(mat, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=False)
+    fp_ci = fp.to_half_niw_range().to_compound_indices()
+    assert fp_ci.has_compressed_q_dimension  # compresses automatically
+    assert fp_ci.current_shape[2] == fp_ci.current_shape[3]
+
+
+# ----------------------------------------------------------
+# Extended tests: to_full_indices round-tripping and shape
+# ----------------------------------------------------------
+def test_to_full_indices_round_trip_with_explicit_shape(rng):
+    nq = (2, 2, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    shape = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    fp = FourPoint(mat, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True)
+    fp_ci = fp.to_half_niw_range().to_compound_indices()
+    shape = fp_ci.original_shape
+    fp_full = fp_ci.to_full_indices(shape)
+    assert fp_full.current_shape == shape
+
+
+def test_to_full_indices_with_incorrect_shape_argument(rng):
+    nq = (2, 2, 1)
+    qtot = 4
+    o = 2
+    niw = 2
+    niv = 2
+    shape = (qtot, o, o, o, o, 2 * niw + 1, 2 * niv, 2 * niv)
+    mat = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    fp = FourPoint(mat, nq=nq, num_vn_dimensions=2, has_compressed_q_dimension=True)
+    fp_ci = fp.to_half_niw_range().to_compound_indices()
+    # Provide deliberately wrong shape: missing v-dimensions
+    wrong_shape = shape[:-1]
+    with pytest.raises(ValueError):
+        fp_ci.to_full_indices(wrong_shape)
