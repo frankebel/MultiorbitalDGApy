@@ -90,15 +90,11 @@ def load_from_w2dyn_file_and_update_config() -> tuple[GreensFunction, SelfEnergy
     config.output.plotting_path = os.path.join(config.output.output_path, config.output.plotting_subfolder_name)
     config.output.eliashberg_path = os.path.join(config.output.output_path, config.eliashberg.subfolder_name)
 
-    if (
-        not os.path.exists(config.output.output_path)
-        and not os.path.exists(config.output.plotting_path)
-        and not os.path.exists(config.output.eliashberg_path)
-        and (config.output.save_quantities or config.output.do_plotting)
-        and config.eliashberg.perform_eliashberg
-    ):
+    if not os.path.exists(config.output.output_path) and config.output.save_quantities:
         os.makedirs(config.output.output_path)
+    if not os.path.exists(config.output.plotting_path) and config.output.do_plotting:
         os.makedirs(config.output.plotting_path)
+    if not os.path.exists(config.output.eliashberg_path) and config.eliashberg.perform_eliashberg:
         os.makedirs(config.output.eliashberg_path)
 
     g2_dens = update_g2_from_dmft(g2_dens)

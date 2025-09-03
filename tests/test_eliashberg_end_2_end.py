@@ -19,7 +19,7 @@ def setup():
     with patch("mpi4py.MPI.COMM_WORLD", comm_mock):
         config.logger = DgaLogger(comm_mock, "./")
         conftest.create_default_config(config, folder)
-        config.eliashberg.perform_eliashberg = True
+        config.eliashberg.perform_eliashberg = False
         config.eliashberg.symmetry = "random"
         config.eliashberg.epsilon = 1e-12
         config.eliashberg.n_eig = 4
@@ -38,6 +38,7 @@ def test_eliashberg_equation_without_local_part(setup, niw_core, niv_core, niv_s
 
     g_dmft, s_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
+    config.eliashberg.perform_eliashberg = True
     config.output.output_path = folder
     config.output.eliashberg_path = config.output.output_path
     config.eliashberg.include_local_part = False
@@ -64,6 +65,7 @@ def test_eliashberg_equation_with_local_part(setup, niw_core, niv_core, niv_shel
 
     g_dmft, s_dmft, g2_dens, g2_magn = dga_io.load_from_w2dyn_file_and_update_config()
 
+    config.eliashberg.perform_eliashberg = True
     config.output.output_path = folder
     config.output.eliashberg_path = config.output.output_path
     config.eliashberg.include_local_part = True
