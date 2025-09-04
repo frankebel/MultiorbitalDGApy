@@ -147,17 +147,8 @@ def create_full_vertex_q_r_pp_w0(
     """
     logger = config.logger
 
-    group_size = max(mpi_dist_irrk.comm.size // 2, 1)
-    color = mpi_dist_irrk.comm.rank // group_size
-    sub_comm = mpi_dist_irrk.comm.Split(color, mpi_dist_irrk.comm.rank)
-
-    f_q_r = None
-    for i in range(sub_comm.size):
-        if sub_comm.rank == i:
-            f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
-            f_q_r = transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
-        sub_comm.Barrier()
-    sub_comm.Free()
+    f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
+    f_q_r = transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
 
     logger.log_info(f"Full ladder-vertex ({channel.value}) calculated.")
     logger.log_memory_usage(f"Full ladder-vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)

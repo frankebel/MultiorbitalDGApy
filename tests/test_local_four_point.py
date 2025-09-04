@@ -408,7 +408,7 @@ def test_assures_invert_calls_to_half_niw_range_to_compound_indices_and_to_full_
         ) as mock_full,
     ):
         obj.invert()
-        assert mock_half_niw.call_count == 2
+        mock_half_niw.assert_called_once()
         mock_compound.assert_called_once()
         mock_full.assert_called_once()
 
@@ -919,6 +919,16 @@ def test_sub_method_and_dunder():
         _ = obj1 - obj2
         mock_sub.assert_called_once_with(obj2)
         mock_add.assert_called_once()
+
+
+def test_sub_operator():
+    mat = np.random.rand(2, 2, 2, 2, 5, 4, 4)
+    fp = LocalFourPoint(mat, num_vn_dimensions=2)
+    res = fp - 1.0
+    assert np.allclose(res.mat, fp.mat - 1.0)
+
+    res2 = 1.0 - fp
+    assert np.allclose(res2.mat, 1.0 - fp.mat)
 
 
 def test_mul_dunder_calls_mul():
