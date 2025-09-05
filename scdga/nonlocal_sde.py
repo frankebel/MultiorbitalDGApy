@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+import time
 
 import mpi4py.MPI as MPI
 import numpy as np
@@ -259,6 +260,63 @@ def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, my_full
     return SelfEnergy(mat, config.lattice.nk, True).compress_q_dimension()
 
 
+def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my_full_q_list: np.ndarray) -> SelfEnergy:
+    r"""
+    Returns :math:`\Sigma_{ij}^{k} = -1/2 * 1/\beta * 1/N_q \sum_q [ U^q_{r;aibc} * K_{r;cbjd}^{qv} * G_{ad}^{w-v} ]`.
+    For very large momentum grids, this function is the slowest part compared to the rest of the code due to the
+    repeated loops. Potential speed-ups could be achieved by batching the q-points or using numba.
+    """
+
+    mat = np.zeros(
+        (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
+        dtype=kernel.mat.dtype,
+    )
+
+    wn = MFHelper.wn(config.box.niw_core)
+
+    nkx, nky, nkz = config.lattice.k_grid.nk
+    vdim = 2 * config.box.niv_core
+    xyz = config.lattice.k_grid.nk_tot
+    ij = config.sys.n_bands**2
+
+    giwk_mat_f = np.asfortranarray(giwk.mat)
+    kernel = np.asfortranarray(kernel.to_full_niw_range().mat)
+    acc_2d = np.empty((xyz, ij), dtype=mat.dtype)
+
+    kxs, kys, kzs = np.arange(nkx), np.arange(nky), np.arange(nkz)
+    kx_indices = [((kxs + q[0]) % nkx) for q in my_full_q_list]
+    ky_indices = [((kys + q[1]) % nky) for q in my_full_q_list]
+    kz_indices = [((kzs + q[2]) % nkz) for q in my_full_q_list]
+
+    for idx_q, q in enumerate(my_full_q_list):
+        shifted = giwk_mat_f[
+            kx_indices[idx_q][:, None, None],
+            ky_indices[idx_q][None, :, None],
+            kz_indices[idx_q][None, None, :],
+            :,
+            :,
+            :,
+        ]
+        g_q_view = shifted.reshape(xyz, *shifted.shape[3:])
+
+        for idx_w, wn_i in enumerate(wn):
+            g_qk = g_q_view[..., giwk.niv - config.box.niv_core - wn_i : giwk.niv + config.box.niv_core - wn_i]
+
+            k = kernel[idx_q, ..., idx_w, :]
+            k = np.moveaxis(k, (-2, -1), (3, 4))
+
+            a, i, j, d, _ = k.shape
+            kd = k.transpose(0, 3, 1, 2, 4).reshape(a * d, i * j, vdim)
+            g = g_qk.transpose(0, 1, 2, 3).reshape(xyz, a * d, vdim)
+
+            for t in range(vdim):
+                np.matmul(g[:, :, t], kd[:, :, t], out=acc_2d)
+                mat[..., t] += acc_2d.reshape(nkx, nky, nkz, i, j)
+
+    mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
+    return SelfEnergy(np.ascontiguousarray(mat), config.lattice.nk, True).compress_q_dimension()
+
+
 def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[SelfEnergy, int]:
     """
     If the output directory is specified to be the same directory as was used by a previous calculation, we try to
@@ -418,8 +476,7 @@ def calculate_self_energy_q(
         kernel.mat = mpi_dist_fullbz.scatter(kernel.mat)
         logger.log_info("Kernel mapped to full BZ and scattered across all MPI ranks.")
 
-        sigma_new = calculate_sigma_from_kernel(kernel, giwk_full, my_full_q_list)
-
+        sigma_new = calculate_sigma_from_kernel_fast(kernel, giwk_full, my_full_q_list)
         del kernel
         logger.log_info("Self-energy calculated from kernel.")
 
