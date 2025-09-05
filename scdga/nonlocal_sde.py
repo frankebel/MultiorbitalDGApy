@@ -289,15 +289,9 @@ def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my
     kz_indices = [((kzs + q[2]) % nkz) for q in my_full_q_list]
 
     for idx_q, q in enumerate(my_full_q_list):
-        shifted = giwk_mat_f[
-            kx_indices[idx_q][:, None, None],
-            ky_indices[idx_q][None, :, None],
-            kz_indices[idx_q][None, None, :],
-            :,
-            :,
-            :,
-        ]
-        g_q_view = shifted.reshape(xyz, *shifted.shape[3:])
+        g_q_view = giwk_mat_f[
+            kx_indices[idx_q][:, None, None], ky_indices[idx_q][None, :, None], kz_indices[idx_q][None, None, :], ...
+        ].reshape(xyz, *giwk_mat_f.shape[3:])
 
         for idx_w, wn_i in enumerate(wn):
             g = (
