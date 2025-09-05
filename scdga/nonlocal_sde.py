@@ -277,11 +277,11 @@ def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my
     nkx, nky, nkz = config.lattice.k_grid.nk
     vdim = 2 * config.box.niv_core
     xyz = config.lattice.k_grid.nk_tot
-    ij = config.sys.n_bands**2
+    nb = config.sys.n_bands
 
     giwk_mat_f = np.asfortranarray(giwk.mat)
     kernel = np.asfortranarray(kernel.to_full_niw_range().mat)
-    acc_2d = np.empty((xyz, ij), dtype=mat.dtype)
+    acc_2d = np.empty((xyz, nb**2), dtype=mat.dtype)
 
     kxs, kys, kzs = np.arange(nkx), np.arange(nky), np.arange(nkz)
     kx_indices = [((kxs + q[0]) % nkx) for q in my_full_q_list]
@@ -300,18 +300,16 @@ def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my
         g_q_view = shifted.reshape(xyz, *shifted.shape[3:])
 
         for idx_w, wn_i in enumerate(wn):
-            g_qk = g_q_view[..., giwk.niv - config.box.niv_core - wn_i : giwk.niv + config.box.niv_core - wn_i]
-
-            k = kernel[idx_q, ..., idx_w, :]
-            k = np.moveaxis(k, (-2, -1), (3, 4))
-
-            a, i, j, d, _ = k.shape
-            kd = k.transpose(0, 3, 1, 2, 4).reshape(a * d, i * j, vdim)
-            g = g_qk.transpose(0, 1, 2, 3).reshape(xyz, a * d, vdim)
+            g = (
+                g_q_view[..., giwk.niv - config.box.niv_core - wn_i : giwk.niv + config.box.niv_core - wn_i]
+                .transpose(0, 2, 1, 3)
+                .reshape(xyz, nb**2, vdim)
+            )
+            k = kernel[idx_q, ..., idx_w, :].transpose(0, 3, 1, 2, 4).reshape(nb**2, nb**2, vdim)
 
             for t in range(vdim):
-                np.matmul(g[:, :, t], kd[:, :, t], out=acc_2d)
-                mat[..., t] += acc_2d.reshape(nkx, nky, nkz, i, j)
+                np.matmul(g[:, :, t], k[:, :, t], out=acc_2d)
+                mat[..., t] += acc_2d.reshape(nkx, nky, nkz, nb, nb)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
     return SelfEnergy(np.ascontiguousarray(mat), config.lattice.nk, True).compress_q_dimension()
