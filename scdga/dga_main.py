@@ -114,10 +114,12 @@ def execute_dga_routine():
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
     if comm.rank == 0:
-        (f_d + 3 * f_m).save(name="f_1dens_3magn_loc", output_dir=config.output.output_path)
-        logger.log_info(
-            "Saved (f_dens_loc + 3 f_magn_loc) as numpy file, which is needed for the double-counting correction."
-        )
+        if config.sys.n_bands == 1:
+            (2 * f_m).save(name="f_dc_loc", output_dir=config.output.output_path)
+            logger.log_info(f"Saved F_dc = 2*F_m to file.")
+        else:
+            (f_d + 3 * f_m).save(name="f_dc_loc", output_dir=config.output.output_path)
+            logger.log_info(f"Saved F_dc = F_d + 3*F_m to file.")
 
     if (config.lambda_correction.perform_lambda_correction or config.output.save_quantities) and comm.rank == 0:
         chi_d.save(name="chi_dens_loc", output_dir=config.output.output_path)
