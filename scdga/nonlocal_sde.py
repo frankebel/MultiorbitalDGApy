@@ -89,12 +89,12 @@ def create_generalized_chi_q_with_shell_correction(
     ).invert()
 
 
-def calculate_sigma_dc_kernel(f_1dens_3magn: LocalFourPoint, gchi0_q: FourPoint, u_loc: LocalInteraction) -> FourPoint:
+def calculate_sigma_dc_kernel(f_dc_loc: LocalFourPoint, gchi0_q: FourPoint, u_loc: LocalInteraction) -> FourPoint:
     """
     Returns the double-counting kernel for the self-energy calculation. For details, see Eq. (3.124) in my master's thesis.
     """
     kernel = 1.0 / config.sys.beta**2 * u_loc.permute_orbitals("abcd->adcb") @ gchi0_q
-    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_1dens_3magn)
+    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_dc_loc)
     return FourPoint(kernel, SpinChannel.NONE, config.lattice.nq, 1, 1, gchi0_q.full_niw_range, True, True).cut_niv(
         config.box.niv_core
     )
@@ -425,9 +425,9 @@ def calculate_self_energy_q(
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
-        f_1dens_3magn = LocalFourPoint.load(os.path.join(config.output.output_path, "f_1dens_3magn_loc.npy"))
-        kernel = -calculate_sigma_dc_kernel(f_1dens_3magn, gchi0_q, u_loc)
-        del f_1dens_3magn
+        f_dc_loc = LocalFourPoint.load(os.path.join(config.output.output_path, "f_dc_loc.npy"))
+        kernel = -calculate_sigma_dc_kernel(f_dc_loc, gchi0_q, u_loc)
+        del f_dc_loc
         logger.log_info("Calculated double-counting kernel.")
 
         gchi0_q_full_sum = 1.0 / config.sys.beta * gchi0_q.sum_over_all_vn(config.sys.beta)
