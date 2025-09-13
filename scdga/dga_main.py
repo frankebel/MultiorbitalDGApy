@@ -110,6 +110,8 @@ def execute_dga_routine():
 
     # there is no need to broadcast the other quantities
     sigma_loc = comm.bcast(sigma_loc, root=0)
+    gamma_m = comm.bcast(gamma_m, root=0)
+    gamma_d = comm.bcast(gamma_d, root=0)
 
     logger.log_info("Local Schwinger-Dyson equation (SDE) done.")
 
@@ -133,6 +135,7 @@ def execute_dga_routine():
         gamma_d.save(name="gamma_dens_loc", output_dir=config.output.output_path)
         gamma_m.save(name="gamma_magn_loc", output_dir=config.output.output_path)
         sigma_loc.save(name="siw_dga_local", output_dir=config.output.output_path)
+
         vrg_d.save(name="vrg_dens_loc", output_dir=config.output.output_path)
         vrg_m.save(name="vrg_magn_loc", output_dir=config.output.output_path)
         del vrg_d, vrg_m
@@ -141,6 +144,7 @@ def execute_dga_routine():
         gchi_m.save(name="gchi_magn_loc", output_dir=config.output.output_path)
         f_d.save(name="f_dens_loc", output_dir=config.output.output_path)
         f_m.save(name="f_magn_loc", output_dir=config.output.output_path)
+        del f_d, f_m
         logger.log_info("Saved all relevant quantities as numpy files.")
 
     if config.output.do_plotting and comm.rank == 0:
@@ -154,14 +158,14 @@ def execute_dga_routine():
         plotting.plot_nu_nup(gamma_dens_plot, omega=10, name="Gamma_dens", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gamma_dens_plot, omega=-10, name="Gamma_dens", output_dir=config.output.plotting_path)
         logger.log_info("Plotted gamma (dens).")
-        del gamma_dens_plot, gamma_d
+        del gamma_dens_plot
 
         gamma_magn_plot = gamma_m.cut_niv(min(config.box.niv_core, 2 * int(config.sys.beta)))
         plotting.plot_nu_nup(gamma_magn_plot, omega=0, name="Gamma_magn", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gamma_magn_plot, omega=10, name="Gamma_magn", output_dir=config.output.plotting_path)
         plotting.plot_nu_nup(gamma_magn_plot, omega=-10, name="Gamma_magn", output_dir=config.output.plotting_path)
         logger.log_info("Plotted gamma (magn).")
-        del gamma_magn_plot, gamma_m
+        del gamma_magn_plot
 
         plotting.chi_checks(
             [chi_d.mat],
@@ -201,7 +205,7 @@ def execute_dga_routine():
     logger.log_info("Local DGA routine finished.")
 
     logger.log_info("Starting non-local ladder-DGA routine.")
-    sigma_dga = nonlocal_sde.calculate_self_energy_q(comm, u_loc, v_nonloc, sigma_dmft, sigma_loc)
+    sigma_dga = nonlocal_sde.calculate_self_energy_q(comm, u_loc, v_nonloc, sigma_dmft, sigma_loc, gamma_d, gamma_m)
     del sigma_dmft, sigma_loc
     logger.log_info("Non-local ladder-DGA routine finished.")
 
@@ -268,7 +272,7 @@ def execute_dga_routine():
             raise ValueError("Eliashberg equation can only be solved when nq = nk.")
         logger.log_info("Starting with Eliashberg equation.")
         lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
-            giwk_dga, g_loc, u_loc, v_nonloc, comm
+            giwk_dga, g_loc, u_loc, v_nonloc, gamma_d, gamma_m, comm
         )
 
         if config.output.save_quantities and comm.rank == 0:

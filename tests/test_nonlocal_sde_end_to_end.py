@@ -46,7 +46,9 @@ def test_calculates_nonlocal_sde_correctly(setup, niw_core, niv_core, niv_shell)
     )
 
     sigma_dga_mat = (
-        nonlocal_sde.calculate_self_energy_q(comm_mock, u_loc, v_nonloc, s_dmft, s_loc).decompress_q_dimension().mat
+        nonlocal_sde.calculate_self_energy_q(comm_mock, u_loc, v_nonloc, s_dmft, s_loc, gamma_d, gamma_m)
+        .decompress_q_dimension()
+        .mat
     )
     sigma_dga_ref = np.load(f"{folder}/sigma_dga.npy")
 

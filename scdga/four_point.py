@@ -375,10 +375,10 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         frequency dimension, such that :math:`A_{abcd}^{qv} * B_{dcef}^{qv'} = C_{abef}^{qvv'}`. This is needed to
         construct the full vertex, see Eq. (3.139) in my thesis. Returns the object in the half niw range.
         """
-        if not isinstance(other, (int, float, complex, np.ndarray, LocalFourPoint)):
+        if not isinstance(other, (int, float, complex, np.ndarray, FourPoint)):
             raise ValueError("Multiplication only supported with numbers, numpy arrays or FourPoint objects.")
 
-        if not isinstance(other, LocalFourPoint):
+        if not isinstance(other, FourPoint):
             copy = deepcopy(self)
             copy.mat *= other
             return copy
@@ -448,27 +448,24 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
         if self.num_vn_dimensions in (0, 1) or other.num_vn_dimensions in (0, 1):
+            # special cases if both objects do not have two fermionic frequency dimensions each. Straightforward
+            # contraction is saving memory as we do not have to add fermionic frequency dimensions to artificially
+            # create compound indices
             q_prefix = "" if is_local else "q"
 
             self.compress_q_dimension()
             if not is_local:
                 other = other.compress_q_dimension()
 
-            # special cases if both objects do not have two fermionic frequency dimensions each. Straightforward
-            # contraction is saving memory as we do not have to add fermionic frequency dimensions to artificially
-            # create compound indices
-            left_orbs = "abcd"
-            right_orbs = "dcef"
-            final_orbs = "abef"
-            suffix_map = {0: "w", 1: "wv", 2: "wvp"}
-            suffix_self = suffix_map.get(self.num_vn_dimensions, "w")
-            suffix_other = suffix_map.get(other.num_vn_dimensions, "w")
-            suffix_final = suffix_map.get(max(self.num_vn_dimensions, other.num_vn_dimensions), "w")
+            self.to_half_niw_range()
+            other.to_half_niw_range()
+
+            suffix_other, suffix_result, suffix_self = self._get_frequency_suffixes_for_matmul(other, left_hand_side)
 
             einsum_str = (
-                f"q{left_orbs}{suffix_self},{q_prefix}{right_orbs}{suffix_other}->q{final_orbs}{suffix_final}"
+                f"qabcd{suffix_self},{q_prefix}dcef{suffix_other}->qabef{suffix_result}"
                 if left_hand_side
-                else f"{q_prefix}{left_orbs}{suffix_other},q{right_orbs}{suffix_self}->q{final_orbs}{suffix_final}"
+                else f"{q_prefix}abcd{suffix_other},qdcef{suffix_self}->qabef{suffix_result}"
             )
 
             return FourPoint(

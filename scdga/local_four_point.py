@@ -304,43 +304,29 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         channel = self.channel if self.channel != SpinChannel.NONE else other.channel
 
-        if (
-            self.num_wn_dimensions == 1
-            and other.num_wn_dimensions == 1
-            and (self.num_vn_dimensions == 0 or other.num_vn_dimensions == 0)
-        ):
-            # special case if one of two LocalFourPoint object has no fermionic frequency dimensions
-            # straightforward contraction is saving memory as we do not have to add fermionic frequency dimensions
-            einsum_str = {
-                (0, 2): "abcdw,dcefwvp->abefwvp",
-                (0, 1): "abcdw,dcefwv->abefwv",
-                (0, 0): "abcdw,dcefw->abefw",
-                (1, 0): "abcdwv,dcefw->abefwv",
-                (2, 0): "abcdwvp,dcefw->abefwvp",
-            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
+        if self.num_vn_dimensions in (0, 1) or other.num_vn_dimensions in (0, 1):
+            # special cases if both objects do not have two fermionic frequency dimensions each. Straightforward
+            # contraction is saving memory as we do not have to add fermionic frequency dimensions to artificially
+            # create compound indices
+            self.to_half_niw_range()
+            other.to_half_niw_range()
+
+            suffix_other, suffix_result, suffix_self = self._get_frequency_suffixes_for_matmul(other, left_hand_side)
+
+            einsum_str = (
+                f"abcd{suffix_self},dcef{suffix_other}->abef{suffix_result}"
+                if left_hand_side
+                else f"abcd{suffix_other},dcef{suffix_self}->abef{suffix_result}"
+            )
 
             return LocalFourPoint(
                 np.einsum(einsum_str, self.mat, other.mat, optimize=True),
                 channel,
                 self.num_wn_dimensions,
                 max(self.num_vn_dimensions, other.num_vn_dimensions),
-                full_niw_range=self.full_niw_range,
-                full_niv_range=self.full_niv_range,
+                self.full_niw_range,
+                self.full_niv_range,
             )
-
-        if self.num_vn_dimensions == 1 or other.num_vn_dimensions == 1:
-            einsum_str = {
-                (1, 1): "abcdwv,dcefwv->abefwv",
-                (1, 2): "abcdwv,dcefwvp->abefwvp" if left_hand_side else "abcdwvp,dcefwp->abefwvp",
-                (2, 1): "abcdwvp,dcefwp->abefwvp" if left_hand_side else "abcdwv,dcefwvp->abefwvp",
-            }.get((self.num_vn_dimensions, other.num_vn_dimensions))
-            new_mat = (
-                np.einsum(einsum_str, self.mat, other.mat, optimize=True)
-                if left_hand_side
-                else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
-            )
-            max_vn_dim = max(self.num_vn_dimensions, other.num_vn_dimensions)
-            return LocalFourPoint(new_mat, channel, self.num_wn_dimensions, max_vn_dim, False, self.full_niv_range)
 
         self_full_niw_range = self.full_niw_range
         other_full_niw_range = other.full_niw_range
@@ -372,6 +358,8 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             full_niw_range=False,
             full_niv_range=self.full_niv_range,
         ).to_full_indices(shape)
+
+
 
     def mul(self, other):
         r"""
@@ -771,3 +759,14 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if other_extended:
             other = other.take_vn_diagonal()
         return other
+
+    def _get_frequency_suffixes_for_matmul(self, other: "LocalFourPoint", left_hand_side: bool) -> tuple[str, str, str]:
+        base = {0: "w", 1: "wv", 2: "wvp"}
+        suffix_self = base[self.num_vn_dimensions]
+        suffix_other = base[other.num_vn_dimensions]
+        suffix_result = base[max(self.num_vn_dimensions, other.num_vn_dimensions)]
+        if left_hand_side and (self.num_vn_dimensions, other.num_vn_dimensions) == (2, 1):
+            suffix_self, suffix_other, suffix_result = "wvp", "wp", "wvp"
+        if not left_hand_side and (self.num_vn_dimensions, other.num_vn_dimensions) == (1, 2):
+            suffix_self, suffix_other, suffix_result = "wp", "wvp", "wvp"
+        return suffix_other, suffix_result, suffix_self

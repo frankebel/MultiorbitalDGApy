@@ -1,7 +1,6 @@
 import glob
 import os
 import re
-import time
 
 import mpi4py.MPI as MPI
 import numpy as np
@@ -359,6 +358,8 @@ def calculate_self_energy_q(
     v_nonloc: Interaction,
     sigma_dmft: SelfEnergy,
     sigma_local: SelfEnergy,
+    gamma_dens: LocalFourPoint,
+    gamma_magn: LocalFourPoint,
 ) -> SelfEnergy:
     """
     Main routine for the non-local DGA self-energy calculation. Calculates the Hartree- and Fock-terms, the bubble,
@@ -425,7 +426,7 @@ def calculate_self_energy_q(
         logger.log_memory_usage("Gchi0_q_full", gchi0_q, comm.size)
         giwk_full = giwk_full.cut_niv(config.box.niw_core + config.box.niv_full)
 
-        f_dc_loc = LocalFourPoint.load(os.path.join(config.output.output_path, "f_dc_loc.npy"))
+        f_dc_loc = LocalFourPoint.load(os.path.join(config.output.output_path, "f_dc_loc.npy")).symmetrize_v_vp()
         kernel = -calculate_sigma_dc_kernel(f_dc_loc, gchi0_q, u_loc)
         del f_dc_loc
         logger.log_info("Calculated double-counting kernel.")
@@ -444,22 +445,15 @@ def calculate_self_energy_q(
         gchi0_q_core_sum = 1.0 / config.sys.beta * gchi0_q_core.sum_over_all_vn(config.sys.beta)
         del gchi0_q_core
 
-        gamma_dens = LocalFourPoint.load(
-            os.path.join(config.output.output_path, "gamma_dens_loc.npy"), SpinChannel.DENS
-        )
         kernel += calculate_sigma_kernel_r_q(
             gamma_dens, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
-        del gamma_dens
         logger.log_info("Calculated kernel for density channel.")
 
-        gamma_magn = LocalFourPoint.load(
-            os.path.join(config.output.output_path, "gamma_magn_loc.npy"), SpinChannel.MAGN
-        )
         kernel += 3 * calculate_sigma_kernel_r_q(
             gamma_magn, gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, u_loc, v_nonloc, mpi_dist_irrk
         )
-        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum, gamma_magn
+        del gchi0_q_core_inv, gchi0_q_full_sum, gchi0_q_core_sum
         logger.log_info("Calculated kernel for magnetic channel.")
 
         kernel.mat = mpi_dist_irrk.gather(kernel.mat)

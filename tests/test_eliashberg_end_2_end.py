@@ -7,6 +7,8 @@ import pytest
 from scdga import config, eliashberg_solver, dga_io
 from scdga.dga_logger import DgaLogger
 from scdga.greens_function import GreensFunction
+from scdga.local_four_point import LocalFourPoint
+from scdga.n_point_base import SpinChannel
 from tests import conftest
 
 
@@ -48,11 +50,14 @@ def test_eliashberg_equation_without_local_part(setup, niw_core, niv_core, niv_s
 
     g_dga = GreensFunction(np.load(f"{folder}/giwk_dga.npy"))
 
+    gamma_dens = LocalFourPoint.load(f"{folder}/gamma_dens_loc.npy", channel=SpinChannel.DENS)
+    gamma_magn = LocalFourPoint.load(f"{folder}/gamma_magn_loc.npy", channel=SpinChannel.MAGN)
+
     lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
-        g_dga, g_dmft, u_loc, v_nonloc, comm_mock
+        g_dga, g_dmft, u_loc, v_nonloc, gamma_dens, gamma_magn, comm_mock
     )
-    assert np.allclose(lambdas_sing, np.array([4.237641492, 3.924374924, 3.825213676, 3.490779646]), atol=1e-4)
-    assert np.allclose(lambdas_trip, np.array([3.814883493, 3.220890131, 2.897254137, 2.886318159]), atol=1e-4)
+    assert np.allclose(lambdas_sing, np.array([320.44198399, 320.44198233, 125.57105153, 125.56943059]), atol=1e-4)
+    assert np.allclose(lambdas_trip, np.array([107.07432659, 106.60650549, 41.88921822, 41.88921591]), atol=1e-4)
 
 
 @pytest.mark.parametrize("niw_core, niv_core, niv_shell", [(20, 20, 10), (-1, 20, 10), (20, -1, 10), (-1, -1, 10)])
@@ -76,7 +81,10 @@ def test_eliashberg_equation_with_local_part(setup, niw_core, niv_core, niv_shel
 
     g_dga = GreensFunction(np.load(f"{folder}/giwk_dga.npy"))
 
+    gamma_dens = LocalFourPoint.load(f"{folder}/gamma_dens_loc.npy", channel=SpinChannel.DENS)
+    gamma_magn = LocalFourPoint.load(f"{folder}/gamma_magn_loc.npy", channel=SpinChannel.MAGN)
+
     lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
-        g_dga, g_dmft, u_loc, v_nonloc, comm_mock
+        g_dga, g_dmft, u_loc, v_nonloc, gamma_dens, gamma_magn, comm_mock
     )
     # asserts are missing

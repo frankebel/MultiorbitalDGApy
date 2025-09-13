@@ -34,50 +34,46 @@ def delete_files(filepath: str, *args) -> None:
 
 
 def create_full_vertex_q_r(
-    u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, comm: MPI.Comm
+    u_loc: LocalInteraction, v_nonloc: Interaction, gamma_r: LocalFourPoint, comm: MPI.Comm
 ) -> FourPoint:
     """
     Calculates the full vertex in the given channel (either density or magnetic). For details, see Eq. (3.139) in my thesis.
     """
     logger = config.logger
-    logger.log_info(f"Starting to calculate the full {channel.value} vertex.")
+    logger.log_info(f"Starting to calculate the full {gamma_r.channel.value} vertex.")
 
     gchi0_q_inv = FourPoint.load(
         os.path.join(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy"), num_vn_dimensions=1
     )
-    gamma_r = LocalFourPoint.load(
-        os.path.join(config.output.output_path, f"gamma_{channel.value}_loc.npy"), channel=channel
-    )
     logger.log_info(f"Loaded gchi0_q_inv and gamma_{gamma_r.channel.value}_loc from files.")
     f_q_r = nonlocal_sde.create_auxiliary_chi_r_q(gamma_r, gchi0_q_inv, u_loc, v_nonloc)
-    logger.log_info(f"Non-Local auxiliary susceptibility ({channel.value}) calculated.")
-    del gamma_r
+    logger.log_info(f"Non-Local auxiliary susceptibility ({gamma_r.channel.value}) calculated.")
 
     f_q_r = config.sys.beta**2 * (gchi0_q_inv - gchi0_q_inv @ f_q_r @ gchi0_q_inv)
     del gchi0_q_inv
-    logger.log_info(f"Calculated first part of full {channel.value} vertex.")
+    logger.log_info(f"Calculated first part of full {gamma_r.channel.value} vertex.")
 
     vrg_q_r = FourPoint.load(
-        os.path.join(config.output.eliashberg_path, f"vrg_q_{channel.value}_rank_{comm.rank}.npy"),
-        channel=channel,
+        os.path.join(config.output.eliashberg_path, f"vrg_q_{gamma_r.channel.value}_rank_{comm.rank}.npy"),
+        channel=gamma_r.channel,
         num_vn_dimensions=1,
     )
     gchi_aux_q_r_sum = FourPoint.load(
-        os.path.join(config.output.eliashberg_path, f"gchi_aux_q_{channel.value}_sum_rank_{comm.rank}.npy"),
-        channel=channel,
+        os.path.join(config.output.eliashberg_path, f"gchi_aux_q_{gamma_r.channel.value}_sum_rank_{comm.rank}.npy"),
+        channel=gamma_r.channel,
         num_vn_dimensions=0,
     )
-    logger.log_info(f"Loaded vrg_q_{channel.value} and gchi_aux_q_{channel.value}_sum from files.")
+    logger.log_info(f"Loaded vrg_q_{gamma_r.channel.value} and gchi_aux_q_{gamma_r.channel.value}_sum from files.")
 
-    u = u_loc.as_channel(channel) + v_nonloc.as_channel(channel)
-    f_q_r += u @ (vrg_q_r * vrg_q_r) - u @ gchi_aux_q_r_sum @ (u @ (vrg_q_r * vrg_q_r))
+    u = u_loc.as_channel(gamma_r.channel) + v_nonloc.as_channel(gamma_r.channel)
+    f_q_r += (1 - u @ gchi_aux_q_r_sum) @ (u @ (vrg_q_r * vrg_q_r))
     del gchi_aux_q_r_sum, vrg_q_r
     logger.log_info(f"Calculated second part of full {f_q_r.channel.value} vertex.")
 
     delete_files(
         config.output.eliashberg_path,
-        f"vrg_q_{channel.value}_rank_{comm.rank}.npy",
-        f"gchi_aux_q_{channel.value}_sum_rank_{comm.rank}.npy",
+        f"vrg_q_{gamma_r.channel.value}_rank_{comm.rank}.npy",
+        f"gchi_aux_q_{gamma_r.channel.value}_sum_rank_{comm.rank}.npy",
     )
 
     return f_q_r
@@ -110,12 +106,10 @@ def create_full_vertex_q_r2(channel: SpinChannel, niv_pp: int, mpi_distributor: 
         ).invert()
     ).cut_niv(config.box.niv_core)
     del f_r_loc, gchi0_q, gchi0_loc
-    return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
+    return transform_vertex_ph_to_pp_w0(f_q_r, niv_pp)
 
 
-def transform_vertex_ph_to_pp_w0(
-    f_q_r: LocalFourPoint, niv_pp: int, channel: SpinChannel = SpinChannel.NONE
-) -> LocalFourPoint | FourPoint:
+def transform_vertex_ph_to_pp_w0(f_q_r: LocalFourPoint | FourPoint, niv_pp: int) -> LocalFourPoint | FourPoint:
     """
     Transforms the vertex function from particle-hole notation to particle-particle notation based on Motoharu Kitatani's
     frequency convention (which is the same as Georg Rohringer's). This is done by flipping the last Matsubara
@@ -131,27 +125,26 @@ def transform_vertex_ph_to_pp_w0(
     for idx, w in enumerate(MFHelper.wn(config.box.niw_core)):
         f_q_r_pp_mat[..., omega == w] = -f_q_r[..., idx, omega == w]
 
-    channel = channel if channel != SpinChannel.NONE else f_q_r.channel
     if is_local:
-        return LocalFourPoint(f_q_r_pp_mat, channel, 0, frequency_notation=FrequencyNotation.PP)
-    return FourPoint(f_q_r_pp_mat, channel, config.lattice.q_grid.nk, 0, 2, True, True, True, FrequencyNotation.PP)
+        return LocalFourPoint(f_q_r_pp_mat, f_q_r.channel, 0, frequency_notation=FrequencyNotation.PP)
+    return FourPoint(
+        f_q_r_pp_mat, f_q_r.channel, config.lattice.q_grid.nk, 0, 2, True, True, True, FrequencyNotation.PP
+    )
 
 
 def create_full_vertex_q_r_pp_w0(
-    u_loc: LocalInteraction, v_nonloc: Interaction, channel: SpinChannel, niv_pp: int, mpi_dist_irrk: MpiDistributor
+    u_loc: LocalInteraction, v_nonloc: Interaction, gamma_r: LocalFourPoint, niv_pp: int, mpi_dist_irrk: MpiDistributor
 ):
     """
     Calculates the full vertex in PH notation and transforms it to PP notation for the both density or magnetic channel.
-    This is done in batches of size `group_size` to account for memory limitations. Since we need two variables as large
-    as the auxiliary susceptibility, we split the MPI communicator in half and calculate the full vertex in two batches.
     """
     logger = config.logger
 
-    f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, channel, mpi_dist_irrk.comm)
-    f_q_r = transform_vertex_ph_to_pp_w0(f_q_r, niv_pp, channel)
+    f_q_r = create_full_vertex_q_r(u_loc, v_nonloc, gamma_r, mpi_dist_irrk.comm)
+    f_q_r = transform_vertex_ph_to_pp_w0(f_q_r, niv_pp)
 
-    logger.log_info(f"Full ladder-vertex ({channel.value}) calculated.")
-    logger.log_memory_usage(f"Full ladder-vertex ({channel.value})", f_q_r, mpi_dist_irrk.comm.size)
+    logger.log_info(f"Full ladder-vertex ({gamma_r.channel.value}) calculated.")
+    logger.log_memory_usage(f"Full ladder-vertex ({gamma_r.channel.value})", f_q_r, mpi_dist_irrk.comm.size)
 
     return f_q_r
 
@@ -210,12 +203,7 @@ def solve_eliashberg_lanczos(gamma_q_r_pp: FourPoint, gchi0_q0_pp: FourPoint):
     gamma_q_r_pp = gamma_q_r_pp.map_to_full_bz(
         config.lattice.q_grid.irrk_inv, config.lattice.q_grid.nk
     ).decompress_q_dimension()
-    logger.log_memory_usage(
-        f"Gamma_pp_{gamma_q_r_pp.channel.value}",
-        gamma_q_r_pp,
-        1,
-        allowed_ranks=(0, 1),
-    )
+    logger.log_memory_usage(f"Gamma_pp_{gamma_q_r_pp.channel.value}", gamma_q_r_pp, 1, allowed_ranks=(0, 1))
 
     sign = 1 if gamma_q_r_pp.channel == SpinChannel.SING else -1
 
@@ -337,7 +325,13 @@ def create_local_reducible_pp_diagrams(
 
 
 def solve(
-    giwk_dga: GreensFunction, giwk_dmft: GreensFunction, u_loc: LocalInteraction, v_nonloc: Interaction, comm: MPI.Comm
+    giwk_dga: GreensFunction,
+    giwk_dmft: GreensFunction,
+    u_loc: LocalInteraction,
+    v_nonloc: Interaction,
+    gamma_dens: LocalFourPoint,
+    gamma_magn: LocalFourPoint,
+    comm: MPI.Comm,
 ):
     """
     Solves the Eliashberg equation for largest the superconducting eigenvalues and corresponding gap functions.
@@ -350,16 +344,15 @@ def solve(
 
     v_nonloc = v_nonloc.reduce_q(my_irr_q_list)
 
+    niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
     if config.eliashberg.include_local_part:
         niv_pp = min(config.box.niw_core // 3, config.box.niv_core // 3)
-    else:
-        niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
 
     # f_dens_pp = create_full_vertex_q_r2(SpinChannel.DENS, niv_pp, mpi_dist_irrk)
-    f_dens_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.DENS, niv_pp, mpi_dist_irrk)
+    f_dens_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, gamma_dens, niv_pp, mpi_dist_irrk)
 
     # f_magn_pp = create_full_vertex_q_r2(SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
-    f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, SpinChannel.MAGN, niv_pp, mpi_dist_irrk)
+    f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, gamma_magn, niv_pp, mpi_dist_irrk)
 
     delete_files(config.output.eliashberg_path, f"gchi0_q_inv_rank_{comm.rank}.npy")
     delete_files(config.output.output_path, f"gchi0_q_rank_{comm.rank}.npy")
@@ -398,7 +391,8 @@ def solve(
             f_magn_loc = LocalFourPoint.load(
                 os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN
             )
-            f_ud_loc_fs_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp, SpinChannel.UD)
+            f_ud_loc_fs_pp = transform_vertex_ph_to_pp_w0(0.5 * f_dens_loc - 0.5 * f_magn_loc, niv_pp)
+            f_ud_loc_fs_pp.channel = SpinChannel.UD
             logger.log_info(f"Calculated full local UD vertex in pp notation.")
 
             if config.output.save_quantities:
