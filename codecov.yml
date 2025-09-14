@@ -12,3 +12,4 @@ ignore:
   - "scdga/dga_main.py"
   - "scdga/plotting.py"
   - "scdga/config_parser.py"
+  - "scdga/symmetrize_new.py"

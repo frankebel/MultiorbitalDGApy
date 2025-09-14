@@ -29,7 +29,7 @@ def test_component2index_general_invalid_num_bands():
 
 @pytest.mark.parametrize("num_bands", [1, 2, 3, 4])
 def test_index2component_band_and_back(num_bands):
-    orbs = list(itertools.product(range(num_bands), repeat=4))
+    orbs = list(it.product(range(num_bands), repeat=4))
 
     for orb in orbs:
         ind = component2index_band(num_bands, 4, list(orb))
