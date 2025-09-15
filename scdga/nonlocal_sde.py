@@ -206,31 +206,43 @@ def perform_lambda_correction(chi_phys_q_r: FourPoint) -> FourPoint:
         logger.log_info(
             f"Lambda correction for the {chi_phys_q_r.channel.value} channel applied with lambda = {lambda_r:.6f}."
         )
+
+        if config.output.save_quantities:
+            with open(os.path.join(config.output.output_path, f"lambda_{config.lambda_correction.type}.txt"), "a") as f:
+                f.write(f"lambda_{chi_phys_q_r.channel.value}: {lambda_r}\n")
+
         return chi_phys_q_r
 
-    # sp lambda correction only performed for magn channel
-    if chi_phys_q_r.channel == SpinChannel.MAGN:
-        logger.log_info(f"Performing lambda correction for magn channel.")
-        chi_phys_q_dens = FourPoint.load(
-            os.path.join(config.output.output_path, f"chi_phys_q_dens.npy"),
-            SpinChannel.DENS,
+    # else: "sp"
+    if chi_phys_q_r.channel != SpinChannel.MAGN:
+        return chi_phys_q_r
+
+    logger.log_info(f"Performing lambda correction for magn channel.")
+    chi_phys_q_dens = FourPoint.load(
+        os.path.join(config.output.output_path, f"chi_phys_q_dens.npy"),
+        SpinChannel.DENS,
+        num_vn_dimensions=0,
+    ).to_full_niw_range()
+
+    chi_dens_loc, chi_magn_loc = [
+        LocalFourPoint.load(
+            os.path.join(config.output.output_path, f"chi_{channel.value}_loc.npy"),
+            channel,
             num_vn_dimensions=0,
         ).to_full_niw_range()
+        for channel in [SpinChannel.DENS, SpinChannel.MAGN]
+    ]
 
-        chi_dens_loc, chi_magn_loc = [
-            LocalFourPoint.load(
-                os.path.join(config.output.output_path, f"chi_{channel.value}_loc.npy"),
-                channel,
-                num_vn_dimensions=0,
-            ).to_full_niw_range()
-            for channel in [SpinChannel.DENS, SpinChannel.MAGN]
-        ]
+    chi_magn_loc_sum = (chi_dens_loc.mat + chi_magn_loc.mat).sum() - 1 / config.lattice.q_grid.nk_tot * (
+        config.lattice.q_grid.irrk_count[:, None, None, None, None, None] * chi_phys_q_dens.mat
+    ).sum()
+    chi_phys_q_r, lambda_r = lc.perform_single_lambda_correction(chi_phys_q_r, chi_magn_loc_sum / config.sys.beta)
+    logger.log_info(f"Lambda correction 'sp' applied. Lambda for magn channel is: {lambda_r:.6f}.")
 
-        chi_magn_loc_sum = (chi_dens_loc.mat + chi_magn_loc.mat).sum() - 1 / config.lattice.q_grid.nk_tot * (
-            config.lattice.q_grid.irrk_count[:, None, None, None, None, None] * chi_phys_q_dens.mat
-        ).sum()
-        chi_phys_q_r, lambda_r = lc.perform_single_lambda_correction(chi_phys_q_r, chi_magn_loc_sum / config.sys.beta)
-        logger.log_info(f"Lambda correction 'sp' applied. Lambda for magn channel is: {lambda_r:.6f}.")
+    if config.output.save_quantities:
+        with open(os.path.join(config.output.output_path, f"lambda_{config.lambda_correction.type}.txt"), "a") as f:
+            f.write(f"lambda_{chi_phys_q_r.channel.value}: {lambda_r}\n")
+
     return chi_phys_q_r
 
 
