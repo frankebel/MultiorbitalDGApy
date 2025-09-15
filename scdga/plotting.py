@@ -96,7 +96,7 @@ def sigma_loc_checks(
     axes[1].set_ylim(None, 0)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(output_dir, f"sde_{name}_check.svg"), bbox_inches="tight", pad_inches=0.05)
+        plt.savefig(os.path.join(output_dir, f"sde_{name}_check.pdf"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -158,7 +158,7 @@ def chi_checks(
     axes[1].set_xlim(-1, 10)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(output_dir, f"chi_dens_magn_{name}.svg"), bbox_inches="tight", pad_inches=0.05)
+        plt.savefig(os.path.join(output_dir, f"chi_dens_magn_{name}.pdf"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -202,7 +202,7 @@ def plot_nu_nup(
     fig.colorbar(im2, ax=(axes[1]), aspect=15, fraction=0.08, location="right", pad=0.05)
     plt.tight_layout()
     if do_save:
-        plt.savefig(os.path.join(output_dir, f"{name}_w{omega}.svg"), bbox_inches="tight", pad_inches=0.05)
+        plt.savefig(os.path.join(output_dir, f"{name}_w{omega}.pdf"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -280,7 +280,7 @@ def plot_two_point_kx_ky(
             ax.scatter(scatter[:, 0], scatter[:, 1], marker="o", c=colours)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(output_dir, f"{name}.svg"), bbox_inches="tight", pad_inches=0.05)
+        plt.savefig(os.path.join(output_dir, f"{name}.pdf"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
@@ -341,7 +341,7 @@ def plot_two_point_kx_ky_real_and_imag(
         plt.tight_layout()
         if save:
             plt.savefig(
-                os.path.join(output_dir, f"{name}_{"real" if idx == 0 else "imag"}.svg"),
+                os.path.join(output_dir, f"{name}_{"real" if idx == 0 else "imag"}.pdf"),
                 bbox_inches="tight",
                 pad_inches=0.05,
             )
@@ -441,7 +441,7 @@ def plot_gap_function(
             ax.scatter(scatter[:, 0], scatter[:, 1], marker="o", c=colours)
     plt.tight_layout()
     if do_save:
-        plt.savefig(os.path.join(output_dir, f"{name}.svg"), bbox_inches="tight", pad_inches=0.05)
+        plt.savefig(os.path.join(output_dir, f"{name}.pdf"), bbox_inches="tight", pad_inches=0.05)
     if show:
         plt.show()
     else:
