@@ -11,37 +11,22 @@ from scdga.self_energy import SelfEnergy
 def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFourPoint:
     r"""
     Returns the generalized susceptibility, see also Eq. (3.31) in my master's thesis.
-    :math:`\chi_{r;abcd}^{wvv'} = \beta G_{r;abcd}^{(2);wvv'} - 2 \delta_{rd} \delta_{w0} G_{ab}^{v} G_{cd}^{v'})`
+    :math:`\chi_{r;abcd}^{wvv'} = \beta (G_{r;abcd}^{(2);wvv'} - 2 \delta_{rd} \delta_{w0} G_{ab}^{v} G_{cd}^{v'})`
     """
-    chi = config.sys.beta * g2
+    chi = config.sys.beta * g2.to_half_niw_range()
 
     if g2.channel == SpinChannel.DENS and g2.frequency_notation == FrequencyNotation.PH:
-        wn = MFHelper.wn(config.box.niw_core)
-        ggv_mat = _get_ggv_mat(g_loc, niv_slice=config.box.niv_core)[:, :, :, :, None, ...]
-        chi[:, :, :, :, wn == 0, ...] -= 2.0 * config.sys.beta * ggv_mat
+        g_loc_slice_mat = g_loc.mat[..., g_loc.niv - config.box.niv_core : g_loc.niv + config.box.niv_core]
+        ggv_mat = g_loc_slice_mat[:, :, None, None, :, None] * g_loc_slice_mat[None, None, :, :, None, :]
+        chi[:, :, :, :, 0, ...] -= 2.0 * config.sys.beta * ggv_mat
 
     return chi
-
-
-def _get_ggv_mat(g_loc: GreensFunction, niv_slice: int = -1) -> np.ndarray:
-    r"""
-    Returns the product of two Green's functions which is needed to retrieve the general susceptibility in the density
-    channel: :math:`B_{0;abcd}^{vv'} = G_{ab}^{v} G_{cd}^{v'}`, see also Eq. (3.31) in my master's thesis.
-    """
-    if niv_slice == -1:
-        niv_slice = g_loc.niv
-
-    g_loc_slice_mat = g_loc.mat[..., g_loc.niv - niv_slice : g_loc.niv + niv_slice]
-
-    g_left_mat = g_loc_slice_mat[:, :, None, None, :, None]
-    g_right_mat = np.swapaxes(g_loc_slice_mat, 0, 1)[None, None, :, :, None, :]
-    return g_left_mat * g_right_mat
 
 
 def create_gamma_r(gchi_r: LocalFourPoint, gchi0_inv: LocalFourPoint) -> LocalFourPoint:
     r"""
     Returns the ph-irreducible vertex
-    :math:`\Gamma_{r;abcd}^{wvv'} = \beta^2 * [(\chi_{r;abcd}^{wvv'})^{-1} - (\chi_{0;abcd}^{wv})^{-1}]`.
+    :math:`\Gamma_{r;abcd}^{wvv'} = \beta^2 * [(\chi_{r;abcd}^{wvv'})^{-1} - (\delta_{vv'}\chi_{0;abcd}^{wvv'})^{-1}]`.
     """
     return config.sys.beta**2 * (gchi_r.invert() - gchi0_inv)
 
