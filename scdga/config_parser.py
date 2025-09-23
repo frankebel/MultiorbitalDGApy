@@ -105,7 +105,7 @@ class ConfigParser:
         conf.type = self._try_parse(lattice_section, "type", "from_wannier90")
         conf.er_input = lattice_section["hr_input"]  # can be multiple types
 
-        conf.interaction_type = self._try_parse(lattice_section, "interaction_type", "local_from_dmft")
+        conf.interaction_type = self._try_parse(lattice_section, "interaction_type", "one_band_from_dmft")
         conf.interaction_input = lattice_section["interaction_input"]  # can be multiple types
         return conf
 

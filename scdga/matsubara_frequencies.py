@@ -65,7 +65,7 @@ class MFHelper:
         """
         niw_pp, niv_pp = niw // 3, min(niw // 3, niv // 3)
         iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw_pp, niv_pp)
-        return niw_pp + iv + ivp - iw, niv_pp + iv, niv_pp + ivp
+        return niw + iv + ivp - iw, niv + iv, niv + ivp
 
     @staticmethod
     def get_frequencies_for_ph_to_ph_bar_channel_conversion(
@@ -75,8 +75,8 @@ class MFHelper:
         Returns the new frequencies :math:`(w', v_1', v_2')` for the conversion of ph to ph_bar notation.
         :math:`F_ph_bar[...] = F_ph[w',v_1',v_2']` where :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_2-v_1, v_2-w, v_2)`
         """
-        niw, niv = niw // 2, min(niw // 2, niv // 2)
-        iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw, niv)
+        niw_phbar, niv_phbar = niw // 2, min(niw // 2, niv // 2)
+        iw, iv, ivp = MFHelper._get_frequencies_for_channel_conversion(niw_phbar, niv_phbar)
         return niw + ivp - iv, niv + ivp - iw, niv + ivp
 
     @staticmethod

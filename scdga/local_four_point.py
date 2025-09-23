@@ -1,5 +1,3 @@
-import scipy as sp
-
 from scdga.interaction import LocalInteraction, Interaction
 from scdga.local_n_point import LocalNPoint
 from scdga.matsubara_frequencies import MFHelper
@@ -200,6 +198,20 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         to the new compound index. Always returns the object with a compressed momentum dimension and in the same niw
         range as the original object.
         """
+        if self.frequency_notation == FrequencyNotation.PH:
+            return self._to_compound_indices_ph()
+        elif self.frequency_notation == FrequencyNotation.PP:
+            return self._to_compound_indices_pp()
+        else:
+            raise NotImplementedError(
+                f"Frequency notation {self.frequency_notation} not supported for transformation to "
+                f"compound indices."
+            )
+
+    def _to_compound_indices_ph(self) -> "LocalFourPoint":
+        """
+        Converts the indices of the LocalFourPoint object in ph channel to compound indices.
+        """
         if len(self.current_shape) == 3:  # [w,x1,x2]
             return self
 
@@ -221,6 +233,21 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         )
         return self
 
+    def _to_compound_indices_pp(self) -> "LocalFourPoint":
+        """
+        Converts the indices of the LocalFourPoint object in pp channel to compound indices. The difference to the ph
+        channel is that the orbital indices have to be permuted first since the ordering of pp quantities is not
+        "1234" but rather "1324".
+        """
+        if len(self.current_shape) == 3:  # [w,x1,x2]
+            return self
+
+        if self.num_wn_dimensions != 1:
+            raise ValueError(f"Cannot convert to compound indices if there are no bosonic frequencies.")
+
+        self.permute_orbitals("abcd->acbd")
+        return self._to_compound_indices_ph()
+
     def to_full_indices(self, shape: tuple = None) -> "LocalFourPoint":
         """
         Converts an object stored with compound indices to an object that has unraveled momentum,
@@ -228,6 +255,19 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         transformation as `to_compound_indices`. Will make use of the `original_shape` the object was created or last
         modified with. If the `original_shape` is not set or is hard to obtain, the `shape` argument can be used to
         specify the original shape of the object.
+        """
+        if self.frequency_notation == FrequencyNotation.PH:
+            return self._to_full_indices_ph(shape)
+        elif self.frequency_notation == FrequencyNotation.PP:
+            return self._to_full_indices_pp(shape)
+        else:
+            raise NotImplementedError(
+                f"Frequency notation {self.frequency_notation} not supported for transformation to full indices."
+            )
+
+    def _to_full_indices_ph(self, shape: tuple = None) -> "LocalFourPoint":
+        """
+        Converts the indices of the LocalFourPoint object in ph channel to full indices.
         """
         if len(self.current_shape) == self.num_orbital_dimensions + self.num_wn_dimensions + self.num_vn_dimensions:
             return self
@@ -254,6 +294,16 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         if self.num_vn_dimensions == 1:  # original was [o1,o2,o4,o3,w,v]
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
+        return self
+
+    def _to_full_indices_pp(self, shape: tuple = None) -> "LocalFourPoint":
+        """
+        Converts the indices of the LocalFourPoint object in pp channel to full indices. The difference to the ph
+        channel is that the orbital indices have to be permuted back since the ordering of pp quantities is not
+        "1234" but rather "1324".
+        """
+        self._to_full_indices_ph(shape)
+        self.permute_orbitals("abcd->acbd")
         return self
 
     def invert(self, copy: bool = True):
@@ -358,8 +408,6 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             full_niw_range=False,
             full_niv_range=self.full_niv_range,
         ).to_full_indices(shape)
-
-
 
     def mul(self, other):
         r"""
@@ -519,14 +567,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
         permutation = f"{split[0]}...->{split[1]}..."
 
-        return LocalFourPoint(
-            np.einsum(permutation, self.mat, optimize=True),
-            self.channel,
-            self.num_wn_dimensions,
-            self.num_vn_dimensions,
-            self.full_niw_range,
-            self.full_niv_range,
-        )
+        copy = deepcopy(self)
+        copy.mat = np.einsum(permutation, copy.mat, optimize=True)
+        return copy
 
     def change_frequency_notation_ph_to_pp(self) -> "LocalFourPoint":
         r"""
@@ -550,94 +593,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.mat = copy.mat[..., iw_pp, iv_pp, ivp_pp]
         copy.frequency_notation = FrequencyNotation.PP
         copy.update_original_shape()
-        return copy
-
-    def change_frequency_notation_ph_to_pp_v2(self) -> "LocalFourPoint":
-        r"""
-        Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
-        The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
-        """
-        """
-        if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
-            raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
-
-        copy = deepcopy(self)
-
-        if copy.frequency_notation == FrequencyNotation.PP:
-            return copy
-
-        copy = copy.to_full_niw_range().to_full_niv_range()
-
-        if copy.num_vn_dimensions == 1:
-            copy = copy.extend_vn_to_diagonal()
-
-        niw_pp, niv_pp = copy.niw // 3, min(copy.niw // 3, copy.niv // 3)
-
-        x_idx, y_idx, z_idx = np.meshgrid(
-            np.arange(2 * niw_pp + 1), np.arange(2 * niv_pp), np.arange(2 * niv_pp), indexing="ij"
-        )
-        i_idx = y_idx + z_idx - x_idx
-
-        copy.mat = copy.mat[..., i_idx, y_idx, z_idx]
-        copy.frequency_notation = FrequencyNotation.PP
-        copy.update_original_shape()
-        return copy
-        """
-        pass
-
-    def change_frequency_notation_ph_to_pp_v3(self) -> "LocalFourPoint":
-        r"""
-        Changes the frequency notation of the object from ph to pp and returns a copy in half the niw range.
-        The frequency shifts are :math:`(w,v_1,v_2) -> (w',v_1',v_2') = (v_1 + v_2 - w, v_1, v_2)`.
-        """
-        """
-        if self.num_wn_dimensions != 1 or self.num_vn_dimensions not in (1, 2):
-            raise ValueError("Object must have 1 bosonic and 1 or 2 fermionic frequency dimensions.")
-
-        copy = deepcopy(self)
-
-        if copy.frequency_notation == FrequencyNotation.PP:
-            return copy
-
-        copy = copy.to_full_niw_range().to_full_niv_range()
-
-        if copy.num_vn_dimensions == 1:
-            copy = copy.extend_vn_to_diagonal()
-
-        x_vals = copy.niw + 1 + MFHelper.wn(copy.niw)
-        y_vals = copy.niv + MFHelper.vn(copy.niv)
-        z_vals = copy.niv + MFHelper.vn(copy.niv)
-        xg, yg, zg = np.meshgrid(x_vals, y_vals, z_vals, indexing="ij")
-
-        i = yg + zg - xg
-        valid = (i >= 0) & (i < len(x_vals))
-        x_valid = xg[valid]
-        y_valid = yg[valid]
-        z_valid = zg[valid]
-        i_valid = i[valid]
-
-        # Get values from original array
-        values = copy.mat[..., i_valid, y_valid, z_valid]
-
-        # Get bounding box
-        coords = np.stack([x_valid, y_valid, z_valid], axis=1)
-        mins = coords.min(axis=0)
-        maxs = coords.max(axis=0)
-        shape = maxs - mins + 1
-
-        # Create dense array
-        dense_array = np.empty(shape, dtype=copy.mat.dtype)
-        x_new = x_valid - mins[0]
-        y_new = y_valid - mins[1]
-        z_new = z_valid - mins[2]
-        dense_array[x_new, y_new, z_new] = values
-        copy.mat[:, :, :, :] = dense_array
-        copy.frequency_notation = FrequencyNotation.PP
-        copy.update_original_shape()
-        niw_pp, niv_pp = copy.niw // 3, min(copy.niw // 3, copy.niv // 3)
-        return copy.cut_niw_and_niv(niw_pp, niv_pp)
-        """
-        pass
+        return copy.to_half_niw_range()
 
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """

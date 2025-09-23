@@ -51,7 +51,7 @@ class LatticeConfig:
         self.symmetries: list[bz.KnownSymmetries] = bz.two_dimensional_square_symmetries()
         self.type: str = "from_wannier90"
         self.er_input: str | list = "./wannier_hr.dat"
-        self.interaction_type: str = "local_from_dmft"
+        self.interaction_type: str = "one_band_from_dmft"
         self.interaction_input: str | list = ""
         self.nk: tuple[int, int, int] = (16, 16, 1)
         self.nq: tuple[int, int, int] = self.nk

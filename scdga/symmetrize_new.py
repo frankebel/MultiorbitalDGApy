@@ -1,6 +1,9 @@
 import gc
+import glob
 import itertools as it
 import logging
+import os
+import readline
 
 import h5py
 import numpy as np
@@ -84,7 +87,7 @@ def extract_g2_general(group_string: str, indices: list, file: h5py.File, niw: i
     :math:`G2_{\downarrow\downarrow\uparrow\uparrow}, G2_{\uparrow\uparrow\downarrow\downarrow}`,
     :math:`G2_{\uparrow\downarrow\downarrow\uparrow}` and :math:`G2_{\downarrow\uparrow\uparrow\downarrow}`.
     """
-    logger.info(f"Nonzero number of elements of g2 in dataset: {len(indices)} / {n_bands ** 4 * 2**4}")
+    print(f"Nonzero number of elements of G2 in dataset: {len(indices)} / {n_bands ** 4 * 2**4}")
 
     elements = np.array([file[f"{group_string}/{idx}/value"] for idx in indices])
     elements = elements.transpose(0, -1, 1, 2)
@@ -109,7 +112,7 @@ def extract_g2_general(group_string: str, indices: list, file: h5py.File, niw: i
 
     for a, b, c, d in it.product(range(n_bands), repeat=4):
         target_orbital = [a, b, c, d]
-        logger.info(f"Collecting G2 for orbitals {target_orbital} ...")
+        print(f"Collecting G2 for orbitals {target_orbital} ...")
 
         idx_dddd, idx_dduu, idx_uudd, idx_uuuu, idx_uddu, idx_duud = (
             next(
@@ -157,6 +160,16 @@ def get_niw_niv(vertex_file, g4iw_groupstring, indices):
     return first_element_shape[-1] // 2, first_element_shape[0] // 2
 
 
+def complete(text, state):
+    expanded = os.path.expanduser(text)
+    matches = [m + "/" if os.path.isdir(m) else m for m in glob.glob(expanded + "*")]
+
+    try:
+        return matches[state]
+    except IndexError:
+        return None
+
+
 if __name__ == "__main__":
     default_ph_filename = "Vertex.hdf5"
     default_pp_filename = "Vertex_pp.hdf5"
@@ -164,6 +177,10 @@ if __name__ == "__main__":
 
     g4iw_ph_groupstring = "worm-last/ineq-001/g4iw-worm"
     g4iw_pp_groupstring = "worm-last/ineq-001/g4iwpp-worm"
+
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer_delims(" \t\n;")
+    readline.set_completer(complete)
 
     input_ph_filename = input(f"Enter the DMFT vertex file name (default = {default_ph_filename}): ")
     output_filename = input(f"Enter the output filename (default = {default_output_filename}): ")
@@ -184,13 +201,11 @@ if __name__ == "__main__":
 
     n_bands = int(vertex_file_ph[".config"].attrs[f"atoms.1.nd"]) + int(vertex_file_ph[".config"].attrs[f"atoms.1.np"])
 
-    logger = logging.getLogger()
-
     indices_ph = None
     try:
         indices_ph = list(vertex_file_ph[g4iw_ph_groupstring].keys())
     except KeyError:
-        logger.warning("WARNING: No g4iw-worm group found in the PH input file. Aborting.")
+        print("WARNING: No g4iw-worm group found in the PH input file. Aborting.")
         exit()
 
     indices_pp = None
@@ -198,41 +213,41 @@ if __name__ == "__main__":
         try:
             indices_pp = list(vertex_file_pp[g4iw_pp_groupstring].keys())
         except KeyError:
-            logger.warning("WARNING: No g4iw-worm-pp group found in the PP input file.")
+            print("WARNING: No g4iw-worm-pp group found in the PP input file.")
             pp_exists = False
 
     niw_ph, niv_ph = get_niw_niv(vertex_file_ph, g4iw_ph_groupstring, indices_ph)
 
-    logger.info("Number of bands:", n_bands)
-    logger.info("Number of fermionic Matsubara frequencies for PH channel:", niv_ph)
-    logger.info("Number of bosonic Matsubara frequencies for PH channel:", niw_ph)
+    print("Number of bands:", n_bands)
+    print("Number of fermionic Matsubara frequencies for PH channel:", niv_ph)
+    print("Number of bosonic Matsubara frequencies for PH channel:", niw_ph)
 
-    logger.info("Extracting G2ph ...")
+    print("Extracting G2ph ...")
     g2_uuuu_ph, g2_dddd_ph, g2_dduu_ph, g2_uudd_ph, g2_uddu_ph, g2_duud_ph = extract_g2_general(
         g4iw_ph_groupstring, indices_ph, vertex_file_ph, niw_ph, niv_ph
     )
-    logger.info("G2ph extracted. Calculating G2_dens and G2_magn for ph ...")
+    print("G2ph extracted. Calculating G2_dens and G2_magn for ph ...")
     g2_dens_ph = 0.5 * (g2_uuuu_ph + g2_dddd_ph + g2_uudd_ph + g2_dduu_ph)
     g2_magn_ph = 0.5 * (g2_uddu_ph + g2_duud_ph)
 
     del g2_uuuu_ph, g2_dddd_ph, g2_dduu_ph, g2_uudd_ph, g2_uddu_ph, g2_duud_ph
     gc.collect()
-    logger.info("G2_dens and G2_magn calculated. Writing to file ...")
+    print("G2_dens and G2_magn calculated. Writing to file ...")
 
     save_to_file([g2_dens_ph, g2_magn_ph], ["dens", "magn"], niw_ph, n_bands)
     del g2_dens_ph, g2_magn_ph
     gc.collect()
-    logger.info("G2_dens and G2_magn successfully written to file.")
+    print("G2_dens and G2_magn successfully written to file.")
 
     if not pp_exists:
         output_file.close()
         vertex_file_ph.close()
-        logger.info("Done!")
+        print("Done!")
         exit()
 
     niw_pp, niv_pp = get_niw_niv(vertex_file_pp, g4iw_pp_groupstring, indices_pp)
-    logger.info("Number of fermionic Matsubara frequencies for PP channel:", niv_pp)
-    logger.info("Number of bosonic Matsubara frequencies for PP channel:", niw_pp)
+    print("Number of fermionic Matsubara frequencies for PP channel:", niv_pp)
+    print("Number of bosonic Matsubara frequencies for PP channel:", niw_pp)
 
     if niw_pp != niw_ph:
         logging.getLogger().warning(
@@ -245,24 +260,24 @@ if __name__ == "__main__":
             "Beware of potential frequency mismatch when running the DGA code."
         )
 
-    logger.info("Extracting G2pp ...")
+    print("Extracting G2pp ...")
     _, _, g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph = extract_g2_general(
         g4iw_pp_groupstring, indices_pp, vertex_file_pp, niw_pp, niv_pp
     )
-    logger.info("G2pp extracted. Calculating G2_sing and G2_trip for pp ...")
+    print("G2pp extracted. Calculating G2_sing and G2_trip for pp ...")
     g2_sing_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp - g2_uddu_pp - g2_duud_ph)
     g2_trip_pp = 0.5 * (g2_dduu_pp + g2_uudd_pp + g2_uddu_pp + g2_duud_ph)
 
     del g2_dduu_pp, g2_uudd_pp, g2_uddu_pp, g2_duud_ph
     gc.collect()
-    logger.info("G2_sing and G2_trip calculated. Writing to file ...")
+    print("G2_sing and G2_trip calculated. Writing to file ...")
 
     save_to_file([g2_sing_pp, g2_trip_pp], ["sing", "trip"], niw_pp, n_bands)
     del g2_sing_pp, g2_trip_pp
     gc.collect()
-    logger.info("G2_sing and G2_trip successfully written to file.")
+    print("G2_sing and G2_trip successfully written to file.")
 
     output_file.close()
     vertex_file_ph.close()
     vertex_file_pp.close()
-    logger.info("Done!")
+    print("Done!")

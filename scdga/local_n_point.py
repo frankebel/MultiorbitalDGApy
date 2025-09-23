@@ -102,7 +102,7 @@ class LocalNPoint(IHaveMat):
 
     def cut_niw(self, niw_cut: int):
         """
-        Allows to place a cutoff on the number of bosonic frequencies of the object.
+        Allows to place a cutoff on the number of bosonic frequencies of the object. Returns a copy of the object.
         """
         if self.num_wn_dimensions == 0:
             raise ValueError("Cannot cut bosonic frequencies if there are none.")
@@ -126,7 +126,7 @@ class LocalNPoint(IHaveMat):
 
     def cut_niv(self, niv_cut: int):
         """
-        Allows to place a cutoff on the number of fermionic frequencies of the object.
+        Allows to place a cutoff on the number of fermionic frequencies of the object. Returns a copy of the object.
         """
         if self.num_vn_dimensions == 0:
             raise ValueError("Cannot cut fermionic frequencies if there are none.")
@@ -148,14 +148,15 @@ class LocalNPoint(IHaveMat):
 
     def cut_niw_and_niv(self, niw_cut: int, niv_cut: int):
         """
-        Allows to place a cutoff on the number of bosonic and fermionic frequencies of the object.
+        Allows to place a cutoff on the number of bosonic and fermionic frequencies of the object. Returns a copy of
+        the object.
         """
         return self.cut_niw(niw_cut).cut_niv(niv_cut)
 
     def extend_vn_to_diagonal(self):
         """
         Extends an object [...,w,v] to [...,w,v,v] by making a diagonal from the last dimension if the number of fermionic
-        frequency dimensions is one.
+        frequency dimensions is one. Returns the original object.
         """
         if self.num_vn_dimensions == 0:
             raise ValueError("No fermionic frequency dimensions available for extension.")
@@ -168,7 +169,8 @@ class LocalNPoint(IHaveMat):
 
     def take_vn_diagonal(self):
         """
-        Compresses an object [...w,v,v] to [...,w,v] by taking the diagonal of the last two dimensions.
+        Compresses an object [...w,v,v] to [...,w,v] by taking the diagonal of the last two dimensions and returns the
+        original object.
         """
         if self.num_vn_dimensions == 0:
             raise ValueError("No fermionic frequency dimensions available for compression.")
@@ -181,19 +183,15 @@ class LocalNPoint(IHaveMat):
 
     def to_full_niw_range(self):
         """
-        Converts the object to the full bosonic frequency range. For details, we refer to Eq. (2.39) and the associated
-        text in Georg Rohringer's PhD thesis.
+        Converts the object to the full bosonic frequency range and returns the original object. For details, we refer
+        to Eq. (2.39) and the associated text in Georg Rohringer's PhD thesis.
         """
         if self.num_wn_dimensions == 0 or self.full_niw_range:
             return self
 
         niw_axis = -(self.num_wn_dimensions + self.num_vn_dimensions)
         ind = np.arange(1, self.current_shape[niw_axis])
-        freq_axis = niw_axis
-        if self.num_vn_dimensions == 1:
-            freq_axis = niw_axis, -1
-        if self.num_vn_dimensions == 2:
-            freq_axis = niw_axis, -2, -1
+        freq_axis = tuple(range(-(self.num_wn_dimensions + self.num_vn_dimensions), 0))
         self.mat = np.concatenate(
             (np.conj(np.flip(np.take(self.mat, ind, axis=niw_axis), freq_axis)), self.mat), axis=niw_axis
         )
@@ -204,7 +202,7 @@ class LocalNPoint(IHaveMat):
     def to_half_niw_range(self):
         r"""
         Converts the object to the half bosonic frequency range by taking
-        :math:`F^{\omega\nu\nu'}_{abcd}\to F^{\omega\geq0;\nu\nu'}_{abcd}`.
+        :math:`F^{\omega\nu\nu'}_{abcd}\to F^{\omega\geq0;\nu\nu'}_{abcd}`. Returns the original object.
         """
         if self.num_wn_dimensions == 0 or not self.full_niw_range:
             return self
@@ -218,7 +216,7 @@ class LocalNPoint(IHaveMat):
 
     def flip_frequency_axis(self, axis: tuple | int):
         """
-        Flips the matrix along the specified frequency axis.
+        Flips the matrix along the specified frequency axis and returns a copy.
         """
         if self.num_wn_dimensions + self.num_vn_dimensions == 0:
             raise ValueError("Cannot flip the matrix if there are no frequency dimensions.")
@@ -230,8 +228,9 @@ class LocalNPoint(IHaveMat):
         if not set(axis).issubset(axis_possible):
             raise ValueError(f"Invalid axis {axis}. Possible axes are {axis_possible}.")
 
-        self.mat = np.flip(self.mat, axis=axis)
-        return self
+        copy = deepcopy(self)
+        copy.mat = np.flip(copy.mat, axis=axis)
+        return copy
 
     def save(self, output_dir: str = "./", name: str = "please_give_me_a_name") -> None:
         """

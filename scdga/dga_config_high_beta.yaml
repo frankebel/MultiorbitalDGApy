@@ -7,10 +7,9 @@ lattice:
   symmetries: "two_dimensional_square" # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
   type: "from_wannier90" # Specifies the hopping elements, either from a wannier90 file 'from_wannier90', from a hk file 'from_wannierHK' or from tight-binding parameters 't_tp_tpp'
   hr_input: "/home/julpe/Documents/DATA/Singleorb-DATA/NdNiO2_beta200_n0.85_U3.2/wannier_hr.dat" # full path to the wannier_hr.dat/wannier.hk file or list of tight-binding parameters [t, tp, tpp] (only for single-orbital)
-  interaction_type: "local_from_dmft" # Type of interaction. Available: ['local_from_dmft', 'kanamori_from_dmft', 'kanamori', 'custom'].
-  # If 'local_from_dmft' or if interaction_type is left empty, we use the single-band interaction from DMFT. If 'kanamori_from_dmft', the interaction is parsed from the DMFT
-  # calculation. If 'kanamori', we expect the interaction input to be a list containing the number of bands and two to three kanamori parameters, [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
-  # (U' is also sometimes called V). If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
+  interaction_type: "one_band_from_dmft" # Type of interaction. Available: ['one_band_from_dmft', 'kanamori_from_dmft', 'custom'].
+  # If 'one_band_from_dmft' or if interaction_type is left empty, we use the single-band interaction from DMFT. If 'kanamori_from_dmft', the interaction is parsed from the DMFT
+  # calculation. If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
   # (similar to how a wannier_hr.dat file is structured, but with 4 orbital indices).
   interaction_input: [ 1, 0, 0, 0 ] # Full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   # this parameter will only be used if interaction_type is either 'kanamori' or 'custom'
@@ -41,8 +40,8 @@ dmft_input:
 
 eliashberg:
   perform_eliashberg: True # If True, the code will perform a power iteration to solve the linearized Eliashberg equation
-  save_pairing_vertex: True # if true, saves the pairing vertex to a file
-  save_fq: True # If True, the code will save the full vertex F(qvv') for d/m channels to a file. Attention: this will be a large file!
+  save_pairing_vertex: False # if true, saves the pairing vertex to a file
+  save_fq: False # If True, the code will save the full vertex F(qvv') for d/m channels to a file. Attention: this will be a large file!
   n_eig: 4 # Number of eigenvalues and eigenvectors to be calculated. Default: 4
   epsilon: 1e-12 # Convergence criterion for the eigenvalues and eigenvectors
   symmetry: "random" # Symmetry of the gap function that will be used as a starting point for the power iteration. Available: p-wave-x, p-wave-y, d-wave, random
@@ -58,5 +57,5 @@ poly_fitting:
 output:
   output_path: "" # Path, where the DGA output folders are created. If not specified, the output is created in the input folder directory of the DMFT files
   save_quantities: True # If True, the code will save several quantities into the output folder
-  do_plotting: False # If True, the code will plot the results into the output folder
+  do_plotting: True # If True, the code will plot the results into the output folder
   plotting_subfolder_name: "Plots" # name for the subfolder where the plots are saved

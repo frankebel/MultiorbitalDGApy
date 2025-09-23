@@ -23,7 +23,7 @@ class SpinChannel(Enum):
 
 class FrequencyNotation(Enum):
     """
-    Enum for the different frequency notations.
+    Enum for the different frequency notations. Is interchangeable with the channel reducibility.
     """
 
     PH: str = "ph"

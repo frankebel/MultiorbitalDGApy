@@ -179,7 +179,7 @@ def set_hamiltonian(er_type: str, er_input: str | list, int_type: str, int_input
     else:
         raise NotImplementedError(f"Hamiltonian type {er_type} not supported.")
 
-    if int_type == "local_from_dmft" or int_type == "" or int_type is None:
+    if int_type == "one_band_from_dmft" or int_type == "" or int_type is None:
         return ham.single_band_interaction(config.lattice.interaction.udd)
     elif int_type == "kanamori_from_dmft":
         return ham.kanamori_interaction(
@@ -188,10 +188,6 @@ def set_hamiltonian(er_type: str, er_input: str | list, int_type: str, int_input
             config.lattice.interaction.jdd,
             config.lattice.interaction.vdd,
         )
-    elif int_type == "kanamori":
-        if not isinstance(int_input, list) or not 3 <= len(int_input) <= 4:
-            raise ValueError("Invalid input for kanamori interaction.")
-        return ham.kanamori_interaction(*int_input)
     elif int_type == "custom":
         if not isinstance(int_input, str):
             raise ValueError("Invalid input for umatrix file.")

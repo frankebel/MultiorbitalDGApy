@@ -795,7 +795,7 @@ def test_permutes_orbitals_correctly():
     obj = LocalFourPoint(mat, num_vn_dimensions=2)
     result = obj.permute_orbitals("abcd->cdab")
     expected = np.einsum("abcd...->cdab...", mat, optimize=True)
-    assert np.allclose(result.mat, expected, rtol=1e-4)
+    assert np.allclose(result.mat, expected)
 
 
 def test_raises_error_for_invalid_permutation_format():

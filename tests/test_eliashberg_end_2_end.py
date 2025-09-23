@@ -56,8 +56,8 @@ def test_eliashberg_equation_without_local_part(setup, niw_core, niv_core, niv_s
     lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
         g_dga, g_dmft, u_loc, v_nonloc, gamma_dens, gamma_magn, comm_mock
     )
-    assert np.allclose(lambdas_sing, np.array([320.44198399, 320.44198233, 125.57105153, 125.56943059]), atol=1e-4)
-    assert np.allclose(lambdas_trip, np.array([107.07432659, 106.60650549, 41.88921822, 41.88921591]), atol=1e-4)
+    assert np.allclose(lambdas_sing, np.array([4.17936064, 3.98239343, 3.7661796, 3.6118379]), atol=1e-4)
+    assert np.allclose(lambdas_trip, np.array([3.87211113, 3.27590262, 2.91889808, 2.85647941]), atol=1e-4)
 
 
 @pytest.mark.parametrize("niw_core, niv_core, niv_shell", [(20, 20, 10), (-1, 20, 10), (20, -1, 10), (-1, -1, 10)])
@@ -87,4 +87,5 @@ def test_eliashberg_equation_with_local_part(setup, niw_core, niv_core, niv_shel
     lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
         g_dga, g_dmft, u_loc, v_nonloc, gamma_dens, gamma_magn, comm_mock
     )
-    # asserts are missing
+    assert np.allclose(lambdas_sing, np.array([6.3768531, 5.95395433, 3.94275148, 3.53948018]), atol=1e-4)
+    assert np.allclose(lambdas_trip, np.array([5.53726134, 4.71843316, 2.87634341, 2.79390457]), atol=1e-4)

@@ -3,7 +3,7 @@ from scdga.greens_function import GreensFunction
 from scdga.matsubara_frequencies import MFHelper
 from scdga.local_four_point import LocalFourPoint
 from scdga.four_point import FourPoint
-from scdga.n_point_base import SpinChannel
+from scdga.n_point_base import SpinChannel, FrequencyNotation
 import numpy as np
 
 
@@ -15,8 +15,16 @@ class BubbleGenerator:
         """
         wn = MFHelper.wn(niw)
         niv_range = np.arange(-niv, niv)
-        g_left_mat = g_loc.mat[:, None, None, :, None, g_loc.niv - niv : g_loc.niv + niv]
-        g_right_mat = g_loc.transpose_orbitals().mat[None, :, :, None, g_loc.niv + niv_range[None, :] - wn[:, None]]
+        eye_bands = np.eye(g_loc.n_bands)
+
+        g_left_mat = (
+            g_loc.mat[:, None, None, :, None, g_loc.niv - niv : g_loc.niv + niv]
+            * eye_bands[None, :, :, None, None, None]
+        )
+        g_right_mat = (
+            g_loc.transpose_orbitals().mat[None, :, :, None, g_loc.niv + niv_range[None, :] - wn[:, None]]
+            * eye_bands[:, None, None, :, None, None]
+        )
         return LocalFourPoint(-config.sys.beta * g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1)
 
     @staticmethod
@@ -27,10 +35,17 @@ class BubbleGenerator:
         wn = MFHelper.wn(niw, return_only_positive=True)
         gchi0_q = np.zeros((len(q_list),) + (giwk.n_bands,) * 4 + (len(wn), 2 * niv), dtype=giwk.mat.dtype)
 
+        eye_bands = np.eye(giwk.n_bands)
         g_right = giwk.transpose_orbitals().cut_niv(niv + niw)
-        g_left_mat = g_right.mat[:, :, :, :, None, None, :, g_right.niv - niv : g_right.niv + niv]
+        g_left_mat = (
+            giwk.cut_niv(niv + niw).mat[:, :, :, :, None, None, :, g_right.niv - niv : g_right.niv + niv]
+            * eye_bands[None, None, None, None, :, :, None, None]
+        )
         for idx_q, q in enumerate(q_list):
-            g_right_mat = np.roll(g_right.mat, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :]
+            g_right_mat = (
+                np.roll(g_right.mat, [-i for i in q], axis=(0, 1, 2))[:, :, :, None, :, :, None, :]
+                * eye_bands[None, None, None, :, None, None, :, None]
+            )
 
             for idx_w, wn_i in enumerate(wn):
                 start = g_right.niv - niv - wn_i
@@ -43,12 +58,38 @@ class BubbleGenerator:
         )
 
     @staticmethod
-    def create_generalized_chi0_pp_w0(giwk: GreensFunction, niv_pp: int) -> FourPoint:
+    def create_generalized_chi0_pp(g_loc: GreensFunction, niw_pp: int, niv_pp: int) -> LocalFourPoint:
+        r"""
+        Returns the particle-particle bare bubble susceptibility from the Green's function. Returns the object with :math:`\omega = 0`.
+        We have :math:`\chi_{0;abcd}^{\vec{k}\nu} = G_{ad}^k * G_{cb}^{\omega-k}`. Attention:
+        no factor of :math:`\beta` is included here.
+        """
+        g = g_loc.cut_niv(niv_pp)
+        eye_bands = np.eye(g.current_shape[0])
+        wn = MFHelper.wn(niw_pp)
+        niv_range = np.arange(-niv_pp, niv_pp)
+        g_left_mat = (
+            g_loc.mat[:, None, None, :, None, g_loc.niv - niv_pp : g_loc.niv + niv_pp]
+            * eye_bands[None, :, :, None, None, None]
+        )
+        g_right_mat = (
+            g_loc.transpose_orbitals().mat[None, :, :, None, g_loc.niv + wn[:, None] - niv_range[None, :]]
+            * eye_bands[:, None, None, :, None, None]
+        )
+        return LocalFourPoint(
+            -g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1, frequency_notation=FrequencyNotation.PP
+        ).permute_orbitals("abcd->acbd")
+
+    @staticmethod
+    def create_generalized_chi0_q_pp_w0(giwk: GreensFunction, niv_pp: int) -> FourPoint:
         r"""
         Returns the particle-particle bare bubble susceptibility from the Green's function. Returns the object with :math:`\omega = 0`.
         We have :math:`\chi_{0;abcd}^{\vec{k}(\omega=0)\nu} = G_{ad}^k * G_{cb}^{-k}` with :math:`G_{cb}^{-k} = G_{bc}^{*k}`. Attention:
         no factor of :math:`-\beta` is included here.
         """
         g = giwk.cut_niv(niv_pp).compress_q_dimension()
-        gchi0_q = g.mat[:, :, None, None, :, :] * np.conj(g.mat)[:, None, :, :, None, :]
+        eye_bands = np.eye(g.n_bands)
+        gchi0_q = (g.mat[:, :, None, None, :, :] * eye_bands[None, None, :, :, None, None]) * (
+            np.conj(g.mat)[:, None, :, :, None, :] * eye_bands[None, :, None, None, :, None]
+        )
         return FourPoint(gchi0_q, SpinChannel.NONE, config.lattice.nq, 0, 1, has_compressed_q_dimension=True)

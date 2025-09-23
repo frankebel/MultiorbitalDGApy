@@ -90,10 +90,10 @@ def create_generalized_chi_q_with_shell_correction(
 
 def calculate_sigma_dc_kernel(f_dc_loc: LocalFourPoint, gchi0_q: FourPoint, u_loc: LocalInteraction) -> FourPoint:
     """
-    Returns the double-counting kernel for the self-energy calculation. For details, see Eq. (3.124) in my master's thesis.
+    Returns the double-counting kernel for the self-energy calculation. For details, see Eq. (4.28) in my master's thesis.
     """
     kernel = 1.0 / config.sys.beta**2 * u_loc.permute_orbitals("abcd->adcb") @ gchi0_q
-    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_dc_loc)
+    kernel = kernel.times("qabcdwv,dcefwvp->qabefwp", f_dc_loc.permute_orbitals("abcd->cbad"))
     return FourPoint(kernel, SpinChannel.NONE, config.lattice.nq, 1, 1, gchi0_q.full_niw_range, True, True).cut_niv(
         config.box.niv_core
     )
@@ -104,7 +104,7 @@ def calculate_kernel_r_q(
 ):
     r"""
     Returns the kernel for the self-energy calculation minus 2/3 times the identity if the channel is the magnetic
-    channel (due to the extra factor of :math:`U_{ah21}` in Eq. (3.125) in my master's thesis).
+    channel (due to the extra factor of :math:`U_{ah21}` in Eq. (4.29) in my master's thesis).
     .. math:: K = \gamma_{r;abcd}^{qv} - \gamma_{r;abef}^{qv} U^{q}_{r;fehg} \chi_{r;ghcd}^{q}
     """
     u_r = v_nonloc.as_channel(vrg_q_r.channel) + u_loc.as_channel(vrg_q_r.channel)
@@ -518,9 +518,11 @@ def calculate_self_energy_q(
 
         logger.log_info("Checking self-consistency convergence.")
         if comm.rank == 0 and current_iter > starting_iter + 1:
+            niv_start = sigma_new.niv
+            niv_end = niv_start + np.ceil(config.box.niv_core / 5)
             converged = np.allclose(
-                sigma_old.compress_q_dimension().mat,
-                sigma_new.compress_q_dimension().mat,
+                sigma_old.compress_q_dimension().mat[..., niv_start:niv_end],
+                sigma_new.compress_q_dimension().mat[..., niv_start:niv_end],
                 atol=config.self_consistency.epsilon,
             )
         else:

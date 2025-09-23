@@ -17,7 +17,10 @@ def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFo
 
     if g2.channel == SpinChannel.DENS and g2.frequency_notation == FrequencyNotation.PH:
         g_loc_slice_mat = g_loc.mat[..., g_loc.niv - config.box.niv_core : g_loc.niv + config.box.niv_core]
-        ggv_mat = g_loc_slice_mat[:, :, None, None, :, None] * g_loc_slice_mat[None, None, :, :, None, :]
+        ggv_mat = (
+            g_loc_slice_mat[:, :, None, None, :, None] * np.eye(config.sys.n_bands)[None, None, :, :, None, None]
+        ) * (g_loc_slice_mat[None, None, :, :, None, :] * np.eye(config.sys.n_bands)[:, :, None, None, None, None])
+
         chi[:, :, :, :, 0, ...] -= 2.0 * config.sys.beta * ggv_mat
 
     return chi
@@ -109,7 +112,7 @@ def create_vertex_functions(
     logger = config.logger
 
     gchi_r = create_generalized_chi(g2_r, g_loc)
-    del g2_r
+    # del g2_r
     logger.log_info(f"Local generalized susceptibility chi^wvv' ({gchi_r.channel.value}) done.")
 
     gamma_r = create_gamma_r_with_shell_correction(gchi_r, gchi0, u_loc)
@@ -157,7 +160,6 @@ def get_loc_self_energy_vrg(
     inner = 0.5 * inner.to_full_niw_range()
     sigma_sum = -1.0 / config.sys.beta * u_loc.times("kjop,ilpowv,lkwv->ijv", inner, g_wv)
     hartree_fock = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
-
     return SelfEnergy((hartree_fock + sigma_sum)[None, None, None, ...])
 
 
@@ -182,3 +184,80 @@ def perform_local_schwinger_dyson(
 
     sigma_loc = get_loc_self_energy_vrg(vrg_d, vrg_m, gchi_d_sum, gchi_m_sum, g_loc, u_loc)
     return gamma_d, gamma_m, gchi_d_sum, gchi_m_sum, vrg_d, vrg_m, f_d, f_m, gchi_d, gchi_m, sigma_loc
+
+
+# ----------------------------------------------- AbinitioDGA algorithms -----------------------------------------------
+
+
+def get_loc_self_energy_gamma_abinitio_dga(
+    gamma_dens: LocalFourPoint, u_loc: LocalInteraction, g_loc: GreensFunction
+) -> SelfEnergy:
+    r"""
+    Returns the local self-energy with the three-leg gamma from AbinitioDGA
+    .. math:: \Sigma_{ij}^{v} = -1/\beta \sum_w [ U_{iabc} * \gamma_{cbdj}^{wv} * G_{ad}^{w-v} ]
+    """
+    g_wv = g_loc.get_g_wv(MFHelper.wn(config.box.niw_core), config.box.niv_core)
+    sigma = -1.0 / config.sys.beta * u_loc.times("iabc,cbdjwv,adwv->ijv", gamma_dens.to_full_niw_range(), g_wv)
+    hartree = u_loc.as_channel(SpinChannel.DENS).times("abcd,dc->ab", config.sys.occ)[..., None]
+    return SelfEnergy((sigma + hartree)[None, None, None, ...])
+
+
+def perform_local_schwinger_dyson_abinitio_dga(
+    g_loc: GreensFunction,
+    g2_dens: LocalFourPoint,
+    g2_magn: LocalFourPoint,
+    u_loc: LocalInteraction,
+):
+    """
+    ATTENTION: THIS IS THE ABINITODGA ROUTINE!
+    Performs the local Schwinger-Dyson equation calculation for the local (DMFT) self-energy for sanity checks.
+    """
+    logger = config.logger
+
+    gchi_dens_loc = create_generalized_chi(g2_dens, g_loc)
+    logger.log_info("Generalized susceptibility chi^wvv' (dens) done.")
+    del g2_dens
+    gchi_magn_loc = create_generalized_chi(g2_magn, g_loc)
+    logger.log_info("Generalized susceptibility chi^wvv' (magn) done.")
+    del g2_magn
+
+    gchi0_loc_full = BubbleGenerator.create_generalized_chi0(g_loc, config.box.niw_core, config.box.niv_full)
+    logger.log_info("Local bare susceptibility chi_0^wv done.")
+    gchi0_core = gchi0_loc_full.cut_niv(config.box.niv_core)
+
+    # 1 + chi0 * F_r = gchi_r * (chi0)^(-1) = 1 + gamma_r or
+    # F_r = -beta^2 * [chi0^(-1) - chi0^(-1) chi_r chi0^(-1)]
+    # gamma_r is NOT the irreducible vertex in channel r but rather the three-point vertex from AbinitioDGA
+    gchi0_inv_core = gchi0_core.invert()
+    f_dens_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_dens_loc @ gchi0_inv_core)
+    logger.log_info("Local full vertex F^wvv' (dens) done.")
+    f_magn_loc = -config.sys.beta**2 * (gchi0_inv_core - gchi0_inv_core @ gchi_magn_loc @ gchi0_inv_core)
+    logger.log_info("Local full vertex F^wvv' (magn) done.")
+    del gchi0_inv_core
+
+    # f_dens_loc_with_asympt = create_asympt_f(gchi_dens_loc, gchi_magn_loc, gchi_ud_pp_loc_sum, u_loc)
+
+    # in most equations we need 1 + gamma_r so we add it here
+    gamma_dens_loc = 1.0 / config.sys.beta * (gchi0_core @ f_dens_loc).sum_over_vn(config.sys.beta, axis=(-2,))
+    one_plus_gamma_dens_loc = LocalFourPoint.identity_like(gamma_dens_loc) + gamma_dens_loc
+    logger.log_info("Local three-leg vertex gamma^wv (dens) done.")
+
+    gamma_magn_loc = 1.0 / config.sys.beta * (gchi0_core @ f_magn_loc).sum_over_vn(config.sys.beta, axis=(-2,))
+    one_plus_gamma_magn_loc = LocalFourPoint.identity_like(gamma_dens_loc) + gamma_magn_loc
+    logger.log_info("Local three-leg vertex gamma^wv (magn) done.")
+    del gchi0_core, gamma_magn_loc
+
+    sigma_loc = get_loc_self_energy_gamma_abinitio_dga(gamma_dens_loc, u_loc, g_loc)
+    logger.log_info("Local self-energy done.")
+    del gamma_dens_loc
+
+    return (
+        gchi_dens_loc,
+        gchi_magn_loc,
+        gchi0_loc_full,
+        one_plus_gamma_dens_loc,
+        one_plus_gamma_magn_loc,
+        f_dens_loc,
+        f_magn_loc,
+        sigma_loc,
+    )

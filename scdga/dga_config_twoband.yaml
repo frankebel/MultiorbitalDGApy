@@ -7,10 +7,9 @@ lattice:
   symmetries: "two_dimensional_square" # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
   type: "from_wannierHK" # Specifies the hopping elements, either from a wannier90 file 'from_wannier90', from a hk file 'from_wannierHK' or from tight-binding parameters 't_tp_tpp'
   hr_input: "/home/julpe/Documents/DATA/Multiorb-DATA/oneband_as_twoband_diagonal_higher_stat_for_vertex_2/wannier.hk" # full path to the wannier_hr.dat/wannier.hk file or list of tight-binding parameters [t, tp, tpp] (only for single-orbital)
-  interaction_type: "kanamori_from_dmft" # Type of interaction. Available: ['local_from_dmft', 'kanamori_from_dmft', 'kanamori', 'custom'].
-  # If 'local_from_dmft' or if interaction_type is left empty, we use the single-band interaction from DMFT. If 'kanamori_from_dmft', the interaction is parsed from the DMFT
-  # calculation. If 'kanamori', we expect the interaction input to be a list containing the number of bands and two to three kanamori parameters, [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
-  # (U' is also sometimes called V). If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
+  interaction_type: "kanamori_from_dmft" # Type of interaction. Available: ['one_band_from_dmft', 'kanamori_from_dmft', 'custom'].
+  # If 'one_band_from_dmft' or if interaction_type is left empty, we use the single-band interaction from DMFT. If 'kanamori_from_dmft', the interaction is parsed from the DMFT
+  # calculation. If 'custom', please specify the full path to a file in 'interaction_input' containing orbital and spacial entries for the interaction matrix
   # (similar to how a wannier_hr.dat file is structured, but with 4 orbital indices).
   interaction_input: [ 1, 0, 0, 0 ] # Full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   # this parameter will only be used if interaction_type is either 'kanamori' or 'custom'
