@@ -597,7 +597,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         copy.mat = copy.mat[..., iw_pp, iv_pp, ivp_pp]
         copy.frequency_notation = FrequencyNotation.PP
         copy.update_original_shape()
-        return copy.to_half_niw_range()
+        return copy.to_half_niw_range().permute_orbitals("abcd->acbd")
 
     def pad_with_u(self, u: LocalInteraction, niv_pad: int):
         """
