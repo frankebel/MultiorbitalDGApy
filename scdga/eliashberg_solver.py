@@ -301,8 +301,10 @@ def create_local_reducible_r_pp_diagrams_w0(
         raise ValueError("Channel must be either singlet or triplet.")
 
     f_r_loc = (
-        0.5 * f_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * f_magn_loc
-    ).change_frequency_notation_ph_to_pp()
+        (0.5 * f_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * f_magn_loc)
+        .change_frequency_notation_ph_to_pp()
+        .permute_orbitals("abcd->acbd")
+    )
     f_r_loc.channel = channel
     logger.log_info(f"Constructed local {channel.value}let vertex.")
 
