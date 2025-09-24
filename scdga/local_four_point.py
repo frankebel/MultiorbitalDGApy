@@ -683,7 +683,12 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
 
     @staticmethod
     def identity(
-        n_bands: int, niw: int, niv: int, num_vn_dimensions: int = 2, full_niw_range: bool = False
+        n_bands: int,
+        niw: int,
+        niv: int,
+        num_vn_dimensions: int = 2,
+        full_niw_range: bool = False,
+        frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ) -> "LocalFourPoint":
         """
         Creates an identity (matrix in compound index notation is unity) for the LocalFourPoint object.
@@ -695,7 +700,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         mat = np.tile(np.eye(compound_index_size)[None, ...], (2 * niw + 1, 1, 1))
 
         result = LocalFourPoint(
-            mat, num_vn_dimensions=num_vn_dimensions, full_niw_range=full_niw_range
+            mat,
+            num_vn_dimensions=num_vn_dimensions,
+            full_niw_range=full_niw_range,
+            frequency_notation=frequency_notation,
         ).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
             return result.take_vn_diagonal()
@@ -708,7 +716,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         of another LocalFourPoint object.
         """
         return LocalFourPoint.identity(
-            other.n_bands, other.niw, other.niv, other.num_vn_dimensions, other.full_niw_range
+            other.n_bands, other.niw, other.niv, other.num_vn_dimensions, other.full_niw_range, other.frequency_notation
         )
 
     def _revert_frequency_dimensions_after_operation(

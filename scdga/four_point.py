@@ -146,11 +146,25 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
 
     def to_compound_indices(self) -> "FourPoint":
         r"""
-        Converts the indices of the FourPoint object :math:`F^{qvv'}_{lmm'l'}` to compound indices :math:`F^{q}_{c_1, c_2}`
+        Converts the indices of the LocalFourPoint object :math:`F^{wvv'}_{lmm'l'}` to compound indices :math:`F^{w}_{c_1, c_2}`
         by transposing the object to [q, w, o1, o2, v, o4, o3, v'] (if the object has any fermionic frequency dimension,
         otherwise the compound indices are built from orbital dimensions only) and grouping {o1, o2, v} and {o4, o3, v'}
         to the new compound index. Always returns the object with a compressed momentum dimension and in the same niw
         range as the original object.
+        """
+        if self.frequency_notation == FrequencyNotation.PH:
+            return self._to_compound_indices_ph()
+        elif self.frequency_notation == FrequencyNotation.PP:
+            return self._to_compound_indices_pp()
+        else:
+            raise NotImplementedError(
+                f"Frequency notation {self.frequency_notation} not supported for transformation to "
+                f"compound indices."
+            )
+
+    def _to_compound_indices_ph(self) -> "FourPoint":
+        r"""
+        Converts the indices of the FourPoint object in ph channel to compound indices.
         """
         if len(self.current_shape) == 4:  # [q, w, x1, x2]
             return self
@@ -187,6 +201,18 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
 
         return self
 
+    def _to_compound_indices_pp(self) -> "FourPoint":
+        """
+        Converts the indices of the LocalFourPoint object in pp channel to compound indices. The difference to the ph
+        channel is that the orbital indices have to be permuted first since the ordering of pp quantities is not
+        "1234" but rather "1324".
+        """
+        if len(self.current_shape) == 3:  # [q, w, x1, x2]
+            return self
+
+        self.permute_orbitals("abcd->acbd")
+        return self._to_compound_indices_ph()
+
     def to_full_indices(self, shape: tuple = None) -> "FourPoint":
         """
         Converts an object stored with compound indices to an object that has unraveled momentum,
@@ -194,6 +220,19 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         transformation as `to_compound_indices`. Will make use of the `original_shape` the object was created or last
         modified with. If the `original_shape` is not set or is hard to obtain, the `shape` argument can be used to
         specify the original shape of the object.
+        """
+        if self.frequency_notation == FrequencyNotation.PH:
+            return self._to_full_indices_ph(shape)
+        elif self.frequency_notation == FrequencyNotation.PP:
+            return self._to_full_indices_pp(shape)
+        else:
+            raise NotImplementedError(
+                f"Frequency notation {self.frequency_notation} not supported for transformation to full indices."
+            )
+
+    def _to_full_indices_ph(self, shape: tuple = None) -> "FourPoint":
+        """
+        Converts the indices of the FourPoint object in ph channel to full indices.
         """
         if (
             len(self.current_shape) == 1 + self.num_orbital_dimensions + self.num_wn_dimensions + self.num_vn_dimensions
@@ -233,6 +272,16 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
 
         if self.num_vn_dimensions == 1:  # original was [q,o1,o2,o4,o3,w,v]
             self.mat = self.mat.diagonal(axis1=-2, axis2=-1)
+        return self
+
+    def _to_full_indices_pp(self, shape: tuple = None) -> "FourPoint":
+        """
+        Converts the indices of the FourPoint object in pp channel to full indices. The difference to the ph
+        channel is that the orbital indices have to be permuted back since the ordering of pp quantities is not
+        "1234" but rather "1324".
+        """
+        self._to_full_indices_ph(shape)
+        self.permute_orbitals("abcd->acbd")
         return self
 
     def permute_orbitals(self, permutation: str = "abcd->abcd") -> "FourPoint":
@@ -568,6 +617,7 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         nq_tot: int = 1,
         nq: tuple[int, int, int] = (1, 1, 1),
         num_vn_dimensions: int = 2,
+        frequency_notation: FrequencyNotation = FrequencyNotation.PH,
     ) -> "FourPoint":
         """
         Creates an identity (matrix in compound index notation is unity in the last two dimensions) for the
@@ -580,7 +630,11 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         mat = np.tile(np.eye(compound_index_size)[None, None, ...], (nq_tot, 2 * niw + 1, 1, 1))
 
         result = FourPoint(
-            mat, nq=nq, num_vn_dimensions=num_vn_dimensions, has_compressed_q_dimension=True
+            mat,
+            nq=nq,
+            num_vn_dimensions=num_vn_dimensions,
+            has_compressed_q_dimension=True,
+            frequency_notation=frequency_notation,
         ).to_full_indices(full_shape)
         if num_vn_dimensions == 1:
             result = result.take_vn_diagonal()
@@ -599,4 +653,5 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
             other.nq_tot,
             other.nq,
             other.num_vn_dimensions,
+            other.frequency_notation,
         )

@@ -306,12 +306,9 @@ def create_local_reducible_r_pp_diagrams_w0(
     f_r_loc.channel = channel
     logger.log_info(f"Constructed local {channel.value}let vertex.")
 
-    gchi0_pp_loc = BubbleGenerator.create_generalized_chi0_pp(g_loc, config.box.niv_core // 3, f_r_loc.niv)
+    gchi0_pp_loc = BubbleGenerator.create_generalized_chi0_pp(g_loc, config.box.niw_core // 3, f_r_loc.niv)
 
-    factor = (
-        0.5 if channel == SpinChannel.TRIP else -0.5
-    )  # notice no factor of beta here since gchi0_pp_loc has no beta
-    gamma_r_loc = f_r_loc @ (LocalFourPoint.identity_like(gchi0_pp_loc) + factor * gchi0_pp_loc @ f_r_loc).invert()
+    gamma_r_loc = f_r_loc @ (LocalFourPoint.identity_like(f_r_loc) - 0.5 * gchi0_pp_loc @ f_r_loc).invert()
     logger.log_info(f"Constructed local {channel.value}let irreducible vertex.")
 
     phi_r_loc = (f_r_loc - gamma_r_loc).to_half_niw_range()
@@ -321,7 +318,7 @@ def create_local_reducible_r_pp_diagrams_w0(
     return phi_r_loc
 
 
-def create_local_diagrams(g_loc: GreensFunction) -> tuple[LocalFourPoint, LocalFourPoint]:
+def create_local_diagrams(g_loc: GreensFunction, niv_pp: int) -> tuple[LocalFourPoint, LocalFourPoint]:
     """
     Creates the local diagrams needed for the Eliashberg equation in PP notation. This includes the full local vertex
     as well as the reducible diagrams for the UD spin combination.
@@ -331,8 +328,8 @@ def create_local_diagrams(g_loc: GreensFunction) -> tuple[LocalFourPoint, LocalF
     f_dens_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_dens_loc.npy"), SpinChannel.DENS)
     f_magn_loc = LocalFourPoint.load(os.path.join(config.output.output_path, f"f_magn_loc.npy"), SpinChannel.MAGN)
 
-    f_sing_loc_pp_w0 = create_local_full_vertex_r_pp_w0(f_dens_loc, f_magn_loc, SpinChannel.SING)
-    f_trip_loc_pp_w0 = create_local_full_vertex_r_pp_w0(f_dens_loc, f_magn_loc, SpinChannel.TRIP)
+    f_sing_loc_pp_w0 = create_local_full_vertex_r_pp_w0(f_dens_loc, f_magn_loc, SpinChannel.SING).cut_niv(niv_pp)
+    f_trip_loc_pp_w0 = create_local_full_vertex_r_pp_w0(f_dens_loc, f_magn_loc, SpinChannel.TRIP).cut_niv(niv_pp)
     f_ud_loc_pp_w0 = 0.5 * (f_sing_loc_pp_w0 - f_trip_loc_pp_w0)
     f_ud_loc_pp_w0.channel = SpinChannel.UD
 
@@ -343,8 +340,12 @@ def create_local_diagrams(g_loc: GreensFunction) -> tuple[LocalFourPoint, LocalF
         f_trip_loc_pp_w0.save(output_dir=config.output.eliashberg_path, name="f_trip_loc_pp_w0")
         f_ud_loc_pp_w0.save(output_dir=config.output.eliashberg_path, name="f_ud_loc_pp_w0")
 
-    phi_sing_loc_pp_w0 = create_local_reducible_r_pp_diagrams_w0(g_loc, f_dens_loc, f_magn_loc, SpinChannel.SING)
-    phi_trip_loc_pp_w0 = create_local_reducible_r_pp_diagrams_w0(g_loc, f_dens_loc, f_magn_loc, SpinChannel.TRIP)
+    phi_sing_loc_pp_w0 = create_local_reducible_r_pp_diagrams_w0(
+        g_loc, f_dens_loc, f_magn_loc, SpinChannel.SING
+    ).cut_niv(niv_pp)
+    phi_trip_loc_pp_w0 = create_local_reducible_r_pp_diagrams_w0(
+        g_loc, f_dens_loc, f_magn_loc, SpinChannel.TRIP
+    ).cut_niv(niv_pp)
     phi_ud_loc_pp_w0 = 0.5 * (phi_sing_loc_pp_w0 - phi_trip_loc_pp_w0)
     phi_ud_loc_pp_w0.channel = SpinChannel.UD
 
@@ -380,7 +381,7 @@ def solve(
 
     niv_pp = min(config.box.niw_core // 2, config.box.niv_core // 2)
     if config.eliashberg.include_local_part:
-        niv_pp = min(config.box.niw_core // 3, config.box.niv_core // 3)
+        niv_pp = min(config.box.niw_core // 3, config.box.niv_full // 3, niv_pp)
 
     f_dens_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, gamma_dens, niv_pp, mpi_dist_irrk)
     f_magn_pp = create_full_vertex_q_r_pp_w0(u_loc, v_nonloc, gamma_magn, niv_pp, mpi_dist_irrk)
@@ -408,7 +409,7 @@ def solve(
         logger.log_info("Created the bare bubble susceptibility in pp notation.")
 
         if config.eliashberg.include_local_part:
-            f_ud_loc_pp_w0, phi_ud_loc_pp = create_local_diagrams(g_loc)
+            f_ud_loc_pp_w0, phi_ud_loc_pp = create_local_diagrams(g_loc, niv_pp)
 
             gamma_sing_pp -= f_ud_loc_pp_w0 + phi_ud_loc_pp
             gamma_trip_pp -= f_ud_loc_pp_w0 + phi_ud_loc_pp
