@@ -67,18 +67,18 @@ class BubbleGenerator:
         g = g_loc.cut_niv(niv_pp)
         eye_bands = np.eye(g.current_shape[0])
         wn = MFHelper.wn(niw_pp)
-        niv_range = np.arange(-niv_pp, niv_pp)
+        vn = MFHelper.vn(niv_pp)
         g_left_mat = (
             g_loc.mat[:, None, None, :, None, g_loc.niv - niv_pp : g_loc.niv + niv_pp]
             * eye_bands[None, :, :, None, None, None]
         )
         g_right_mat = (
-            g_loc.transpose_orbitals().mat[None, :, :, None, g_loc.niv + wn[:, None] - niv_range[None, :]]
+            g_loc.transpose_orbitals().mat[None, :, :, None, g_loc.niv + wn[:, None] - vn[None, :]]
             * eye_bands[:, None, None, :, None, None]
         )
         return LocalFourPoint(
             -g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1, frequency_notation=FrequencyNotation.PP
-        ).permute_orbitals("abcd->acbd")
+        )
 
     @staticmethod
     def create_generalized_chi0_q_pp_w0(giwk: GreensFunction, niv_pp: int) -> FourPoint:

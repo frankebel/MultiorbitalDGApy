@@ -370,7 +370,11 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             )
 
             return LocalFourPoint(
-                np.einsum(einsum_str, self.mat, other.mat, optimize=True),
+                (
+                    np.einsum(einsum_str, self.mat, other.mat, optimize=True)
+                    if left_hand_side
+                    else np.einsum(einsum_str, other.mat, self.mat, optimize=True)
+                ),
                 channel,
                 self.num_wn_dimensions,
                 max(self.num_vn_dimensions, other.num_vn_dimensions),
