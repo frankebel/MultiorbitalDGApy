@@ -301,16 +301,17 @@ def create_local_reducible_r_pp_diagrams_w0(
         raise ValueError("Channel must be either singlet or triplet.")
 
     f_r_loc = (
-        (0.5 * f_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * f_magn_loc)
-        .change_frequency_notation_ph_to_pp()
-        .permute_orbitals("abcd->acbd")
-    )
+        0.5 * f_dens_loc + (-1.5 if channel == SpinChannel.SING else 0.5) * f_magn_loc
+    ).change_frequency_notation_ph_to_pp()
     f_r_loc.channel = channel
     logger.log_info(f"Constructed local {channel.value}let vertex.")
 
     gchi0_pp_loc = BubbleGenerator.create_generalized_chi0_pp(g_loc, config.box.niw_core // 3, f_r_loc.niv)
 
-    gamma_r_loc = f_r_loc @ (LocalFourPoint.identity_like(f_r_loc) - 0.5 * gchi0_pp_loc @ f_r_loc).invert()
+    gamma_r_loc = (
+        f_r_loc
+        @ (LocalFourPoint.identity_like(f_r_loc) - 0.5 * gchi0_pp_loc @ f_r_loc.permute_orbitals("abcd->acbd")).invert()
+    )
     logger.log_info(f"Constructed local {channel.value}let irreducible vertex.")
 
     phi_r_loc = (f_r_loc - gamma_r_loc).to_half_niw_range()
