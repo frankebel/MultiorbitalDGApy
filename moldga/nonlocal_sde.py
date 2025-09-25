@@ -253,7 +253,7 @@ def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, my_full
     repeated loops. Potential speed-ups could be achieved by batching the q-points or using numba.
     """
     mat = np.zeros(
-        (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
+        (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, config.box.niv_core),
         dtype=kernel.mat.dtype,
     )
 
@@ -264,11 +264,13 @@ def calculate_sigma_from_kernel(kernel: FourPoint, giwk: GreensFunction, my_full
     for idx_q, q in enumerate(my_full_q_list):
         shifted_mat = np.roll(giwk.mat, [-i for i in q], axis=(0, 1, 2))
         for idx_w, wn_i in enumerate(wn):
-            g_qk = shifted_mat[..., giwk.niv - config.box.niv_core - wn_i : giwk.niv + config.box.niv_core - wn_i]
-            mat += np.einsum("aijdv,xyzadv->xyzijv", kernel[idx_q, ..., idx_w, :], g_qk, optimize=path)
+            g_qk = shifted_mat[..., giwk.niv - wn_i : giwk.niv + config.box.niv_core - wn_i]
+            mat += np.einsum(
+                "aijdv,xyzadv->xyzijv", kernel[idx_q, ..., idx_w, config.box.niv_core :], g_qk, optimize=path
+            )
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
-    return SelfEnergy(mat, config.lattice.nk, True).compress_q_dimension()
+    return SelfEnergy(mat, config.lattice.nk, False).compress_q_dimension()
 
 
 def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my_full_q_list: np.ndarray) -> SelfEnergy:
@@ -279,14 +281,14 @@ def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my
     """
 
     mat = np.zeros(
-        (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, 2 * config.box.niv_core),
+        (*config.lattice.k_grid.nk, config.sys.n_bands, config.sys.n_bands, config.box.niv_core),
         dtype=kernel.mat.dtype,
     )
 
     wn = MFHelper.wn(config.box.niw_core)
 
     nkx, nky, nkz = config.lattice.k_grid.nk
-    vdim = 2 * config.box.niv_core
+    vdim = config.box.niv_core
     xyz = config.lattice.k_grid.nk_tot
     nb = config.sys.n_bands
 
@@ -306,18 +308,18 @@ def calculate_sigma_from_kernel_fast(kernel: FourPoint, giwk: GreensFunction, my
 
         for idx_w, wn_i in enumerate(wn):
             g = (
-                g_q_view[..., giwk.niv - config.box.niv_core - wn_i : giwk.niv + config.box.niv_core - wn_i]
+                g_q_view[..., giwk.niv - wn_i : giwk.niv + config.box.niv_core - wn_i]
                 .transpose(0, 2, 1, 3)
                 .reshape(xyz, nb**2, vdim)
             )
-            k = kernel[idx_q, ..., idx_w, :].transpose(0, 3, 1, 2, 4).reshape(nb**2, nb**2, vdim)
+            k = kernel[idx_q, ..., idx_w, config.box.niv_core :].transpose(0, 3, 1, 2, 4).reshape(nb**2, nb**2, vdim)
 
             for t in range(vdim):
                 np.matmul(g[:, :, t], k[:, :, t], out=acc_2d)
                 mat[..., t] += acc_2d.reshape(nkx, nky, nkz, nb, nb)
 
     mat *= -0.5 / config.sys.beta / config.lattice.q_grid.nk_tot
-    return SelfEnergy(np.ascontiguousarray(mat), config.lattice.nk, True).compress_q_dimension()
+    return SelfEnergy(np.ascontiguousarray(mat), config.lattice.nk, False).compress_q_dimension()
 
 
 def get_starting_sigma(output_path: str, default_sigma: SelfEnergy) -> tuple[SelfEnergy, int]:
