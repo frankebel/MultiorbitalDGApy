@@ -5,12 +5,12 @@ from matplotlib import pyplot as plt
 from matplotlib import ticker
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-import scdga.config as config
-from scdga.gap_function import GapFunction
-from scdga.local_four_point import LocalFourPoint
-from scdga.local_n_point import LocalNPoint
-from scdga.matsubara_frequencies import MFHelper
-from scdga.n_point_base import IAmNonLocal
+import moldga.config as config
+from moldga.gap_function import GapFunction
+from moldga.local_four_point import LocalFourPoint
+from moldga.local_n_point import LocalNPoint
+from moldga.matsubara_frequencies import MFHelper
+from moldga.n_point_base import IAmNonLocal
 
 
 def add_afzb(ax=None, kx=None, ky=None, lw=1.0, marker=""):

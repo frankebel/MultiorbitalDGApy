@@ -1,7 +1,7 @@
 box_sizes:
   niw_core: -1 # Number of bosonic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_core: 80 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
-  niv_shell: 50 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
+  niv_core: 50 # Number of fermionic frequencies used from G2(w,v,v'); default: -1 (all)
+  niv_shell: 20 # Number of fermionic frequencies used for explicit asymptotics. If left at 0, no asymptotics are used. Default: 0
 
 lattice:
   symmetries: "two_dimensional_square" # Specify lattice symmetry group. For availability, check out the file 'brillouin_zone.py'
@@ -13,7 +13,7 @@ lattice:
   # (similar to how a wannier_hr.dat file is structured, but with 4 orbital indices).
   interaction_input: [ 1, 0, 0, 0 ] # Full path to the interaction file or list of interaction parameters [n_bands, U, J, U'] (U' is optional; if left empty, U' is set to U-2J)
   # this parameter will only be used if interaction_type is either 'kanamori' or 'custom'
-  nk: [ 24, 24, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
+  nk: [ 16, 16, 1 ] # Number of k-points in x, y and z-direction. Default: [ 16, 16, 1 ]
   #nq: [ 16, 16, 1 ] # Number of q-points in x, y and z-direction. Default: [ 16, 16, 1 ]. If left empty, nq is set to nk
 
 self_consistency:
@@ -57,5 +57,5 @@ poly_fitting:
 output:
   output_path: "" # Path, where the DGA output folders are created. If not specified, the output is created in the input folder directory of the DMFT files
   save_quantities: True # If True, the code will save several quantities into the output folder
-  do_plotting: False # If True, the code will plot the results into the output folder
+  do_plotting: True # If True, the code will plot the results into the output folder
   plotting_subfolder_name: "Plots" # name for the subfolder where the plots are saved

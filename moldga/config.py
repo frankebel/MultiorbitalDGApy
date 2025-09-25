@@ -1,8 +1,8 @@
 import numpy as np
 
-import scdga.brillouin_zone as bz
-from scdga.dga_logger import DgaLogger
-from scdga.hamiltonian import Hamiltonian
+import moldga.brillouin_zone as bz
+from moldga.dga_logger import DgaLogger
+from moldga.hamiltonian import Hamiltonian
 
 
 class InteractionConfig:

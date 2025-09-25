@@ -4,10 +4,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from scdga import config, dga_io, local_sde
-from scdga import nonlocal_sde
-from scdga.dga_logger import DgaLogger
-from scdga.greens_function import GreensFunction
+from moldga import config, dga_io, local_sde
+from moldga import nonlocal_sde
+from moldga.dga_logger import DgaLogger
+from moldga.greens_function import GreensFunction
 from tests import conftest
 
 

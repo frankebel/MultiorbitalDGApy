@@ -5,14 +5,14 @@ import mpi4py
 import numpy as np
 import pytest
 
-import scdga.lambda_correction as lc
-from scdga import nonlocal_sde
-from scdga.dga_logger import DgaLogger
-from scdga.four_point import FourPoint
-from scdga.local_four_point import LocalFourPoint
-from scdga.n_point_base import SpinChannel
-import scdga.config as config
-import scdga.brillouin_zone as bz
+import moldga.lambda_correction as lc
+from moldga import nonlocal_sde
+from moldga.dga_logger import DgaLogger
+from moldga.four_point import FourPoint
+from moldga.local_four_point import LocalFourPoint
+from moldga.n_point_base import SpinChannel
+import moldga.config as config
+import moldga.brillouin_zone as bz
 
 
 def load_four_point(lc_type: str, filename: str, channel: SpinChannel) -> FourPoint:

@@ -5,17 +5,17 @@ import re
 import mpi4py.MPI as MPI
 import numpy as np
 
-import scdga.config as config
-import scdga.lambda_correction as lc
-from scdga.bubble_gen import BubbleGenerator
-from scdga.four_point import FourPoint
-from scdga.greens_function import GreensFunction, update_mu
-from scdga.interaction import LocalInteraction, Interaction
-from scdga.local_four_point import LocalFourPoint
-from scdga.matsubara_frequencies import MFHelper
-from scdga.mpi_distributor import MpiDistributor
-from scdga.n_point_base import SpinChannel
-from scdga.self_energy import SelfEnergy
+import moldga.config as config
+import moldga.lambda_correction as lc
+from moldga.bubble_gen import BubbleGenerator
+from moldga.four_point import FourPoint
+from moldga.greens_function import GreensFunction, update_mu
+from moldga.interaction import LocalInteraction, Interaction
+from moldga.local_four_point import LocalFourPoint
+from moldga.matsubara_frequencies import MFHelper
+from moldga.mpi_distributor import MpiDistributor
+from moldga.n_point_base import SpinChannel
+from moldga.self_energy import SelfEnergy
 
 
 def get_hartree_fock(

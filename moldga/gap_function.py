@@ -1,7 +1,7 @@
 import numpy as np
 
-from scdga.local_n_point import LocalNPoint
-from scdga.n_point_base import IAmNonLocal, IHaveChannel, SpinChannel, FrequencyNotation
+from moldga.local_n_point import LocalNPoint
+from moldga.n_point_base import IAmNonLocal, IHaveChannel, SpinChannel, FrequencyNotation
 
 
 class GapFunction(IAmNonLocal, LocalNPoint, IHaveChannel):

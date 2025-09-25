@@ -2,9 +2,9 @@ from copy import deepcopy
 
 import numpy as np
 
-from scdga.interaction import Interaction, LocalInteraction
-from scdga.local_four_point import LocalFourPoint
-from scdga.n_point_base import IAmNonLocal, SpinChannel, FrequencyNotation
+from moldga.interaction import Interaction, LocalInteraction
+from moldga.local_four_point import LocalFourPoint
+from moldga.n_point_base import IAmNonLocal, SpinChannel, FrequencyNotation
 
 
 class FourPoint(IAmNonLocal, LocalFourPoint):
@@ -210,8 +210,7 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         if len(self.current_shape) == 3:  # [q, w, x1, x2]
             return self
 
-        self.permute_orbitals("abcd->acbd")
-        return self._to_compound_indices_ph()
+        return self.permute_orbitals("abcd->acbd", copy=False)._to_compound_indices_ph()
 
     def to_full_indices(self, shape: tuple = None) -> "FourPoint":
         """
@@ -280,13 +279,11 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
         channel is that the orbital indices have to be permuted back since the ordering of pp quantities is not
         "1234" but rather "1324".
         """
-        self._to_full_indices_ph(shape)
-        self.permute_orbitals("abcd->acbd")
-        return self
+        return self._to_full_indices_ph(shape).permute_orbitals("abcd->acbd", copy=False)
 
-    def permute_orbitals(self, permutation: str = "abcd->abcd") -> "FourPoint":
+    def permute_orbitals(self, permutation: str = "abcd->abcd", copy: bool = True) -> "FourPoint":
         """
-        Permutes the orbitals of the four-point object with the string given. It is not possible to sum over any
+        Permutes the orbitals of the FourPoint object with the string given. It is not possible to sum over any
         orbitals with this method.
         """
         split = permutation.split("->")
@@ -301,6 +298,10 @@ class FourPoint(IAmNonLocal, LocalFourPoint):
             if self.has_compressed_q_dimension
             else f"ijk{split[0]}...->ijk{split[1]}..."
         )
+
+        if not copy:
+            self.mat = np.einsum(permutation, self.mat, optimize=True)
+            return self
 
         copy = deepcopy(self)
         copy.mat = np.einsum(permutation, copy.mat, optimize=True)

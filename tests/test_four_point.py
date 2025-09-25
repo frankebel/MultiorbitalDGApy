@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from scdga.four_point import FourPoint
-from scdga.interaction import LocalInteraction, Interaction
-from scdga.n_point_base import SpinChannel, FrequencyNotation, IAmNonLocal
+from moldga.four_point import FourPoint
+from moldga.interaction import LocalInteraction, Interaction
+from moldga.n_point_base import SpinChannel, FrequencyNotation, IAmNonLocal
 
 
 @pytest.fixture

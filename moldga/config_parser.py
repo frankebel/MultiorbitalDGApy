@@ -4,9 +4,9 @@ import os
 from mpi4py import MPI
 from ruamel.yaml import YAML
 
-import scdga.config as config
-from scdga.config import *
-from scdga.dga_logger import DgaLogger
+import moldga.config as config
+from moldga.config import *
+from moldga.dga_logger import DgaLogger
 
 
 class ConfigParser:

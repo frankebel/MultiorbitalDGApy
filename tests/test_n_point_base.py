@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from scdga.n_point_base import IHaveChannel, IHaveMat, IAmNonLocal, SpinChannel, FrequencyNotation
+from moldga.n_point_base import IHaveChannel, IHaveMat, IAmNonLocal, SpinChannel, FrequencyNotation
 
 
 # ----- Tests for IHaveMat -----

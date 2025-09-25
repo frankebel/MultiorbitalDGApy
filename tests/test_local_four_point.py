@@ -2,11 +2,11 @@ from unittest.mock import patch
 
 import pytest
 
-from scdga.interaction import LocalInteraction, Interaction
-from scdga.local_four_point import LocalFourPoint
+from moldga.interaction import LocalInteraction, Interaction
+from moldga.local_four_point import LocalFourPoint
 import numpy as np
 
-from scdga.n_point_base import SpinChannel
+from moldga.n_point_base import SpinChannel
 
 
 @pytest.mark.parametrize("n", [1, 2, 3])

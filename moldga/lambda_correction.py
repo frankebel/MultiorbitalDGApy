@@ -1,7 +1,7 @@
 import numpy as np
 
-from scdga import config
-from scdga.four_point import FourPoint
+from moldga import config
+from moldga.four_point import FourPoint
 
 
 def get_lambda_start(chi_r: np.ndarray) -> float:

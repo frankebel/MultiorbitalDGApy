@@ -4,9 +4,9 @@ import logging
 import numpy as np
 import pandas as pd
 
-import scdga.brillouin_zone as bz
-from scdga.interaction import LocalInteraction, Interaction
-from scdga.n_point_base import SpinChannel
+import moldga.brillouin_zone as bz
+from moldga.interaction import LocalInteraction, Interaction
+from moldga.n_point_base import SpinChannel
 
 
 class HoppingElement:

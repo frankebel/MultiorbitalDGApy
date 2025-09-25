@@ -1,7 +1,7 @@
-from scdga.interaction import LocalInteraction, Interaction
-from scdga.local_n_point import LocalNPoint
-from scdga.matsubara_frequencies import MFHelper
-from scdga.n_point_base import *
+from moldga.interaction import LocalInteraction, Interaction
+from moldga.local_n_point import LocalNPoint
+from moldga.matsubara_frequencies import MFHelper
+from moldga.n_point_base import *
 
 
 class LocalFourPoint(LocalNPoint, IHaveChannel):
@@ -242,11 +242,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         if len(self.current_shape) == 3:  # [w,x1,x2]
             return self
 
-        if self.num_wn_dimensions != 1:
-            raise ValueError(f"Cannot convert to compound indices if there are no bosonic frequencies.")
-
-        self.permute_orbitals("abcd->acbd")
-        return self._to_compound_indices_ph()
+        return self.permute_orbitals("abcd->acbd", copy=False)._to_compound_indices_ph()
 
     def to_full_indices(self, shape: tuple = None) -> "LocalFourPoint":
         """
@@ -302,9 +298,7 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         channel is that the orbital indices have to be permuted back since the ordering of pp quantities is not
         "1234" but rather "1324".
         """
-        self._to_full_indices_ph(shape)
-        self.permute_orbitals("abcd->acbd")
-        return self
+        return self._to_full_indices_ph(shape).permute_orbitals("abcd->acbd", copy=False)
 
     def invert(self, copy: bool = True):
         """
@@ -556,9 +550,9 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
         """
         return self.add(-other)
 
-    def permute_orbitals(self, permutation: str = "abcd->abcd") -> "LocalFourPoint":
+    def permute_orbitals(self, permutation: str = "abcd->abcd", copy: bool = True) -> "LocalFourPoint":
         """
-        Permutes the orbitals of the local four-point object with the string given. It is not possible to sum over any
+        Permutes the orbitals of the LocalFourPoint object with the string given. It is not possible to sum over any
         orbitals with this method.
         """
         split = permutation.split("->")
@@ -570,6 +564,10 @@ class LocalFourPoint(LocalNPoint, IHaveChannel):
             raise ValueError("Invalid permutation.")
 
         permutation = f"{split[0]}...->{split[1]}..."
+
+        if not copy:
+            self.mat = np.einsum(permutation, self.mat, optimize=True)
+            return self
 
         copy = deepcopy(self)
         copy.mat = np.einsum(permutation, copy.mat, optimize=True)

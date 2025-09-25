@@ -1,11 +1,11 @@
-import scdga.config as config
-from scdga.bubble_gen import BubbleGenerator
-from scdga.greens_function import GreensFunction
-from scdga.interaction import LocalInteraction
-from scdga.local_four_point import LocalFourPoint
-from scdga.matsubara_frequencies import MFHelper
-from scdga.n_point_base import *
-from scdga.self_energy import SelfEnergy
+import moldga.config as config
+from moldga.bubble_gen import BubbleGenerator
+from moldga.greens_function import GreensFunction
+from moldga.interaction import LocalInteraction
+from moldga.local_four_point import LocalFourPoint
+from moldga.matsubara_frequencies import MFHelper
+from moldga.n_point_base import *
+from moldga.self_energy import SelfEnergy
 
 
 def create_generalized_chi(g2: LocalFourPoint, g_loc: GreensFunction) -> LocalFourPoint:

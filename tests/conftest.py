@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-import scdga.brillouin_zone as bz
+import moldga.brillouin_zone as bz
 
 
 @pytest.fixture(autouse=True)

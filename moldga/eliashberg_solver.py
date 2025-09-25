@@ -4,17 +4,17 @@ import mpi4py.MPI as MPI
 import numpy as np
 import scipy as sp
 
-import scdga.config as config
-from scdga import nonlocal_sde
-from scdga.bubble_gen import BubbleGenerator
-from scdga.four_point import FourPoint
-from scdga.gap_function import GapFunction
-from scdga.greens_function import GreensFunction
-from scdga.interaction import LocalInteraction, Interaction
-from scdga.local_four_point import LocalFourPoint
-from scdga.matsubara_frequencies import MFHelper
-from scdga.mpi_distributor import MpiDistributor
-from scdga.n_point_base import SpinChannel, FrequencyNotation
+import moldga.config as config
+from moldga import nonlocal_sde
+from moldga.bubble_gen import BubbleGenerator
+from moldga.four_point import FourPoint
+from moldga.gap_function import GapFunction
+from moldga.greens_function import GreensFunction
+from moldga.interaction import LocalInteraction, Interaction
+from moldga.local_four_point import LocalFourPoint
+from moldga.matsubara_frequencies import MFHelper
+from moldga.mpi_distributor import MpiDistributor
+from moldga.n_point_base import SpinChannel, FrequencyNotation
 
 
 def delete_files(filepath: str, *args) -> None:
@@ -310,7 +310,10 @@ def create_local_reducible_r_pp_diagrams_w0(
 
     gamma_r_loc = (
         f_r_loc
-        @ (LocalFourPoint.identity_like(f_r_loc) - 0.5 * gchi0_pp_loc @ f_r_loc.permute_orbitals("abcd->acbd")).invert()
+        @ (
+            LocalFourPoint.identity_like(f_r_loc).permute_orbitals("abcd->acbd")
+            - 0.5 * gchi0_pp_loc @ f_r_loc.permute_orbitals("abcd->acbd")
+        ).invert()
     )
     logger.log_info(f"Constructed local {channel.value}let irreducible vertex.")
 

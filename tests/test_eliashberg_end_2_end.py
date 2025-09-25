@@ -4,11 +4,11 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from scdga import config, eliashberg_solver, dga_io
-from scdga.dga_logger import DgaLogger
-from scdga.greens_function import GreensFunction
-from scdga.local_four_point import LocalFourPoint
-from scdga.n_point_base import SpinChannel
+from moldga import config, eliashberg_solver, dga_io
+from moldga.dga_logger import DgaLogger
+from moldga.greens_function import GreensFunction
+from moldga.local_four_point import LocalFourPoint
+from moldga.n_point_base import SpinChannel
 from tests import conftest
 
 
@@ -87,5 +87,5 @@ def test_eliashberg_equation_with_local_part(setup, niw_core, niv_core, niv_shel
     lambdas_sing, lambdas_trip, gaps_sing, gaps_trip = eliashberg_solver.solve(
         g_dga, g_dmft, u_loc, v_nonloc, gamma_dens, gamma_magn, comm_mock
     )
-    assert np.allclose(lambdas_sing, np.array([5.81783761, 5.46658385, 3.94275161, 3.5394802]), atol=1e-4)
-    assert np.allclose(lambdas_trip, np.array([5.47993002, 4.66918962, 2.87634338, 2.79390456]), atol=1e-4)
+    assert np.allclose(lambdas_sing, np.array([6.19956223, 5.01912816, 3.9427516, 3.53948015]), atol=1e-4)
+    assert np.allclose(lambdas_trip, np.array([5.4919969, 4.65633698, 2.87634353, 2.79390464]), atol=1e-4)

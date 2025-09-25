@@ -3,9 +3,9 @@ import os
 import numpy as np
 import pytest
 
-from scdga import brillouin_zone
-from scdga.brillouin_zone import KGrid
-from scdga.hamiltonian import Hamiltonian, HoppingElement, InteractionElement
+from moldga import brillouin_zone
+from moldga.brillouin_zone import KGrid
+from moldga.hamiltonian import Hamiltonian, HoppingElement, InteractionElement
 
 
 def test_hoppingelement_valid():

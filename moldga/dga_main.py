@@ -7,14 +7,14 @@ import numpy as np
 from matplotlib import font_manager
 from mpi4py import MPI
 
-import scdga.config as config
-import scdga.dga_io as dga_io
-import scdga.eliashberg_solver as eliashberg_solver
-import scdga.local_sde as local_sde
-import scdga.nonlocal_sde as nonlocal_sde
-import scdga.plotting as plotting
-from scdga.config_parser import ConfigParser
-from scdga.greens_function import GreensFunction
+import moldga.config as config
+import moldga.dga_io as dga_io
+import moldga.eliashberg_solver as eliashberg_solver
+import moldga.local_sde as local_sde
+import moldga.nonlocal_sde as nonlocal_sde
+import moldga.plotting as plotting
+from moldga.config_parser import ConfigParser
+from moldga.greens_function import GreensFunction
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 

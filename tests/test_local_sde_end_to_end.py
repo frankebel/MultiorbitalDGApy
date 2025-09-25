@@ -5,18 +5,18 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
-import scdga.config as config
-import scdga.dga_io
-import scdga.greens_function
-import scdga.hamiltonian
-import scdga.local_four_point
-import scdga.self_energy
-import scdga.w2dyn_aux
-from scdga import local_sde
-from scdga.dga_logger import DgaLogger
-from scdga.greens_function import GreensFunction
-from scdga.local_four_point import LocalFourPoint
-from scdga.n_point_base import SpinChannel
+import moldga.config as config
+import moldga.dga_io
+import moldga.greens_function
+import moldga.hamiltonian
+import moldga.local_four_point
+import moldga.self_energy
+import moldga.w2dyn_aux
+from moldga import local_sde
+from moldga.dga_logger import DgaLogger
+from moldga.greens_function import GreensFunction
+from moldga.local_four_point import LocalFourPoint
+from moldga.n_point_base import SpinChannel
 from tests import conftest
 
 
@@ -64,7 +64,7 @@ def test_extracts_dmft_quantities_correctly(setup, niw_core, niv_core, niv_shell
     config.box.niv_core = niv_core
     config.box.niv_shell = niv_shell
 
-    g_dmft, s_dmft, g2_dens, g2_magn = scdga.dga_io.load_from_w2dyn_file_and_update_config()
+    g_dmft, s_dmft, g2_dens, g2_magn = moldga.dga_io.load_from_w2dyn_file_and_update_config()
 
     if niw_core == -1:
         assert config.box.niw_core == 20
@@ -118,7 +118,7 @@ def test_calculates_local_sde_correctly(setup, niw_core, niv_core, niv_shell):
     config.box.niv_core = niv_core
     config.box.niv_shell = niv_shell
 
-    g_dmft, s_dmft, g2_dens, g2_magn = scdga.dga_io.load_from_w2dyn_file_and_update_config()
+    g_dmft, s_dmft, g2_dens, g2_magn = moldga.dga_io.load_from_w2dyn_file_and_update_config()
 
     ek = config.lattice.hamiltonian.get_ek(config.lattice.k_grid)
     g_loc = GreensFunction.create_g_loc(s_dmft.create_with_asympt_up_to_core(), ek)

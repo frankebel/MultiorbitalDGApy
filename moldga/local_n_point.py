@@ -1,6 +1,6 @@
 import os
 
-from scdga.n_point_base import *
+from moldga.n_point_base import *
 
 
 class LocalNPoint(IHaveMat):

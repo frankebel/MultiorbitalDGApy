@@ -3,10 +3,10 @@ from copy import deepcopy
 
 import numpy as np
 
-import scdga.config as config
-from scdga.local_n_point import LocalNPoint
-from scdga.matsubara_frequencies import MFHelper
-from scdga.n_point_base import IAmNonLocal
+import moldga.config as config
+from moldga.local_n_point import LocalNPoint
+from moldga.matsubara_frequencies import MFHelper
+from moldga.n_point_base import IAmNonLocal
 
 
 class SelfEnergy(IAmNonLocal, LocalNPoint):

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from scdga.interaction import Interaction, LocalInteraction, SpinChannel
+from moldga.interaction import Interaction, LocalInteraction, SpinChannel
 
 
 def test_localinteraction_adds_correctly():

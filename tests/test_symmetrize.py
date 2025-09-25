@@ -1,6 +1,6 @@
 import pytest
 
-from scdga.symmetrize_new import *
+from moldga.symmetrize_new import *
 
 
 @pytest.mark.parametrize("num_bands", [1, 2, 3, 4])

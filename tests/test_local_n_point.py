@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 from unittest.mock import patch
 
-from scdga.local_four_point import LocalFourPoint
-from scdga.local_n_point import LocalNPoint
-from scdga.n_point_base import SpinChannel
+from moldga.local_four_point import LocalFourPoint
+from moldga.local_n_point import LocalNPoint
+from moldga.n_point_base import SpinChannel
 
 
 def test_initializes_with_valid_parameters():

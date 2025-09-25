@@ -1,13 +1,13 @@
 import os
 
-import scdga.brillouin_zone as bz
-import scdga.config as config
-import scdga.w2dyn_aux as w2dyn_aux
-from scdga.greens_function import GreensFunction
-from scdga.hamiltonian import Hamiltonian
-from scdga.local_four_point import LocalFourPoint
-from scdga.n_point_base import *
-from scdga.self_energy import SelfEnergy
+import moldga.brillouin_zone as bz
+import moldga.config as config
+import moldga.w2dyn_aux as w2dyn_aux
+from moldga.greens_function import GreensFunction
+from moldga.hamiltonian import Hamiltonian
+from moldga.local_four_point import LocalFourPoint
+from moldga.n_point_base import *
+from moldga.self_energy import SelfEnergy
 
 
 def uniquify_path(path: str = None):

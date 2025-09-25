@@ -1,7 +1,7 @@
 import h5py
 
-import scdga.symmetrize_new as sym
-from scdga.n_point_base import *
+import moldga.symmetrize_new as sym
+from moldga.n_point_base import *
 
 
 class W2dynFile:

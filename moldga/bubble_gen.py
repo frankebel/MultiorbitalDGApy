@@ -1,9 +1,9 @@
-import scdga.config as config
-from scdga.greens_function import GreensFunction
-from scdga.matsubara_frequencies import MFHelper
-from scdga.local_four_point import LocalFourPoint
-from scdga.four_point import FourPoint
-from scdga.n_point_base import SpinChannel, FrequencyNotation
+import moldga.config as config
+from moldga.greens_function import GreensFunction
+from moldga.matsubara_frequencies import MFHelper
+from moldga.local_four_point import LocalFourPoint
+from moldga.four_point import FourPoint
+from moldga.n_point_base import SpinChannel, FrequencyNotation
 import numpy as np
 
 
@@ -66,7 +66,7 @@ class BubbleGenerator:
         """
         g = g_loc.cut_niv(niv_pp)
         eye_bands = np.eye(g.current_shape[0])
-        wn = MFHelper.wn(niw_pp)
+        wn = MFHelper.wn(niw_pp, return_only_positive=True)
         vn = MFHelper.vn(niv_pp)
         g_left_mat = (
             g_loc.mat[:, None, None, :, None, g_loc.niv - niv_pp : g_loc.niv + niv_pp]
@@ -77,7 +77,12 @@ class BubbleGenerator:
             * eye_bands[:, None, None, :, None, None]
         )
         return LocalFourPoint(
-            -g_left_mat * g_right_mat, SpinChannel.NONE, 1, 1, frequency_notation=FrequencyNotation.PP
+            -g_left_mat * g_right_mat,
+            SpinChannel.NONE,
+            1,
+            1,
+            full_niw_range=False,
+            frequency_notation=FrequencyNotation.PP,
         )
 
     @staticmethod

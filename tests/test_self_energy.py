@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from scdga.matsubara_frequencies import MFHelper
-from scdga.self_energy import SelfEnergy
-from scdga.config import sys
+from moldga.matsubara_frequencies import MFHelper
+from moldga.self_energy import SelfEnergy
+from moldga.config import sys
 
 sys.beta = 1.0
 nk = (4, 4, 1)
