@@ -523,8 +523,8 @@ def calculate_self_energy_q(
             niv_start = sigma_new.niv
             niv_end = niv_start + int(np.ceil(config.box.niv_core / 5))
             converged = np.allclose(
-                sigma_old.compress_q_dimension().mat[..., niv_start:niv_end],
-                sigma_new.compress_q_dimension().mat[..., niv_start:niv_end],
+                sigma_old[..., niv_start:niv_end],
+                sigma_new[..., niv_start:niv_end],
                 atol=config.self_consistency.epsilon,
             )
         else:
