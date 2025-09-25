@@ -521,7 +521,7 @@ def calculate_self_energy_q(
         logger.log_info("Checking self-consistency convergence.")
         if comm.rank == 0 and current_iter > starting_iter + 1:
             niv_start = sigma_new.niv
-            niv_end = niv_start + np.ceil(config.box.niv_core / 5)
+            niv_end = niv_start + int(np.ceil(config.box.niv_core / 5))
             converged = np.allclose(
                 sigma_old.compress_q_dimension().mat[..., niv_start:niv_end],
                 sigma_new.compress_q_dimension().mat[..., niv_start:niv_end],
