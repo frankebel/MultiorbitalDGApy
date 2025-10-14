@@ -8,8 +8,12 @@ __pycache__/
 *.npy
 *.dat
 
+# Custom configuration files
+moldga/dga_config_*.yaml
+
 # IDE folders
 .idea/
+.vscode/
 
 # other
 *.html
